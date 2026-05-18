@@ -1,7 +1,7 @@
-export { useClustersStore } from './clusters'
-export { useSchoolsStore } from './schools'
-export { useAcademicYearsStore } from './academicYears'
-export { useSubjectsStore } from './subjects'
-export { useClassesStore } from './classes'
-export { useTeachersStore } from './teachers'
-export { useTimetablesStore } from './timetables'
+import { store } from 'quasar/wrappers'
+import { createPinia } from 'pinia'
+
+export default store(function () {
+  const pinia = createPinia()
+  return pinia
+})
