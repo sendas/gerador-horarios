@@ -3,7 +3,8 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Turmas</div>
       <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
-      <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
+      <q-btn color="secondary" icon="upload" label="Importar Turmas" @click="showImport = true" class="q-ml-sm" />
+      <q-btn color="purple" icon="table_chart" label="Importar Currículo" @click="showCurriculumImport = true" class="q-ml-sm" />
     </div>
 
     <ImportDialog
@@ -12,6 +13,11 @@
       endpoint="/imports/classes"
       :extra-params="{ school_id: selectedSchoolId, academic_year_id: selectedYearId }"
       entity-type="classes"
+      @done="classesStore.fetchAll()"
+    />
+
+    <ImportCurriculumDialog
+      v-model="showCurriculumImport"
       @done="classesStore.fetchAll()"
     />
 
@@ -131,6 +137,7 @@ import { useSchoolsStore } from 'stores/schools'
 import { useAcademicYearsStore } from 'stores/academicYears'
 import { useSubjectsStore } from 'stores/subjects'
 import ImportDialog from 'components/ImportDialog.vue'
+import ImportCurriculumDialog from 'components/ImportCurriculumDialog.vue'
 
 const $q = useQuasar()
 const classesStore = useClassesStore()
@@ -139,6 +146,7 @@ const yearsStore = useAcademicYearsStore()
 const subjectsStore = useSubjectsStore()
 
 const showImport = ref(false)
+const showCurriculumImport = ref(false)
 const selectedSchoolId = computed(() => schoolsStore.schools[0]?.id ?? null)
 const selectedYearId = computed(() => yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null)
 

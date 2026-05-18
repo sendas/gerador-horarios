@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import Teacher, Class, Room, Cluster, School
+from app.models.models import Teacher, Class, Room, Cluster, School, Subject, CurriculumEntry, TeacherSubject, TeacherSchoolAssignment
 from app.auth import require_editor
 from app.models.user import User
 
@@ -221,6 +221,156 @@ def import_rooms(
 
     db.commit()
     return {"created": created, "skipped": skipped, "errors": errors}
+
+
+@router.post("/curriculum")
+def import_curriculum(
+    file: UploadFile = File(...),
+    cluster_id: int = Form(...),
+    school_id: int = Form(...),
+    academic_year_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Import full curriculum from CSV/XLSX: creates classes, subjects, teachers and curriculum entries.
+
+    Expected columns: ano, turma, disciplina, horas semana, professor, articulado
+    The column 'ano+turma+disc' is accepted but ignored (used as key in source data).
+    """
+    school = db.query(School).filter(School.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Escola não encontrada")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Agrupamento não encontrado")
+
+    rows = parse_upload(file)
+
+    stats = {"classes": 0, "subjects": 0, "teachers": 0, "entries": 0, "skipped": 0}
+    errors: List[str] = []
+
+    for i, row in enumerate(rows, start=2):
+        turma = get_col(row, "turma", "Turma") or ""
+        disciplina = get_col(row, "disciplina", "Disciplina") or ""
+        if not turma or not disciplina:
+            errors.append(f"Linha {i}: turma e disciplina obrigatórias")
+            continue
+
+        # Year level
+        ano_raw = get_col(row, "ano", "Ano")
+        try:
+            year_level = int(ano_raw) if ano_raw else 5
+        except ValueError:
+            year_level = 5
+
+        # Hours per week — accept decimal comma or dot
+        horas_raw = get_col(row, "horas semana", "horas_semana", "horas", "Horas semana", "Horas") or "2"
+        horas_raw = horas_raw.replace(",", ".")
+        try:
+            hours_per_week = float(horas_raw)
+        except ValueError:
+            hours_per_week = 2.0
+
+        # Teacher name (optional)
+        professor = get_col(row, "professor", "Professor") or None
+
+        # Articulado flag
+        articulado_raw = (get_col(row, "articulado", "Articulado") or "").lower().strip()
+        is_articulated = articulado_raw in ("sim", "s", "yes", "y", "1", "true")
+
+        # ── Find or create Class ──────────────────────────────────────────────
+        cls = db.query(Class).filter(
+            Class.school_id == school_id,
+            Class.academic_year_id == academic_year_id,
+            Class.name == turma,
+        ).first()
+        if not cls:
+            cls = Class(
+                school_id=school_id,
+                academic_year_id=academic_year_id,
+                name=turma,
+                year_level=year_level,
+                num_students=25,
+            )
+            db.add(cls)
+            db.flush()
+            stats["classes"] += 1
+
+        # ── Find or create Subject ────────────────────────────────────────────
+        subj = db.query(Subject).filter(
+            Subject.cluster_id == cluster_id,
+            Subject.name == disciplina,
+        ).first()
+        if not subj:
+            subj = Subject(cluster_id=cluster_id, name=disciplina)
+            db.add(subj)
+            db.flush()
+            stats["subjects"] += 1
+
+        # ── Find or create Teacher ────────────────────────────────────────────
+        teacher = None
+        if professor:
+            teacher = db.query(Teacher).filter(
+                Teacher.cluster_id == cluster_id,
+                Teacher.name == professor,
+            ).first()
+            if not teacher:
+                teacher = Teacher(cluster_id=cluster_id, name=professor)
+                db.add(teacher)
+                db.flush()
+                stats["teachers"] += 1
+
+            # Link teacher → subject
+            if not db.query(TeacherSubject).filter(
+                TeacherSubject.teacher_id == teacher.id,
+                TeacherSubject.subject_id == subj.id,
+            ).first():
+                db.add(TeacherSubject(teacher_id=teacher.id, subject_id=subj.id))
+
+            # Link teacher → school (for this academic year)
+            if not db.query(TeacherSchoolAssignment).filter(
+                TeacherSchoolAssignment.teacher_id == teacher.id,
+                TeacherSchoolAssignment.school_id == school_id,
+                TeacherSchoolAssignment.academic_year_id == academic_year_id,
+            ).first():
+                db.add(TeacherSchoolAssignment(
+                    teacher_id=teacher.id,
+                    school_id=school_id,
+                    academic_year_id=academic_year_id,
+                    travel_time_minutes=0,
+                ))
+
+        # ── Find or create CurriculumEntry ────────────────────────────────────
+        existing_entry = db.query(CurriculumEntry).filter(
+            CurriculumEntry.class_id == cls.id,
+            CurriculumEntry.subject_id == subj.id,
+        ).first()
+        if existing_entry:
+            stats["skipped"] += 1
+            continue
+
+        split_count = max(1, round(hours_per_week))
+        entry = CurriculumEntry(
+            class_id=cls.id,
+            subject_id=subj.id,
+            hours_per_week=hours_per_week,
+            is_split=split_count > 1 or is_articulated,
+            split_count=split_count,
+            consecutive_pairs=0,
+            is_semestral=False,
+        )
+        db.add(entry)
+        stats["entries"] += 1
+
+    db.commit()
+    return {
+        "created": stats["entries"],
+        "skipped": stats["skipped"],
+        "new_classes": stats["classes"],
+        "new_subjects": stats["subjects"],
+        "new_teachers": stats["teachers"],
+        "errors": errors,
+    }
 
 
 @router.post("/image")
