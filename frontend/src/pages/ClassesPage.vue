@@ -67,12 +67,60 @@
             <template #body-cell-subject="props">
               <q-td :props="props">{{ subjectName(props.row.subject_id) }}</q-td>
             </template>
+            <template #body-cell-semestral="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.is_semestral" :color="props.row.semester === 1 ? 'blue-7' : 'orange-7'" :label="props.row.semester === 1 ? '1.º Sem' : '2.º Sem'" />
+              </q-td>
+            </template>
+            <template #body-cell-paired="props">
+              <q-td :props="props">
+                <span v-if="props.row.paired_entry_id" class="text-caption text-positive">
+                  ⇄ {{ pairedSubjectName(props.row.paired_entry_id) }}
+                </span>
+              </q-td>
+            </template>
             <template #body-cell-actions="props">
               <q-td :props="props">
                 <q-btn flat round dense icon="delete" color="negative" @click="removeEntry(props.row.id)" />
               </q-td>
             </template>
           </q-table>
+
+          <q-separator class="q-my-md" />
+          <div class="row items-center q-mb-sm">
+            <div class="text-subtitle2 col">Turnos (Grupos de Disciplinas Simultâneas)</div>
+            <q-btn color="secondary" icon="call_split" size="sm" label="Novo Turno" @click="openAddGroup" />
+          </div>
+          <div v-if="subjectGroups.length === 0" class="text-caption text-grey-6 q-mb-sm">
+            Nenhum turno definido. Use turnos quando metade da turma tem uma disciplina e a outra metade tem outra ao mesmo tempo (ex: CN e FQ em laboratório).
+          </div>
+          <div v-for="group in subjectGroups" :key="group.id" class="q-mb-xs">
+            <div class="row items-center">
+              <q-icon name="call_split" class="q-mr-xs text-secondary" />
+              <span class="text-body2 q-mr-sm">{{ group.name }}</span>
+              <q-chip v-for="ge in group.entries" :key="ge.id" dense removable @remove="removeGroupEntry(group.id, ge.id)"
+                color="secondary" text-color="white" size="sm">
+                {{ entrySubjectName(ge.curriculum_entry_id) }}
+              </q-chip>
+              <q-btn flat round dense icon="add_circle" size="sm" color="secondary" @click="openAddEntryToGroup(group)" />
+              <q-space />
+              <q-btn flat round dense icon="delete" size="sm" color="negative" @click="deleteGroup(group.id)" />
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Add group entry dialog -->
+    <q-dialog v-model="addGroupEntryDialog">
+      <q-card style="min-width: 300px">
+        <q-card-section><div class="text-h6">Adicionar ao Turno</div></q-card-section>
+        <q-card-section>
+          <q-select v-model="groupEntryForm.curriculum_entry_id" :options="availableForGroupOptions" label="Disciplina" emit-value map-options />
+          <div class="row justify-end q-mt-md q-gutter-sm">
+            <q-btn flat label="Cancelar" v-close-popup />
+            <q-btn color="secondary" label="Adicionar" @click="addEntryToGroup" />
+          </div>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -163,6 +211,7 @@ import { useClassesStore, type SchoolClass, type CurriculumEntry } from 'stores/
 import { useSchoolsStore } from 'stores/schools'
 import { useAcademicYearsStore } from 'stores/academicYears'
 import { useSubjectsStore } from 'stores/subjects'
+import { api } from 'boot/axios'
 import ImportDialog from 'components/ImportDialog.vue'
 import ImportCurriculumDialog from 'components/ImportCurriculumDialog.vue'
 
@@ -188,6 +237,8 @@ const currColumns = [
   { name: 'subject', label: 'Disciplina', field: 'subject_id', align: 'left' as const },
   { name: 'hours_per_week', label: 'Horas/sem', field: 'hours_per_week', align: 'center' as const },
   { name: 'split_count', label: 'Partes', field: 'split_count', align: 'center' as const },
+  { name: 'semestral', label: 'Semestre', field: 'semester', align: 'center' as const },
+  { name: 'paired', label: 'Par c/ semestre oposto', field: 'paired_entry_id', align: 'left' as const },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
 
@@ -208,6 +259,7 @@ const entryForm = ref({
   is_semestral: false,
   semester: null as number | null,
   paired_entry_id: null as number | null,
+  _editingId: undefined as number | undefined,
 })
 
 const schoolOptions = computed(() => schoolsStore.schools.map((s) => ({ label: s.name, value: s.id })))
@@ -241,12 +293,83 @@ const semesterOptions = [
 // Semestral entries of the selected class that can be paired
 const semestralEntryOptions = computed(() =>
   curriculumEntries.value
-    .filter((e) => e.is_semestral && e.id !== undefined)
+    .filter((e) => e.is_semestral && e.id !== undefined && e.id !== entryForm.value._editingId)
     .map((e) => ({ label: subjectName(e.subject_id), value: e.id }))
 )
 
 function subjectName(id: number) {
   return subjectsStore.subjects.find((s) => s.id === id)?.name ?? '—'
+}
+
+function pairedSubjectName(entryId: number) {
+  const e = curriculumEntries.value.find(e => e.id === entryId)
+  return e ? subjectName(e.subject_id) : '?'
+}
+
+// Subject groups (turnos)
+interface SubjectGroupEntry { id: number; group_id: number; curriculum_entry_id: number }
+interface SubjectGroupItem { id: number; name: string; academic_year_id: number; entries: SubjectGroupEntry[] }
+const subjectGroups = ref<SubjectGroupItem[]>([])
+const addGroupEntryDialog = ref(false)
+const selectedGroupForEntry = ref<SubjectGroupItem | null>(null)
+const groupEntryForm = ref({ curriculum_entry_id: null as number | null })
+
+const availableForGroupOptions = computed(() => {
+  const inGroup = new Set(
+    subjectGroups.value.flatMap(g => g.entries.map(e => e.curriculum_entry_id))
+  )
+  return curriculumEntries.value
+    .filter(e => !inGroup.has(e.id))
+    .map(e => ({ label: subjectName(e.subject_id), value: e.id }))
+})
+
+function entrySubjectName(curriculum_entry_id: number) {
+  const e = curriculumEntries.value.find(e => e.id === curriculum_entry_id)
+  return e ? subjectName(e.subject_id) : '?'
+}
+
+async function loadSubjectGroups() {
+  if (!selectedClass.value) return
+  const yearId = selectedClass.value.academic_year_id
+  const { data } = await api.get<SubjectGroupItem[]>('/subject-groups', { params: { academic_year_id: yearId } })
+  const classEntryIds = new Set(curriculumEntries.value.map(e => e.id))
+  subjectGroups.value = data.filter(g => g.entries.some(e => classEntryIds.has(e.curriculum_entry_id)))
+}
+
+async function openAddGroup() {
+  if (!selectedClass.value) return
+  const yearId = selectedClass.value.academic_year_id
+  const name = `Turno ${selectedClass.value.name}`
+  const { data } = await api.post<SubjectGroupItem>('/subject-groups', { name, academic_year_id: yearId })
+  subjectGroups.value.push(data)
+}
+
+function openAddEntryToGroup(group: SubjectGroupItem) {
+  selectedGroupForEntry.value = group
+  groupEntryForm.value = { curriculum_entry_id: null }
+  addGroupEntryDialog.value = true
+}
+
+async function addEntryToGroup() {
+  if (!selectedGroupForEntry.value || !groupEntryForm.value.curriculum_entry_id) return
+  const { data } = await api.post<SubjectGroupEntry>(
+    `/subject-groups/${selectedGroupForEntry.value.id}/entries`,
+    { curriculum_entry_id: groupEntryForm.value.curriculum_entry_id }
+  )
+  const group = subjectGroups.value.find(g => g.id === selectedGroupForEntry.value!.id)
+  if (group) group.entries.push(data)
+  addGroupEntryDialog.value = false
+}
+
+async function removeGroupEntry(groupId: number, entryId: number) {
+  await api.delete(`/subject-groups/${groupId}/entries/${entryId}`)
+  const group = subjectGroups.value.find(g => g.id === groupId)
+  if (group) group.entries = group.entries.filter(e => e.id !== entryId)
+}
+
+async function deleteGroup(groupId: number) {
+  await api.delete(`/subject-groups/${groupId}`)
+  subjectGroups.value = subjectGroups.value.filter(g => g.id !== groupId)
 }
 
 onMounted(async () => {
@@ -289,6 +412,7 @@ async function save() {
 async function openCurriculum(row: SchoolClass) {
   selectedClass.value = row
   curriculumEntries.value = await classesStore.fetchCurriculum(row.id)
+  await loadSubjectGroups()
   curriculumDialog.value = true
 }
 
@@ -302,6 +426,7 @@ function openAddEntry() {
     is_semestral: false,
     semester: null,
     paired_entry_id: null,
+    _editingId: undefined,
   }
   addEntryDialog.value = true
 }
@@ -322,6 +447,12 @@ async function addEntry() {
     }
     const entry = await classesStore.addCurriculumEntry(selectedClass.value.id, payload)
     curriculumEntries.value.push(entry)
+    // Bidirectional pairing: also set paired_entry_id on the other entry
+    if (payload.paired_entry_id) {
+      const updated = await classesStore.updateCurriculumEntry(payload.paired_entry_id, { paired_entry_id: entry.id })
+      const idx = curriculumEntries.value.findIndex(e => e.id === payload.paired_entry_id)
+      if (idx !== -1) curriculumEntries.value[idx] = updated
+    }
     addEntryDialog.value = false
     $q.notify({ type: 'positive', message: 'Disciplina adicionada' })
   } catch {
@@ -330,6 +461,13 @@ async function addEntry() {
 }
 
 async function removeEntry(entryId: number) {
+  const entry = curriculumEntries.value.find(e => e.id === entryId)
+  // Clear bidirectional pairing before removing
+  if (entry?.paired_entry_id) {
+    const updated = await classesStore.updateCurriculumEntry(entry.paired_entry_id, { paired_entry_id: null })
+    const idx = curriculumEntries.value.findIndex(e => e.id === entry.paired_entry_id)
+    if (idx !== -1) curriculumEntries.value[idx] = updated
+  }
   await classesStore.removeCurriculumEntry(entryId)
   curriculumEntries.value = curriculumEntries.value.filter((e) => e.id !== entryId)
   $q.notify({ type: 'positive', message: 'Removida' })

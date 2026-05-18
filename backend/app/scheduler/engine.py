@@ -229,10 +229,19 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         if entry.is_semestral and entry.paired_entry_id:
             semestral_pairs[entry.id] = entry.paired_entry_id
 
+    # Subject groups (turnos): entries in the same group can share a slot
+    from app.models.models import SubjectGroup as SubjectGroupModel
+    group_pairs: set[tuple[int, int]] = set()  # pairs (min_eid, max_eid) that CAN share a slot
+    for sg in db.query(SubjectGroupModel).filter(SubjectGroupModel.academic_year_id == academic_year_id).all():
+        sg_eids = [sge.curriculum_entry_id for sge in sg.entries]
+        for i, eid_a in enumerate(sg_eids):
+            for eid_b in sg_eids[i + 1:]:
+                group_pairs.add((min(eid_a, eid_b), max(eid_a, eid_b)))
+
     for class_id, eids in entry_by_class.items():
         for si in range(n_slots):
             # For semestral pairs, only count one of the two paired entries
-            slot_vars = []
+            slot_vars_full: list[tuple[int, cp_model.IntVar]] = []
             for eid in eids:
                 skip = False
                 if eid in semestral_pairs:
@@ -243,9 +252,19 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                     n_occ = next((e.split_count if e.is_split else max(1, round(e.hours_per_week)) for e in entries if e.id == eid), 1)
                     for occ_idx in range(n_occ):
                         if (eid, occ_idx, si) in x:
-                            slot_vars.append(x[(eid, occ_idx, si)])
-            if len(slot_vars) > 1:
-                model.AddAtMostOne(slot_vars)
+                            slot_vars_full.append((eid, x[(eid, occ_idx, si)]))
+            if len(slot_vars_full) <= 1:
+                continue
+            if not group_pairs:
+                model.AddAtMostOne([v for _, v in slot_vars_full])
+            else:
+                for ii in range(len(slot_vars_full)):
+                    eid_i, var_i = slot_vars_full[ii]
+                    for jj in range(ii + 1, len(slot_vars_full)):
+                        eid_j, var_j = slot_vars_full[jj]
+                        pair_key = (min(eid_i, eid_j), max(eid_i, eid_j))
+                        if pair_key not in group_pairs:
+                            model.AddBoolOr([var_i.Not(), var_j.Not()])
 
     # 4. No teacher double-booking: for each (teacher, slot), at most one lesson
     # Use auxiliary variables: a[(eid, occ, tid, si)] = x AND t
@@ -327,7 +346,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             model.Add(day_a == day_b)
             model.Add(num_b == num_a + 1)  # occ_b immediately after occ_a
 
-    # 7. Semestral paired subjects must share the same time slot
+    # 7. Semestral paired subjects must share the same time slot (all occurrences)
     processed_semestral: set[int] = set()
     for entry in entries:
         if not entry.is_semestral or not entry.paired_entry_id:
@@ -339,16 +358,18 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             continue
         processed_semestral.add(entry.id)
         processed_semestral.add(paired.id)
-        # Force them to the same slot
+        # Force them to share the same slots across all occurrences
+        n_a = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+        n_b = paired.split_count if paired.is_split else max(1, round(paired.hours_per_week))
         for si in range(n_slots):
-            has_a = (entry.id, 0, si) in x
-            has_b = (paired.id, 0, si) in x
-            if has_a and has_b:
-                model.Add(x[(entry.id, 0, si)] == x[(paired.id, 0, si)])
-            elif has_a:
-                model.Add(x[(entry.id, 0, si)] == 0)
-            elif has_b:
-                model.Add(x[(paired.id, 0, si)] == 0)
+            sum_a = [x[(entry.id, occ, si)] for occ in range(n_a) if (entry.id, occ, si) in x]
+            sum_b = [x[(paired.id, occ, si)] for occ in range(n_b) if (paired.id, occ, si) in x]
+            if sum_a and sum_b:
+                model.Add(sum(sum_a) == sum(sum_b))
+            elif sum_a:
+                model.Add(sum(sum_a) == 0)
+            elif sum_b:
+                model.Add(sum(sum_b) == 0)
 
     # 8. No student gaps: for each class on each day, lessons must be contiguous
     if opt_no_student_gaps:
