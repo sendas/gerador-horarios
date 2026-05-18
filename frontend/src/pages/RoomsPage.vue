@@ -3,7 +3,17 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Salas</div>
       <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
+      <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
     </div>
+
+    <ImportDialog
+      v-model="showImport"
+      title="Importar Salas"
+      endpoint="/imports/rooms"
+      :extra-params="{ school_id: filterSchool }"
+      entity-type="rooms"
+      @done="loadRooms()"
+    />
 
     <div class="q-mb-md">
       <q-select v-model="filterSchool" :options="schoolOptions" label="Filtrar por escola" emit-value map-options clearable style="max-width:300px" @update:model-value="loadRooms" />
@@ -43,10 +53,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
 import { useSchoolsStore } from 'stores/schools'
+import ImportDialog from 'components/ImportDialog.vue'
 
 const $q = useQuasar()
 const schoolsStore = useSchoolsStore()
 
+const showImport = ref(false)
 const rooms = ref<{ id: number; school_id: number; name: string; capacity: number; room_type: string }[]>([])
 const loading = ref(false)
 const filterSchool = ref<number | null>(null)

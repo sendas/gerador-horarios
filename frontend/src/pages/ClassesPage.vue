@@ -3,7 +3,17 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Turmas</div>
       <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
+      <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
     </div>
+
+    <ImportDialog
+      v-model="showImport"
+      title="Importar Turmas"
+      endpoint="/imports/classes"
+      :extra-params="{ school_id: selectedSchoolId, academic_year_id: selectedYearId }"
+      entity-type="classes"
+      @done="classesStore.fetchAll()"
+    />
 
     <q-table :rows="classesStore.classes" :columns="columns" row-key="id" :loading="classesStore.loading">
       <template #body-cell-actions="props">
@@ -89,12 +99,17 @@ import { useClassesStore, type SchoolClass, type CurriculumEntry } from 'stores/
 import { useSchoolsStore } from 'stores/schools'
 import { useAcademicYearsStore } from 'stores/academicYears'
 import { useSubjectsStore } from 'stores/subjects'
+import ImportDialog from 'components/ImportDialog.vue'
 
 const $q = useQuasar()
 const classesStore = useClassesStore()
 const schoolsStore = useSchoolsStore()
 const yearsStore = useAcademicYearsStore()
 const subjectsStore = useSubjectsStore()
+
+const showImport = ref(false)
+const selectedSchoolId = computed(() => schoolsStore.schools[0]?.id ?? null)
+const selectedYearId = computed(() => yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null)
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },

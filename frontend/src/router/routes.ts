@@ -24,6 +24,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'timetables/:id', component: () => import('pages/TimetableDetailPage.vue') },
       { path: 'non-teaching', component: () => import('pages/NonTeachingPage.vue') },
       { path: 'users', component: () => import('pages/UsersPage.vue'), meta: { requiresAdmin: true } },
+      { path: 'about', component: () => import('pages/AboutPage.vue') },
     ],
   },
   {

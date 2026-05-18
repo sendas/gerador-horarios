@@ -11,6 +11,7 @@ from app.routers import (
     subjects, classes, subject_groups, teachers, non_teaching,
     timetables, exports
 )
+from app.routers import imports as imports_router
 from app.routers.auth import router as auth_router
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ app.include_router(teachers.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(non_teaching.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(timetables.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(exports.router, prefix=API_PREFIX, dependencies=[_auth])
+app.include_router(imports_router.router, prefix=API_PREFIX, dependencies=[_auth])
 
 
 @app.on_event("startup")

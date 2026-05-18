@@ -3,7 +3,17 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Professores</div>
       <q-btn color="primary" icon="add" label="Novo" @click="openCreate" />
+      <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
     </div>
+
+    <ImportDialog
+      v-model="showImport"
+      title="Importar Professores"
+      endpoint="/imports/teachers"
+      :extra-params="{ cluster_id: selectedClusterId }"
+      entity-type="teachers"
+      @done="teachersStore.fetchAll()"
+    />
 
     <q-table :rows="teachersStore.teachers" :columns="columns" row-key="id" :loading="teachersStore.loading">
       <template #body-cell-preferred_free_day="props">
@@ -165,10 +175,14 @@ import { useSchoolsStore } from 'stores/schools'
 import { useAcademicYearsStore } from 'stores/academicYears'
 import { useSubjectsStore } from 'stores/subjects'
 import { api } from 'boot/axios'
+import ImportDialog from 'components/ImportDialog.vue'
 
 const $q = useQuasar()
 const teachersStore = useTeachersStore()
 const clustersStore = useClustersStore()
+
+const showImport = ref(false)
+const selectedClusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
 const schoolsStore = useSchoolsStore()
 const yearsStore = useAcademicYearsStore()
 const subjectsStore = useSubjectsStore()

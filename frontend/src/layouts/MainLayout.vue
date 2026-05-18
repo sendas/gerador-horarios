@@ -25,6 +25,10 @@
           >{{ auth.user.role }}</q-badge>
         </q-chip>
 
+        <q-btn flat dense round :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'" @click="$q.dark.toggle(); saveDarkMode()">
+          <q-tooltip>{{ $q.dark.isActive ? 'Modo claro' : 'Modo escuro' }}</q-tooltip>
+        </q-btn>
+
         <q-btn flat dense round icon="logout" @click="handleLogout">
           <q-tooltip>Terminar sessão</q-tooltip>
         </q-btn>
@@ -110,6 +114,12 @@
             <q-item-section>Utilizadores</q-item-section>
           </q-item>
         </template>
+
+        <q-separator />
+        <q-item clickable v-ripple :to="'/about'">
+          <q-item-section avatar><q-icon name="info" /></q-item-section>
+          <q-item-section>Sobre</q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 
@@ -122,11 +132,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { useAuthStore } from 'stores/auth'
 
 const leftDrawerOpen = ref(false)
 const auth = useAuthStore()
 const router = useRouter()
+const $q = useQuasar()
+
+// Restore dark mode preference from localStorage
+const savedDark = localStorage.getItem('darkMode')
+if (savedDark !== null) $q.dark.set(savedDark === 'true')
 
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
@@ -135,5 +151,9 @@ function toggleLeftDrawer() {
 function handleLogout() {
   auth.logout()
   router.push('/login')
+}
+
+function saveDarkMode() {
+  localStorage.setItem('darkMode', String($q.dark.isActive))
 }
 </script>
