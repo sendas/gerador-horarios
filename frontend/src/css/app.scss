@@ -1,0 +1,17 @@
+// app global css in SCSS form
+@import 'quasar/src/css/index.sass';
+
+.page-header {
+  margin-bottom: 16px;
+}
+
+.timetable-grid {
+  overflow-x: auto;
+}
+
+.lesson-cell {
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.3;
+}
