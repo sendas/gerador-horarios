@@ -158,6 +158,14 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     max_consec_teacher = rules_obj.max_consecutive_periods_teacher if rules_obj else 4
     avoid_isolated = rules_obj.avoid_isolated_teacher if rules_obj else False
 
+    # opts override DB rules; fall back to DB rules, then hard defaults
+    if rules_obj and "students_start_slot_1" not in opts:
+        opts["students_start_slot_1"] = bool(getattr(rules_obj, "students_start_slot_1", True))
+    if rules_obj and "no_pe_after_lunch" not in opts:
+        opts["no_pe_after_lunch"] = bool(getattr(rules_obj, "no_pe_after_lunch", True))
+    if rules_obj and "lunch_after_slot" not in opts:
+        opts["lunch_after_slot"] = getattr(rules_obj, "lunch_after_slot", 4) or 4
+
     # ── Build occurrences ────────────────────────────────────────────────────
     # Each curriculum entry needs int(hours_per_week) occurrences per week
     # (handle fractional by rounding)
@@ -383,11 +391,15 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                             )
 
     # 9. No same subject twice per day
+    # Entries with consecutive_pairs > 0 need exactly 2 occurrences on the same day
+    # (the consecutive pair itself), so the per-day cap is 2 for those entries.
     if opt_no_same_subject_twice:
         for entry in entries:
             n_occ = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
             if n_occ <= 1:
                 continue
+            cp = getattr(entry, 'consecutive_pairs', 0) or 0
+            max_per_day_entry = 2 if cp > 0 else 1
             for day in DAYS:
                 day_slot_indices = [si for si in range(n_slots) if slot_day_of[si] == day]
                 day_vars = [
@@ -397,7 +409,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                     if (entry.id, occ, si) in x
                 ]
                 if day_vars:
-                    model.Add(sum(day_vars) <= 1)
+                    model.Add(sum(day_vars) <= max_per_day_entry)
 
     # 10. Students start at slot 1: first slot of each day must be used if class has any lesson
     if opts.get("students_start_slot_1", True):

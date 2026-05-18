@@ -24,7 +24,7 @@ class GenerationOptions(BaseModel):
     teacher_gap_weight: int = 10
     no_same_subject_twice_per_day: bool = True
     distribute_subjects_weight: int = 5
-    max_time_seconds: int = 120
+    max_time_seconds: int = 300
     students_start_slot_1: bool = True
     no_pe_after_lunch: bool = True
     lunch_after_slot: int = 4

@@ -20,6 +20,8 @@
         <!-- Restrições alunos -->
         <div class="text-subtitle2">Alunos</div>
         <q-toggle v-model="opts.no_student_gaps" label="Sem furos nos horários dos alunos (restrição rígida)" />
+        <q-toggle v-model="opts.students_start_slot_1" label="Alunos entram sempre no 1.º tempo (restrição rígida)" />
+        <q-toggle v-model="opts.no_pe_after_lunch" label="Educação Física nunca depois do almoço" />
 
         <q-separator/>
 
@@ -71,11 +73,13 @@ const opts = reactive({
   include3rdCycle: true,
   includeSecondary: true,
   no_student_gaps: true,
+  students_start_slot_1: true,
+  no_pe_after_lunch: true,
   minimize_teacher_gaps: true,
   teacher_gap_weight: 10,
   no_same_subject_twice_per_day: true,
   distribute_subjects_weight: 5,
-  max_time_seconds: 120,
+  max_time_seconds: 300,
 })
 
 async function generate() {
@@ -90,6 +94,8 @@ async function generate() {
     await api.post(`/timetables/${props.timetableId}/generate`, {
       year_levels: year_levels.length === 0 ? null : year_levels,
       no_student_gaps: opts.no_student_gaps,
+      students_start_slot_1: opts.students_start_slot_1,
+      no_pe_after_lunch: opts.no_pe_after_lunch,
       minimize_teacher_gaps: opts.minimize_teacher_gaps,
       teacher_gap_weight: opts.teacher_gap_weight,
       no_same_subject_twice_per_day: opts.no_same_subject_twice_per_day,
