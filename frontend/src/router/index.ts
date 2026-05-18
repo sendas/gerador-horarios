@@ -18,5 +18,27 @@ export default route(function (/* { store, ssrContext } */) {
     history: createHistory(process.env.VUE_ROUTER_BASE),
   })
 
+  Router.beforeEach((to) => {
+    const token = localStorage.getItem('token')
+    const isAuthenticated = !!token
+
+    if (to.meta.requiresAuth && !isAuthenticated) {
+      return { path: '/login', query: { redirect: to.fullPath } }
+    }
+
+    if (to.path === '/login' && isAuthenticated) {
+      return { path: '/' }
+    }
+
+    if (to.meta.requiresAdmin) {
+      const user = JSON.parse(localStorage.getItem('user') ?? 'null')
+      if (!user || user.role !== 'admin') {
+        return { path: '/' }
+      }
+    }
+
+    return true
+  })
+
   return Router
 })

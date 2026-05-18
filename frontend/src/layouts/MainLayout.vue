@@ -7,6 +7,27 @@
           <q-icon name="schedule" class="q-mr-sm" />
           Gerador de Horários
         </q-toolbar-title>
+
+        <q-chip
+          v-if="auth.user"
+          square
+          color="white"
+          text-color="primary"
+          class="q-mr-xs"
+          size="sm"
+        >
+          <q-avatar icon="person" />
+          {{ auth.user.full_name || auth.user.username }}
+          <q-badge
+            v-if="auth.user.role !== 'user'"
+            :color="auth.user.role === 'admin' ? 'red-7' : 'grey-6'"
+            floating
+          >{{ auth.user.role }}</q-badge>
+        </q-chip>
+
+        <q-btn flat dense round icon="logout" @click="handleLogout">
+          <q-tooltip>Terminar sessão</q-tooltip>
+        </q-btn>
       </q-toolbar>
     </q-header>
 
@@ -80,6 +101,15 @@
           <q-item-section avatar><q-icon name="table_chart" /></q-item-section>
           <q-item-section>Horários</q-item-section>
         </q-item>
+
+        <template v-if="auth.isAdmin">
+          <q-separator />
+          <q-item-label header caption>Administração</q-item-label>
+          <q-item clickable v-ripple :to="'/users'">
+            <q-item-section avatar><q-icon name="manage_accounts" /></q-item-section>
+            <q-item-section>Utilizadores</q-item-section>
+          </q-item>
+        </template>
       </q-list>
     </q-drawer>
 
@@ -91,10 +121,19 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from 'stores/auth'
 
 const leftDrawerOpen = ref(false)
+const auth = useAuthStore()
+const router = useRouter()
 
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
+}
+
+function handleLogout() {
+  auth.logout()
+  router.push('/login')
 }
 </script>
