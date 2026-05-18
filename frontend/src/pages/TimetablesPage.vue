@@ -18,7 +18,7 @@
             title="Gerar"
             :loading="store.generating"
             :disable="props.row.status === 'generating'"
-            @click="generate(props.row)"
+            @click="openGenerateDialog(props.row)"
           />
           <q-btn flat round dense icon="visibility" color="primary" :to="`/timetables/${props.row.id}`" />
           <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
@@ -41,6 +41,8 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <GenerateTimetableDialog v-model="showGenerateDialog" :timetable-id="generateTargetId" @started="load()" />
   </q-page>
 </template>
 
@@ -49,10 +51,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useTimetablesStore } from 'stores/timetables'
 import { useAcademicYearsStore } from 'stores/academicYears'
+import GenerateTimetableDialog from 'components/GenerateTimetableDialog.vue'
 
 const $q = useQuasar()
 const store = useTimetablesStore()
 const yearsStore = useAcademicYearsStore()
+
+const showGenerateDialog = ref(false)
+const generateTargetId = ref<number | null>(null)
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
@@ -80,6 +86,10 @@ onMounted(async () => {
   await Promise.all([store.fetchAll(), yearsStore.fetchAll()])
 })
 
+async function load() {
+  await store.fetchAll()
+}
+
 async function create() {
   if (!form.value.academic_year_id) return
   try {
@@ -91,14 +101,9 @@ async function create() {
   }
 }
 
-async function generate(row: { id: number }) {
-  try {
-    await store.generate(row.id)
-    $q.notify({ type: 'info', message: 'Geração iniciada. Aguarde...' })
-    setTimeout(() => store.fetchAll(), 5000)
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao iniciar geração' })
-  }
+function openGenerateDialog(row: { id: number }) {
+  generateTargetId.value = row.id
+  showGenerateDialog.value = true
 }
 
 function openCreate() {

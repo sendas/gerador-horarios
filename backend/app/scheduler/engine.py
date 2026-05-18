@@ -4,7 +4,9 @@ OR-Tools CP-SAT scheduler engine for school timetable generation.
 import logging
 from datetime import datetime
 from collections import defaultdict
+from itertools import combinations
 from ortools.sat.python import cp_model
+from ortools.sat.python.cp_model import LinearExpr
 from app.database import SessionLocal
 from app.models.models import (
     Timetable, ScheduledLesson, CurriculumEntry, Class, Subject,
@@ -18,10 +20,10 @@ logger = logging.getLogger(__name__)
 DAYS = [0, 1, 2, 3, 4]  # Mon-Fri
 
 
-def generate_timetable(timetable_id: int):
+def generate_timetable(timetable_id: int, options: dict = None):
     db = SessionLocal()
     try:
-        _run_solver(db, timetable_id)
+        _run_solver(db, timetable_id, options)
     except Exception as e:
         logger.error(f"Solver error for timetable {timetable_id}: {e}", exc_info=True)
         tt = db.query(Timetable).filter(Timetable.id == timetable_id).first()
@@ -34,12 +36,22 @@ def generate_timetable(timetable_id: int):
         db.close()
 
 
-def _run_solver(db, timetable_id: int):
+def _run_solver(db, timetable_id: int, options: dict = None):
     tt = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not tt:
         raise ValueError(f"Timetable {timetable_id} not found")
 
     academic_year_id = tt.academic_year_id
+
+    # ── Extract generation options ────────────────────────────────────────────
+    opts = options or {}
+    year_levels_filter = opts.get("year_levels")  # None or list of ints
+    opt_no_student_gaps = opts.get("no_student_gaps", True)
+    opt_minimize_teacher_gaps = opts.get("minimize_teacher_gaps", True)
+    opt_teacher_gap_weight = opts.get("teacher_gap_weight", 10)
+    opt_no_same_subject_twice = opts.get("no_same_subject_twice_per_day", True)
+    opt_distribute_weight = opts.get("distribute_subjects_weight", 5)
+    max_time = opts.get("max_time_seconds", 120)
 
     # ── Load data ────────────────────────────────────────────────────────────
 
@@ -73,6 +85,10 @@ def _run_solver(db, timetable_id: int):
         tt.updated_at = datetime.utcnow()
         db.commit()
         return
+
+    # Filter entries by year_level if specified
+    if year_levels_filter:
+        entries = [e for e in entries if e.class_.year_level in year_levels_filter]
 
     # Teachers eligible for each entry (via TeacherSubject)
     entry_teachers: dict[int, list[int]] = {}
@@ -250,6 +266,23 @@ def _run_solver(db, timetable_id: int):
                         # If teacher is assigned AND slot is this blocked slot -> forbidden
                         model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
 
+    # 5c. Teacher min_start_slot / max_end_slot
+    for (eid, occ) in occurrences:
+        for tid in entry_teachers.get(eid, []):
+            if (eid, occ, tid) not in t:
+                continue
+            teacher = teachers.get(tid)
+            if not teacher:
+                continue
+            if teacher.min_start_slot is not None:
+                for si, (day, slot_num) in enumerate(all_slots):
+                    if slot_num < teacher.min_start_slot and (eid, occ, si) in x:
+                        model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
+            if teacher.max_end_slot is not None:
+                for si, (day, slot_num) in enumerate(all_slots):
+                    if slot_num > teacher.max_end_slot and (eid, occ, si) in x:
+                        model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
+
     # 5b. Max periods per day per class (hard constraint from scheduling rules)
     for class_id, eids in entry_by_class.items():
         for day in DAYS:
@@ -308,6 +341,63 @@ def _run_solver(db, timetable_id: int):
                 model.Add(x[(entry.id, 0, si)] == 0)
             elif has_b:
                 model.Add(x[(paired.id, 0, si)] == 0)
+
+    # 8. No student gaps: for each class on each day, lessons must be contiguous
+    if opt_no_student_gaps:
+        for class_id, eids in entry_by_class.items():
+            for day in DAYS:
+                day_slots_sorted = sorted(
+                    [si for si in range(n_slots) if slot_day_of[si] == day],
+                    key=lambda si: slot_num_of[si]
+                )
+                if len(day_slots_sorted) < 3:
+                    continue
+                # is_used[si] = class has a lesson here
+                is_used_map = {}
+                for si in day_slots_sorted:
+                    occ_vars = [
+                        x[(eid, occ, si)]
+                        for eid in eids
+                        for occ in range(next((
+                            e.split_count if e.is_split else max(1, round(e.hours_per_week))
+                            for e in entries if e.id == eid), 1))
+                        if (eid, occ, si) in x
+                    ]
+                    if not occ_vars:
+                        is_used_map[si] = model.NewConstant(0)
+                    else:
+                        used_v = model.NewBoolVar(f"used_c{class_id}_d{day}_s{si}")
+                        model.AddBoolOr(occ_vars).OnlyEnforceIf(used_v)
+                        model.AddBoolAnd([v.Not() for v in occ_vars]).OnlyEnforceIf(used_v.Not())
+                        is_used_map[si] = used_v
+                # No gaps: if slots j and k used, all between must be used
+                n_day = len(day_slots_sorted)
+                for ji in range(n_day):
+                    for ki in range(ji + 2, n_day):
+                        for ii in range(ji + 1, ki):
+                            sj = day_slots_sorted[ji]
+                            sk = day_slots_sorted[ki]
+                            si = day_slots_sorted[ii]
+                            model.Add(
+                                is_used_map[sj] + is_used_map[sk] <= is_used_map[si] + 1
+                            )
+
+    # 9. No same subject twice per day
+    if opt_no_same_subject_twice:
+        for entry in entries:
+            n_occ = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+            if n_occ <= 1:
+                continue
+            for day in DAYS:
+                day_slot_indices = [si for si in range(n_slots) if slot_day_of[si] == day]
+                day_vars = [
+                    x[(entry.id, occ, si)]
+                    for occ in range(n_occ)
+                    for si in day_slot_indices
+                    if (entry.id, occ, si) in x
+                ]
+                if day_vars:
+                    model.Add(sum(day_vars) <= 1)
 
     # ── Soft constraints (objective) ─────────────────────────────────────────
     penalty_terms = []
@@ -383,12 +473,103 @@ def _run_solver(db, timetable_id: int):
                             model.AddBoolOr([aux_here.Not()] + adj_teaching).OnlyEnforceIf(is_isolated.Not())
                             penalty_terms.append(is_isolated)
 
+    # Soft: preferred shift (morning/afternoon)
+    for tid, teacher in teachers.items():
+        if not teacher.preferred_shift:
+            continue
+        for day in DAYS:
+            day_slots_list = sorted([si for si in range(n_slots) if slot_day_of[si] == day])
+            if not day_slots_list:
+                continue
+            half = len(day_slots_list) // 2
+            if teacher.preferred_shift == 'morning':
+                penalty_slots = day_slots_list[half:]  # penalize afternoon slots
+            else:
+                penalty_slots = day_slots_list[:half]  # penalize morning slots
+            for (eid, occ) in occurrences:
+                for si in penalty_slots:
+                    if (eid, occ, si) in x and (eid, occ, tid) in t:
+                        aux = model.NewBoolVar(f"shift_{eid}_{occ}_{tid}_{si}")
+                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                        penalty_terms.append(aux)
+
+    # Soft: minimize teacher gaps
+    if opt_minimize_teacher_gaps and opt_teacher_gap_weight > 0:
+        for tid in all_teacher_ids:
+            for day in DAYS:
+                day_slots_sorted = sorted(
+                    [si for si in range(n_slots) if slot_day_of[si] == day],
+                    key=lambda si: slot_num_of[si]
+                )
+                if len(day_slots_sorted) < 3:
+                    continue
+                # teacher_at[si] = BoolVar: teacher has a lesson here
+                teacher_at = {}
+                for si in day_slots_sorted:
+                    t_vars_here = []
+                    for (eid, occ) in occurrences:
+                        if (eid, occ, si) in x and (eid, occ, tid) in t:
+                            aux = model.NewBoolVar(f"tgap_at_{tid}_{day}_{si}_{eid}_{occ}")
+                            model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                            model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                            t_vars_here.append(aux)
+                    if not t_vars_here:
+                        teacher_at[si] = model.NewConstant(0)
+                    else:
+                        at_v = model.NewBoolVar(f"tgap_used_{tid}_{day}_{si}")
+                        model.AddBoolOr(t_vars_here).OnlyEnforceIf(at_v)
+                        model.AddBoolAnd([v.Not() for v in t_vars_here]).OnlyEnforceIf(at_v.Not())
+                        teacher_at[si] = at_v
+                # Penalize each gap slot (slot between first and last teacher lesson that is free)
+                n_day = len(day_slots_sorted)
+                for ji in range(n_day):
+                    for ki in range(ji + 2, n_day):
+                        for ii in range(ji + 1, ki):
+                            sj = day_slots_sorted[ji]
+                            sk = day_slots_sorted[ki]
+                            si_mid = day_slots_sorted[ii]
+                            # gap = teacher_at[sj] AND teacher_at[sk] AND NOT teacher_at[si_mid]
+                            gap_v = model.NewBoolVar(f"gap_{tid}_{day}_{sj}_{si_mid}_{sk}")
+                            model.AddBoolAnd([
+                                teacher_at[sj], teacher_at[sk], teacher_at[si_mid].Not()
+                            ]).OnlyEnforceIf(gap_v)
+                            model.AddBoolOr([
+                                teacher_at[sj].Not(), teacher_at[sk].Not(), teacher_at[si_mid]
+                            ]).OnlyEnforceIf(gap_v.Not())
+                            penalty_terms.append(LinearExpr.Term(gap_v, opt_teacher_gap_weight))
+
+    # Soft: prefer different days for split occurrences
+    if opt_distribute_weight > 0:
+        for entry in entries:
+            n_occ = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+            if n_occ <= 1:
+                continue
+            for day in DAYS:
+                day_slot_indices = [si for si in range(n_slots) if slot_day_of[si] == day]
+                for occ_a, occ_b in combinations(range(n_occ), 2):
+                    # Penalize if both occ_a and occ_b land on same day
+                    vars_a = [x[(entry.id, occ_a, si)] for si in day_slot_indices if (entry.id, occ_a, si) in x]
+                    vars_b = [x[(entry.id, occ_b, si)] for si in day_slot_indices if (entry.id, occ_b, si) in x]
+                    if not vars_a or not vars_b:
+                        continue
+                    on_day_a = model.NewBoolVar(f"distA_{entry.id}_{occ_a}_{day}")
+                    on_day_b = model.NewBoolVar(f"distB_{entry.id}_{occ_b}_{day}")
+                    model.AddBoolOr(vars_a).OnlyEnforceIf(on_day_a)
+                    model.AddBoolAnd([v.Not() for v in vars_a]).OnlyEnforceIf(on_day_a.Not())
+                    model.AddBoolOr(vars_b).OnlyEnforceIf(on_day_b)
+                    model.AddBoolAnd([v.Not() for v in vars_b]).OnlyEnforceIf(on_day_b.Not())
+                    both_day = model.NewBoolVar(f"distBoth_{entry.id}_{occ_a}_{occ_b}_{day}")
+                    model.AddBoolAnd([on_day_a, on_day_b]).OnlyEnforceIf(both_day)
+                    model.AddBoolOr([on_day_a.Not(), on_day_b.Not()]).OnlyEnforceIf(both_day.Not())
+                    penalty_terms.append(LinearExpr.Term(both_day, opt_distribute_weight))
+
     if penalty_terms:
         model.Minimize(sum(penalty_terms))
 
     # ── Solve ─────────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 60.0
+    solver.parameters.max_time_in_seconds = float(max_time)
     solver.parameters.num_workers = 4
 
     status = solver.Solve(model)

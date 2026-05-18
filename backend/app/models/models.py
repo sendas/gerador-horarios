@@ -171,6 +171,10 @@ class Teacher(Base):
     email = Column(String, unique=True, nullable=True)
     max_daily_lessons = Column(Integer, default=5)
     preferred_free_day = Column(Integer, nullable=True)  # 0-4 Mon-Fri
+    min_start_slot = Column(Integer, nullable=True)   # earliest slot_number teacher can start
+    max_end_slot = Column(Integer, nullable=True)     # latest slot_number teacher can end
+    preferred_shift = Column(String, nullable=True)   # 'morning' | 'afternoon' | None
+    max_consecutive_lessons = Column(Integer, nullable=True)  # override global rule
 
     cluster = relationship("Cluster", back_populates="teachers")
     school_assignments = relationship("TeacherSchoolAssignment", back_populates="teacher")
@@ -265,6 +269,11 @@ class SchedulingRules(Base):
     max_consecutive_periods_class = Column(Integer, default=2)
     max_consecutive_periods_teacher = Column(Integer, default=4)
     avoid_isolated_teacher = Column(Boolean, default=False)  # penalize isolated single periods for teachers
+    no_student_gaps = Column(Boolean, default=True)        # hard: no free slots between class lessons
+    minimize_teacher_gaps = Column(Boolean, default=True)   # soft: reduce holes in teacher day
+    teacher_gap_weight = Column(Integer, default=10)        # penalty weight for teacher gaps
+    no_same_subject_twice_per_day = Column(Boolean, default=True)  # hard: split occurrences on different days
+    distribute_subjects_weight = Column(Integer, default=5) # soft: spread subject across week days
 
     cluster = relationship("Cluster")
     academic_year = relationship("AcademicYear")

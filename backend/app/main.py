@@ -27,6 +27,15 @@ for _sql in [
     "ALTER TABLE curriculum_entries ADD COLUMN semester INTEGER",
     "ALTER TABLE curriculum_entries ADD COLUMN paired_entry_id INTEGER REFERENCES curriculum_entries(id)",
     "ALTER TABLE scheduled_lessons ADD COLUMN semester INTEGER",
+    "ALTER TABLE teachers ADD COLUMN min_start_slot INTEGER",
+    "ALTER TABLE teachers ADD COLUMN max_end_slot INTEGER",
+    "ALTER TABLE teachers ADD COLUMN preferred_shift TEXT",
+    "ALTER TABLE teachers ADD COLUMN max_consecutive_lessons INTEGER",
+    "ALTER TABLE scheduling_rules ADD COLUMN no_student_gaps BOOLEAN DEFAULT 1",
+    "ALTER TABLE scheduling_rules ADD COLUMN minimize_teacher_gaps BOOLEAN DEFAULT 1",
+    "ALTER TABLE scheduling_rules ADD COLUMN teacher_gap_weight INTEGER DEFAULT 10",
+    "ALTER TABLE scheduling_rules ADD COLUMN no_same_subject_twice_per_day BOOLEAN DEFAULT 1",
+    "ALTER TABLE scheduling_rules ADD COLUMN distribute_subjects_weight INTEGER DEFAULT 5",
 ]:
     try:
         with engine.connect() as _conn:

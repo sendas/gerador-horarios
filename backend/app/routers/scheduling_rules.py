@@ -18,6 +18,11 @@ class SchedulingRulesCreate(BaseModel):
     max_consecutive_periods_class: int = 2
     max_consecutive_periods_teacher: int = 4
     avoid_isolated_teacher: bool = False
+    no_student_gaps: bool = True
+    minimize_teacher_gaps: bool = True
+    teacher_gap_weight: int = 10
+    no_same_subject_twice_per_day: bool = True
+    distribute_subjects_weight: int = 5
 
 
 class SchedulingRulesUpdate(BaseModel):
@@ -26,6 +31,11 @@ class SchedulingRulesUpdate(BaseModel):
     max_consecutive_periods_class: Optional[int] = None
     max_consecutive_periods_teacher: Optional[int] = None
     avoid_isolated_teacher: Optional[bool] = None
+    no_student_gaps: Optional[bool] = None
+    minimize_teacher_gaps: Optional[bool] = None
+    teacher_gap_weight: Optional[int] = None
+    no_same_subject_twice_per_day: Optional[bool] = None
+    distribute_subjects_weight: Optional[int] = None
 
 
 class SchedulingRulesResponse(BaseModel):
@@ -38,6 +48,11 @@ class SchedulingRulesResponse(BaseModel):
     max_consecutive_periods_class: int
     max_consecutive_periods_teacher: int
     avoid_isolated_teacher: bool
+    no_student_gaps: bool = True
+    minimize_teacher_gaps: bool = True
+    teacher_gap_weight: int = 10
+    no_same_subject_twice_per_day: bool = True
+    distribute_subjects_weight: int = 5
 
 
 @router.get("", response_model=List[SchedulingRulesResponse])

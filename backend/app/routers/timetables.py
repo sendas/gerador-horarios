@@ -1,13 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 from app.database import get_db
 from app.models.models import Timetable, ScheduledLesson, CurriculumEntry, Teacher, Room
 from app.schemas.schemas import (
     TimetableCreate, TimetableUpdate, TimetableResponse,
     TimetableDetail, ScheduledLessonDetail
 )
+
+
+class GenerationOptions(BaseModel):
+    year_levels: Optional[List[int]] = None  # None=all, [5,6]=2nd cycle, [7,8,9]=3rd cycle
+    no_student_gaps: bool = True
+    minimize_teacher_gaps: bool = True
+    teacher_gap_weight: int = 10
+    no_same_subject_twice_per_day: bool = True
+    distribute_subjects_weight: int = 5
+    max_time_seconds: int = 120
 
 router = APIRouter(prefix="/timetables", tags=["timetables"])
 
@@ -87,7 +98,12 @@ def delete_timetable(id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{id}/generate")
-def generate_timetable(id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def generate_timetable(
+    id: int,
+    background_tasks: BackgroundTasks,
+    options: GenerationOptions = None,
+    db: Session = Depends(get_db)
+):
     obj = db.query(Timetable).filter(Timetable.id == id).first()
     if not obj:
         raise HTTPException(status_code=404, detail="Timetable not found")
@@ -97,8 +113,9 @@ def generate_timetable(id: int, background_tasks: BackgroundTasks, db: Session =
     obj.updated_at = datetime.utcnow()
     db.commit()
 
+    options = options or GenerationOptions()
     from app.scheduler.engine import generate_timetable as run_solver
-    background_tasks.add_task(run_solver, id)
+    background_tasks.add_task(run_solver, id, options.model_dump())
     return {"message": "Generation started", "timetable_id": id}
 
 

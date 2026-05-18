@@ -98,6 +98,57 @@
             Quando ativo, o sistema penaliza situações em que um professor tem apenas um tempo letivo isolado num dia,
             sem aulas adjacentes. Isto reduz deslocações desnecessárias.
           </div>
+
+          <div class="text-h6 q-mb-md q-mt-lg">Restrições de Horário dos Alunos</div>
+          <q-toggle
+            v-model="form.no_student_gaps"
+            label="Sem furos nos horários dos alunos"
+            color="primary"
+          />
+          <div class="text-caption text-grey q-mt-xs q-ml-xl">
+            Restrição rígida: as aulas de cada turma num dado dia devem ser contíguas (sem períodos livres entre elas).
+          </div>
+
+          <div class="text-h6 q-mb-md q-mt-lg">Restrições de Horário dos Professores</div>
+          <q-toggle
+            v-model="form.minimize_teacher_gaps"
+            label="Minimizar furos dos professores"
+            color="primary"
+          />
+          <div class="text-caption text-grey q-mt-xs q-ml-xl q-mb-sm">
+            Soft: penaliza períodos livres entre aulas de um professor no mesmo dia.
+          </div>
+          <q-input
+            v-if="form.minimize_teacher_gaps"
+            v-model.number="form.teacher_gap_weight"
+            label="Peso dos furos de professor"
+            type="number"
+            min="1"
+            max="50"
+            outlined
+            style="max-width: 200px"
+            hint="Penalização por cada furo (1–50)."
+          />
+
+          <div class="text-h6 q-mb-md q-mt-lg">Distribuição de Disciplinas</div>
+          <q-toggle
+            v-model="form.no_same_subject_twice_per_day"
+            label="Máximo 1 tempo por disciplina por dia"
+            color="primary"
+          />
+          <div class="text-caption text-grey q-mt-xs q-ml-xl q-mb-sm">
+            Restrição rígida: uma turma não pode ter a mesma disciplina duas vezes no mesmo dia.
+          </div>
+          <q-input
+            v-model.number="form.distribute_subjects_weight"
+            label="Peso da distribuição semanal de disciplinas"
+            type="number"
+            min="0"
+            max="20"
+            outlined
+            style="max-width: 220px"
+            hint="Penalização por disciplina repetida no mesmo dia (0 = desligado)."
+          />
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md">
@@ -193,6 +244,11 @@ interface SchedulingRulesResponse {
   max_consecutive_periods_class: number
   max_consecutive_periods_teacher: number
   avoid_isolated_teacher: boolean
+  no_student_gaps: boolean
+  minimize_teacher_gaps: boolean
+  teacher_gap_weight: number
+  no_same_subject_twice_per_day: boolean
+  distribute_subjects_weight: number
 }
 
 const $q = useQuasar()
@@ -211,6 +267,11 @@ const defaultForm = () => ({
   max_consecutive_periods_class: 2,
   max_consecutive_periods_teacher: 4,
   avoid_isolated_teacher: false,
+  no_student_gaps: true,
+  minimize_teacher_gaps: true,
+  teacher_gap_weight: 10,
+  no_same_subject_twice_per_day: true,
+  distribute_subjects_weight: 5,
 })
 
 const form = ref(defaultForm())
@@ -259,6 +320,11 @@ async function loadRules() {
         max_consecutive_periods_class: currentRule.value.max_consecutive_periods_class,
         max_consecutive_periods_teacher: currentRule.value.max_consecutive_periods_teacher,
         avoid_isolated_teacher: currentRule.value.avoid_isolated_teacher,
+        no_student_gaps: currentRule.value.no_student_gaps,
+        minimize_teacher_gaps: currentRule.value.minimize_teacher_gaps,
+        teacher_gap_weight: currentRule.value.teacher_gap_weight,
+        no_same_subject_twice_per_day: currentRule.value.no_same_subject_twice_per_day,
+        distribute_subjects_weight: currentRule.value.distribute_subjects_weight,
       }
       showForm.value = true
     } else {

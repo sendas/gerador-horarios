@@ -224,6 +224,10 @@ class TeacherBase(BaseModel):
     email: Optional[str] = None
     max_daily_lessons: int = 5
     preferred_free_day: Optional[int] = None
+    min_start_slot: Optional[int] = None
+    max_end_slot: Optional[int] = None
+    preferred_shift: Optional[str] = None
+    max_consecutive_lessons: Optional[int] = None
 
 class TeacherCreate(TeacherBase):
     pass
@@ -233,6 +237,10 @@ class TeacherUpdate(BaseModel):
     email: Optional[str] = None
     max_daily_lessons: Optional[int] = None
     preferred_free_day: Optional[int] = None
+    min_start_slot: Optional[int] = None
+    max_end_slot: Optional[int] = None
+    preferred_shift: Optional[str] = None
+    max_consecutive_lessons: Optional[int] = None
 
 class TeacherResponse(TeacherBase):
     model_config = ConfigDict(from_attributes=True)

@@ -46,6 +46,48 @@
               label="Dia livre preferido"
               emit-value map-options clearable
             />
+            <q-separator class="q-my-sm" />
+            <div class="text-caption text-grey-6 q-mb-sm">Preferências de horário</div>
+
+            <div class="row q-gutter-sm">
+              <q-input
+                v-model.number="form.min_start_slot"
+                label="Não entrar antes do tempo n.°"
+                type="number"
+                min="1"
+                :max="10"
+                hint="Ex: 2 = não começa no 1.° tempo"
+                style="min-width: 200px"
+                clearable
+              />
+              <q-input
+                v-model.number="form.max_end_slot"
+                label="Não sair depois do tempo n.°"
+                type="number"
+                min="1"
+                :max="10"
+                hint="Ex: 6 = termina no máximo no 6.° tempo"
+                style="min-width: 200px"
+                clearable
+              />
+            </div>
+            <q-select
+              v-model="form.preferred_shift"
+              :options="shiftOptions"
+              label="Turno preferido"
+              emit-value
+              map-options
+              clearable
+            />
+            <q-input
+              v-model.number="form.max_consecutive_lessons"
+              label="Máx. aulas consecutivas (sobrepõe-se à regra global)"
+              type="number"
+              min="1"
+              :max="8"
+              clearable
+              hint="Deixa vazio para usar a regra global"
+            />
             <div class="row justify-end q-mt-md q-gutter-sm">
               <q-btn flat label="Cancelar" v-close-popup />
               <q-btn type="submit" color="primary" :label="editing ? 'Guardar' : 'Criar'" />
@@ -198,9 +240,23 @@ const columns = [
 ]
 
 const dayOptions = DAYS.map((d, i) => ({ label: d, value: i }))
+const shiftOptions = [
+  { label: 'Manhã (preferência)', value: 'morning' },
+  { label: 'Tarde (preferência)', value: 'afternoon' },
+]
 const dialog = ref(false)
 const editing = ref<null | Teacher>(null)
-const form = ref({ cluster_id: null as number | null, name: '', email: '', max_daily_lessons: 5, preferred_free_day: null as number | null })
+const form = ref({
+  cluster_id: null as number | null,
+  name: '',
+  email: '',
+  max_daily_lessons: 5,
+  preferred_free_day: null as number | null,
+  min_start_slot: null as number | null,
+  max_end_slot: null as number | null,
+  preferred_shift: null as string | null,
+  max_consecutive_lessons: null as number | null,
+})
 
 const clusterOptions = computed(() => clustersStore.clusters.map((c) => ({ label: c.name, value: c.id })))
 const schoolOptions = computed(() => schoolsStore.schools.map((s) => ({ label: s.name, value: s.id })))
@@ -253,13 +309,33 @@ onMounted(async () => {
 
 function openCreate() {
   editing.value = null
-  form.value = { cluster_id: null, name: '', email: '', max_daily_lessons: 5, preferred_free_day: null }
+  form.value = {
+    cluster_id: null,
+    name: '',
+    email: '',
+    max_daily_lessons: 5,
+    preferred_free_day: null,
+    min_start_slot: null,
+    max_end_slot: null,
+    preferred_shift: null,
+    max_consecutive_lessons: null,
+  }
   dialog.value = true
 }
 
 function openEdit(row: Teacher) {
   editing.value = row
-  form.value = { cluster_id: row.cluster_id, name: row.name, email: row.email || '', max_daily_lessons: row.max_daily_lessons, preferred_free_day: row.preferred_free_day ?? null }
+  form.value = {
+    cluster_id: row.cluster_id,
+    name: row.name,
+    email: row.email || '',
+    max_daily_lessons: row.max_daily_lessons,
+    preferred_free_day: row.preferred_free_day ?? null,
+    min_start_slot: (row as unknown as { min_start_slot?: number | null }).min_start_slot ?? null,
+    max_end_slot: (row as unknown as { max_end_slot?: number | null }).max_end_slot ?? null,
+    preferred_shift: (row as unknown as { preferred_shift?: string | null }).preferred_shift ?? null,
+    max_consecutive_lessons: (row as unknown as { max_consecutive_lessons?: number | null }).max_consecutive_lessons ?? null,
+  }
   dialog.value = true
 }
 
