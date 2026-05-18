@@ -15,6 +15,7 @@ app = FastAPI(
     title="Gerador de Horários API",
     description="API para geração automática de horários escolares",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(
