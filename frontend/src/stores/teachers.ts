@@ -9,6 +9,10 @@ export interface Teacher {
   email?: string
   max_daily_lessons: number
   preferred_free_day?: number
+  min_start_slot?: number | null
+  max_end_slot?: number | null
+  preferred_shift?: string | null
+  max_consecutive_lessons?: number | null
 }
 
 export interface TeacherSchoolAssignment {

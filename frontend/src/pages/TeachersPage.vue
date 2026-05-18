@@ -331,10 +331,10 @@ function openEdit(row: Teacher) {
     email: row.email || '',
     max_daily_lessons: row.max_daily_lessons,
     preferred_free_day: row.preferred_free_day ?? null,
-    min_start_slot: (row as unknown as { min_start_slot?: number | null }).min_start_slot ?? null,
-    max_end_slot: (row as unknown as { max_end_slot?: number | null }).max_end_slot ?? null,
-    preferred_shift: (row as unknown as { preferred_shift?: string | null }).preferred_shift ?? null,
-    max_consecutive_lessons: (row as unknown as { max_consecutive_lessons?: number | null }).max_consecutive_lessons ?? null,
+    min_start_slot: row.min_start_slot ?? null,
+    max_end_slot: row.max_end_slot ?? null,
+    preferred_shift: row.preferred_shift ?? null,
+    max_consecutive_lessons: row.max_consecutive_lessons ?? null,
   }
   dialog.value = true
 }
