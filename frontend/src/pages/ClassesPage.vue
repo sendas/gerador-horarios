@@ -104,6 +104,9 @@
               hint="Quantas das partes devem ser dadas em bloco (2 tempos consecutivos)."
             />
             <q-separator class="q-my-sm" />
+            <div class="text-caption text-weight-medium q-mb-xs">
+              <q-icon name="event" class="q-mr-xs" />Regime Semestral
+            </div>
             <q-checkbox v-model="entryForm.is_semestral" label="Disciplina semestral?" />
             <template v-if="entryForm.is_semestral">
               <q-select
@@ -114,10 +117,19 @@
                 map-options
                 class="q-mt-sm"
               />
+              <q-banner
+                v-if="entryForm.semester"
+                dense
+                rounded
+                class="bg-blue-1 text-blue-10 q-mt-sm q-mb-xs"
+              >
+                <template #avatar><q-icon name="info" color="blue-7" /></template>
+                Disciplina semestral: ocorre apenas no {{ entryForm.semester === 1 ? '1.º' : '2.º' }} semestre. Para emparelhamento, selecione a disciplina que ocorre no outro semestre no mesmo horário.
+              </q-banner>
               <q-select
                 v-model="entryForm.paired_entry_id"
                 :options="semestralEntryOptions"
-                label="Disciplina par (outro semestre)"
+                label="Emparelhar com (outro semestre no mesmo horário)"
                 emit-value
                 map-options
                 clearable
@@ -125,6 +137,14 @@
                 hint="Selecione a disciplina que ocorre no outro semestre no mesmo horário."
               />
             </template>
+            <q-separator class="q-my-sm" />
+            <div class="text-caption text-weight-medium q-mb-xs">
+              <q-icon name="call_split" class="q-mr-xs" />Turno / Desdobramento
+            </div>
+            <q-banner dense rounded class="bg-blue-1 text-blue-10 q-mb-sm" v-if="entryForm.is_split">
+              <template #avatar><q-icon name="info" color="blue-7" /></template>
+              Para turnos (ex: metade da turma em CN, outra em FQ ao mesmo tempo), configure o emparelhamento semestral acima ou use os Grupos de Disciplinas.
+            </q-banner>
             <div class="row justify-end q-mt-md q-gutter-sm">
               <q-btn flat label="Cancelar" v-close-popup />
               <q-btn type="submit" color="primary" label="Adicionar" />

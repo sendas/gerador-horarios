@@ -41,6 +41,11 @@ for _sql in [
     "ALTER TABLE subjects ADD COLUMN weekly_structure TEXT DEFAULT '1+1'",
     "ALTER TABLE subjects ADD COLUMN regime TEXT DEFAULT 'annual'",
     "ALTER TABLE subjects ADD COLUMN default_semester INTEGER",
+    "ALTER TABLE subjects ADD COLUMN is_physical_education BOOLEAN DEFAULT 0",
+    "ALTER TABLE subjects ADD COLUMN can_exempt_articulado BOOLEAN DEFAULT 0",
+    "ALTER TABLE scheduling_rules ADD COLUMN students_start_slot_1 BOOLEAN DEFAULT 1",
+    "ALTER TABLE scheduling_rules ADD COLUMN no_pe_after_lunch BOOLEAN DEFAULT 1",
+    "ALTER TABLE scheduling_rules ADD COLUMN lunch_after_slot INTEGER DEFAULT 4",
     "CREATE TABLE IF NOT EXISTS backup_config (id INTEGER PRIMARY KEY DEFAULT 1, enabled BOOLEAN DEFAULT 0, frequency TEXT DEFAULT 'weekly', onedrive_client_id TEXT, onedrive_refresh_token TEXT, folder_path TEXT DEFAULT 'GeradorHorarios/Backups', last_backup_at DATETIME, next_backup_at DATETIME)",
     "CREATE TABLE IF NOT EXISTS backup_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME, status TEXT, destination TEXT DEFAULT 'download', size_bytes INTEGER, message TEXT, filename TEXT)",
 ]:
@@ -112,17 +117,22 @@ def create_default_admin():
 
 
 def _build_demo_timetable(db, timetable_id, classes_list, teacher_by_subject_id):
-    """Greedy schedule builder for demo data — no teacher conflicts, realistic spread."""
-    from app.models.models import ScheduledLesson, CurriculumEntry
+    """Greedy schedule — alunos sempre no 1º tempo, EF nunca depois do almoço."""
+    from app.models.models import ScheduledLesson, CurriculumEntry, Subject
 
-    class_slots: dict = {}    # {class_id: set of (day, slot)}
-    teacher_slots: dict = {}  # {teacher_id: set of (day, slot)}
-    DAYS, MAX_SLOT = 5, 7
+    class_slots: dict = {}
+    teacher_slots: dict = {}
+    DAYS, MAX_SLOT, LUNCH_AFTER = 5, 7, 4
 
-    def find_slot(class_id, teacher_id, start_day=0):
+    def find_slot(class_id, teacher_id, start_day=0, max_slot=MAX_SLOT, only_slots=None):
         for day in range(start_day, DAYS + start_day):
             d = day % DAYS
-            for slot in range(1, MAX_SLOT + 1):
+            # First slot of day must be 1 if day not yet started for this class
+            day_used = any(d2 == d for (d2, _) in class_slots.get(class_id, set()))
+            slot_range = only_slots if only_slots else range(1, max_slot + 1)
+            for slot in slot_range:
+                if not day_used and slot != 1:
+                    continue  # first lesson of day must be slot 1
                 if (d, slot) in class_slots.get(class_id, set()):
                     continue
                 if teacher_id and (d, slot) in teacher_slots.get(teacher_id, set()):
@@ -130,10 +140,13 @@ def _build_demo_timetable(db, timetable_id, classes_list, teacher_by_subject_id)
                 return d, slot
         return None, None
 
-    def find_consecutive_pair(class_id, teacher_id, start_day=0):
+    def find_consecutive_pair(class_id, teacher_id, start_day=0, max_slot=MAX_SLOT):
         for day in range(start_day, DAYS + start_day):
             d = day % DAYS
-            for slot in range(1, MAX_SLOT):
+            day_used = any(d2 == d for (d2, _) in class_slots.get(class_id, set()))
+            for slot in range(1, max_slot):
+                if not day_used and slot != 1:
+                    continue
                 occupied_class = class_slots.get(class_id, set())
                 occupied_teacher = teacher_slots.get(teacher_id, set()) if teacher_id else set()
                 if (d, slot) not in occupied_class and (d, slot + 1) not in occupied_class:
@@ -151,25 +164,25 @@ def _build_demo_timetable(db, timetable_id, classes_list, teacher_by_subject_id)
         ))
 
     for cls_idx, cls in enumerate(classes_list):
-        start_day = cls_idx % DAYS  # offset per class to spread subjects
+        start_day = cls_idx % DAYS
         entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id == cls.id).all()
         for entry in entries:
             n = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
             teacher_id = teacher_by_subject_id.get(entry.subject_id)
             pairs = getattr(entry, 'consecutive_pairs', 0) or 0
+            is_pe = entry.subject and getattr(entry.subject, 'is_physical_education', False)
+            pe_max_slot = LUNCH_AFTER if is_pe else MAX_SLOT
             placed = 0
-            # Place consecutive pairs first
             for _ in range(pairs):
                 if placed + 2 > n:
                     break
-                d, s = find_consecutive_pair(cls.id, teacher_id, start_day)
+                d, s = find_consecutive_pair(cls.id, teacher_id, start_day, pe_max_slot)
                 if d is not None:
                     place(cls.id, entry.id, teacher_id, d, s)
                     place(cls.id, entry.id, teacher_id, d, s + 1)
                     placed += 2
-            # Place remaining as singles
             while placed < n:
-                d, s = find_slot(cls.id, teacher_id, start_day)
+                d, s = find_slot(cls.id, teacher_id, start_day, pe_max_slot)
                 if d is None:
                     break
                 place(cls.id, entry.id, teacher_id, d, s)
@@ -242,8 +255,11 @@ def seed_demo_data():
             ]
             subjects = {}
             for sname, scolor, wstruct, regime in subj_data:
-                s = Subject(cluster_id=cluster.id, name=sname, color=scolor,
-                            weekly_structure=wstruct, regime=regime)
+                s = Subject(
+                    cluster_id=cluster.id, name=sname, color=scolor,
+                    weekly_structure=wstruct, regime=regime,
+                    is_physical_education=(sname == "Educação Física"),
+                )
                 db.add(s); db.flush()
                 subjects[sname] = s
 
@@ -341,6 +357,7 @@ def seed_demo_data():
                 avoid_isolated_teacher=True, no_student_gaps=True,
                 minimize_teacher_gaps=True, teacher_gap_weight=10,
                 no_same_subject_twice_per_day=True, distribute_subjects_weight=5,
+                students_start_slot_1=True, no_pe_after_lunch=True, lunch_after_slot=4,
             ))
 
             # Pre-built demo timetable

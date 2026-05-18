@@ -21,6 +21,12 @@
           <q-badge :color="row.regime === 'semestral' ? 'orange-7' : 'teal-7'" :label="row.regime === 'semestral' ? 'Semestral' : 'Anual'" />
         </q-td>
       </template>
+      <template #body-cell-flags="{ row }">
+        <q-td>
+          <q-badge v-if="row.is_physical_education" color="orange-7" label="EF" class="q-mr-xs" />
+          <q-badge v-if="row.can_exempt_articulado" color="teal-7" label="Articulado" />
+        </q-td>
+      </template>
       <template #body-cell-actions="{ row }">
         <q-td auto-width>
           <q-btn flat round dense icon="edit" @click="openEdit(row)" />
@@ -108,6 +114,13 @@
               />
             </div>
 
+            <q-separator class="q-my-md" />
+            <div class="text-subtitle2 q-mb-xs q-mt-sm">Características especiais</div>
+            <q-toggle v-model="form.is_physical_education" label="Educação Física" color="orange-7" />
+            <div class="text-caption text-grey-6 q-ml-xl q-mb-xs">Sujeita à regra 'sem EF depois do almoço'</div>
+            <q-toggle v-model="form.can_exempt_articulado" label="Pode ter dispensa (ensino articulado)" color="teal-7" />
+            <div class="text-caption text-grey-6 q-ml-xl">Alunos de ensino articulado podem ser dispensados desta disciplina</div>
+
             <div class="row justify-end q-mt-lg q-gutter-sm">
               <q-btn flat label="Cancelar" v-close-popup />
               <q-btn type="submit" color="primary" :label="editing ? 'Guardar' : 'Criar'" />
@@ -153,6 +166,7 @@ const columns = [
   { name: 'color', label: 'Cor', field: 'color', align: 'center' as const },
   { name: 'weekly_structure', label: 'Funcionamento', field: 'weekly_structure', align: 'left' as const },
   { name: 'regime', label: 'Regime', field: 'regime', align: 'center' as const },
+  { name: 'flags', label: 'Flags', field: 'id', align: 'left' as const },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
 
@@ -164,6 +178,8 @@ const form = ref({
   weekly_structure: '1+1',
   regime: 'annual',
   default_semester: null as number | null,
+  is_physical_education: false,
+  can_exempt_articulado: false,
 })
 
 const clusterOptions = computed(() => clustersStore.clusters.map((c) => ({ label: c.name, value: c.id })))
@@ -174,7 +190,7 @@ onMounted(async () => {
 
 function openCreate() {
   editing.value = null
-  form.value = { cluster_id: null, name: '', code: '', color: '#3498db', weekly_structure: '1+1', regime: 'annual', default_semester: null }
+  form.value = { cluster_id: null, name: '', code: '', color: '#3498db', weekly_structure: '1+1', regime: 'annual', default_semester: null, is_physical_education: false, can_exempt_articulado: false }
   dialog.value = true
 }
 
@@ -184,6 +200,8 @@ function openEdit(row: Subject) {
     cluster_id: row.cluster_id, name: row.name, code: row.code || '',
     color: row.color, weekly_structure: row.weekly_structure || '1+1',
     regime: row.regime || 'annual', default_semester: row.default_semester ?? null,
+    is_physical_education: row.is_physical_education || false,
+    can_exempt_articulado: row.can_exempt_articulado || false,
   }
   dialog.value = true
 }

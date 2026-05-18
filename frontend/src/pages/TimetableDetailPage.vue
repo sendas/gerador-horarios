@@ -36,6 +36,7 @@
               <q-btn flat icon="code" label="HTML" @click="exportFile('html')" />
               <q-btn flat icon="table_chart" label="Excel" @click="exportFile('excel')" />
               <q-btn flat icon="description" label="CSV" @click="exportFile('csv')" />
+              <q-btn flat icon="picture_as_pdf" label="PDF" @click="exportFile('pdf')" color="red-7" />
             </q-btn-group>
           </div>
         </div>
@@ -130,8 +131,14 @@ async function loadLessons() {
   }
 }
 
-function exportFile(type: 'html' | 'excel' | 'csv') {
+function exportFile(type: 'html' | 'excel' | 'csv' | 'pdf') {
   if (!timetable.value) return
+  if (type === 'pdf') {
+    const url = `/api/v1/timetables/${timetable.value.id}/export/html?view=${viewMode.value}${selectedEntity.value ? `&entity_id=${selectedEntity.value}` : ''}`
+    const win = window.open(url, '_blank')
+    if (win) win.onload = () => win.print()
+    return
+  }
   const url = `/api/v1/timetables/${timetable.value.id}/export/${type}?view=${viewMode.value}${selectedEntity.value ? `&entity_id=${selectedEntity.value}` : ''}`
   window.open(url, '_blank')
 }

@@ -104,6 +104,8 @@ class Subject(Base):
     # Regime: 'annual' | 'semestral'
     regime = Column(String, default="annual")
     default_semester = Column(Integer, nullable=True)  # 1 or 2 if semestral
+    is_physical_education = Column(Boolean, default=False)   # triggers no-PE-after-lunch
+    can_exempt_articulado = Column(Boolean, default=False)   # students can have dispensation
 
     cluster = relationship("Cluster", back_populates="subjects")
     curriculum_entries = relationship("CurriculumEntry", back_populates="subject")
@@ -280,6 +282,9 @@ class SchedulingRules(Base):
     teacher_gap_weight = Column(Integer, default=10)        # penalty weight for teacher gaps
     no_same_subject_twice_per_day = Column(Boolean, default=True)  # hard: split occurrences on different days
     distribute_subjects_weight = Column(Integer, default=5) # soft: spread subject across week days
+    students_start_slot_1 = Column(Boolean, default=True)   # hard: 1st slot occupied each day
+    no_pe_after_lunch = Column(Boolean, default=True)        # hard: no PE after slot lunch_after_slot
+    lunch_after_slot = Column(Integer, default=4)            # last slot before lunch
 
     cluster = relationship("Cluster")
     academic_year = relationship("AcademicYear")

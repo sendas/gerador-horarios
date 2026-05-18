@@ -399,6 +399,57 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                 if day_vars:
                     model.Add(sum(day_vars) <= 1)
 
+    # 10. Students start at slot 1: first slot of each day must be used if class has any lesson
+    if opts.get("students_start_slot_1", True):
+        for class_id, eids in entry_by_class.items():
+            for day in DAYS:
+                day_slots_sorted = sorted(
+                    [si for si in range(n_slots) if slot_day_of[si] == day],
+                    key=lambda si: slot_num_of[si]
+                )
+                if len(day_slots_sorted) < 2:
+                    continue
+                first_si = day_slots_sorted[0]
+
+                def make_used(si, eids_=eids):
+                    occ_vars = [
+                        x[(eid, occ, si)]
+                        for eid in eids_
+                        for occ in range(next((
+                            e.split_count if e.is_split else max(1, round(e.hours_per_week))
+                            for e in entries if e.id == eid), 1))
+                        if (eid, occ, si) in x
+                    ]
+                    if not occ_vars:
+                        return model.NewConstant(0)
+                    v = model.NewBoolVar(f"strt_c{class_id}_d{day}_s{si}")
+                    model.AddBoolOr(occ_vars).OnlyEnforceIf(v)
+                    model.AddBoolAnd([u.Not() for u in occ_vars]).OnlyEnforceIf(v.Not())
+                    return v
+
+                used_first = make_used(first_si)
+                for si in day_slots_sorted[1:]:
+                    used_later = make_used(si)
+                    # if any later slot used -> first slot must be used
+                    model.Add(used_later <= used_first)
+
+    # 11. No PE after lunch
+    lunch_slot = opts.get("lunch_after_slot", 4)
+    if opts.get("no_pe_after_lunch", True):
+        pe_entry_ids = {
+            e.id for e in entries
+            if e.subject and getattr(e.subject, 'is_physical_education', False)
+        }
+        for eid in pe_entry_ids:
+            entry = next((e for e in entries if e.id == eid), None)
+            if not entry:
+                continue
+            n_occ = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+            for occ in range(n_occ):
+                for si in range(n_slots):
+                    if slot_num_of[si] > lunch_slot and (eid, occ, si) in x:
+                        model.Add(x[(eid, occ, si)] == 0)
+
     # ── Soft constraints (objective) ─────────────────────────────────────────
     penalty_terms = []
 

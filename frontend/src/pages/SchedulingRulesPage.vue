@@ -109,6 +109,38 @@
             Restrição rígida: as aulas de cada turma num dado dia devem ser contíguas (sem períodos livres entre elas).
           </div>
 
+          <div class="text-h6 q-mb-md q-mt-lg">Entradas e Saídas dos Alunos</div>
+          <q-toggle
+            v-model="form.students_start_slot_1"
+            label="Alunos entram sempre no 1.º tempo"
+            color="primary"
+          />
+          <div class="text-caption text-grey q-mt-xs q-ml-xl">
+            Restrição rígida: para cada turma, o primeiro tempo de cada dia deve ser sempre ocupado (sem entrar no 2.º tempo).
+          </div>
+
+          <q-separator class="q-my-md" />
+          <div class="text-h6 q-mb-md">Educação Física</div>
+          <q-toggle
+            v-model="form.no_pe_after_lunch"
+            label="Sem Educação Física depois do almoço"
+            color="orange-7"
+          />
+          <div class="text-caption text-grey q-mt-xs q-ml-xl q-mb-sm">
+            Restrição rígida: disciplinas marcadas como 'Educação Física' não podem ser agendadas após o almoço.
+          </div>
+          <q-input
+            v-if="form.no_pe_after_lunch"
+            v-model.number="form.lunch_after_slot"
+            label="Último tempo antes do almoço"
+            type="number"
+            min="1"
+            max="10"
+            outlined
+            style="max-width: 220px"
+            hint="Número do tempo letivo após o qual começa o período de almoço (ex: 4)."
+          />
+
           <div class="text-h6 q-mb-md q-mt-lg">Restrições de Horário dos Professores</div>
           <q-toggle
             v-model="form.minimize_teacher_gaps"
@@ -249,6 +281,9 @@ interface SchedulingRulesResponse {
   teacher_gap_weight: number
   no_same_subject_twice_per_day: boolean
   distribute_subjects_weight: number
+  students_start_slot_1: boolean
+  no_pe_after_lunch: boolean
+  lunch_after_slot: number
 }
 
 const $q = useQuasar()
@@ -272,6 +307,9 @@ const defaultForm = () => ({
   teacher_gap_weight: 10,
   no_same_subject_twice_per_day: true,
   distribute_subjects_weight: 5,
+  students_start_slot_1: true,
+  no_pe_after_lunch: true,
+  lunch_after_slot: 4,
 })
 
 const form = ref(defaultForm())
@@ -325,6 +363,9 @@ async function loadRules() {
         teacher_gap_weight: currentRule.value.teacher_gap_weight,
         no_same_subject_twice_per_day: currentRule.value.no_same_subject_twice_per_day,
         distribute_subjects_weight: currentRule.value.distribute_subjects_weight,
+        students_start_slot_1: currentRule.value.students_start_slot_1 ?? true,
+        no_pe_after_lunch: currentRule.value.no_pe_after_lunch ?? true,
+        lunch_after_slot: currentRule.value.lunch_after_slot ?? 4,
       }
       showForm.value = true
     } else {
