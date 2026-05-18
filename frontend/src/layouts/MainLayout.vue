@@ -8,6 +8,9 @@
           Gerador de Horários
         </q-toolbar-title>
 
+        <!-- Demo badge -->
+        <q-chip v-if="auth.isDemo" color="teal-7" text-color="white" icon="explore" label="DEMO" size="sm" class="q-mr-sm" />
+
         <q-chip
           v-if="auth.user"
           square
@@ -33,6 +36,12 @@
           <q-tooltip>Terminar sessão</q-tooltip>
         </q-btn>
       </q-toolbar>
+
+      <!-- Demo banner -->
+      <div v-if="auth.isDemo" class="bg-teal-8 text-white text-center text-caption q-py-xs">
+        <q-icon name="info" size="xs" class="q-mr-xs" />
+        Modo demonstração — dados de exemplo, alterações não são gravadas permanentemente
+      </div>
     </q-header>
 
     <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
@@ -40,7 +49,7 @@
         <q-item-label header>Navegação</q-item-label>
 
         <q-item clickable v-ripple :to="'/'">
-          <q-item-section avatar><q-icon name="home" /></q-item-section>
+          <q-item-section avatar><q-icon name="home" color="blue-7" /></q-item-section>
           <q-item-section>Dashboard</q-item-section>
         </q-item>
 
@@ -48,32 +57,32 @@
         <q-item-label header caption>Configuração</q-item-label>
 
         <q-item clickable v-ripple :to="'/clusters'">
-          <q-item-section avatar><q-icon name="domain" /></q-item-section>
+          <q-item-section avatar><q-icon name="domain" color="green-7" /></q-item-section>
           <q-item-section>Agrupamentos</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/schools'">
-          <q-item-section avatar><q-icon name="school" /></q-item-section>
+          <q-item-section avatar><q-icon name="school" color="teal-7" /></q-item-section>
           <q-item-section>Escolas</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/academic-years'">
-          <q-item-section avatar><q-icon name="calendar_today" /></q-item-section>
+          <q-item-section avatar><q-icon name="calendar_today" color="orange-7" /></q-item-section>
           <q-item-section>Anos Letivos</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/time-slots'">
-          <q-item-section avatar><q-icon name="schedule" /></q-item-section>
+          <q-item-section avatar><q-icon name="schedule" color="indigo-6" /></q-item-section>
           <q-item-section>Tempos Letivos</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/scheduling-rules'">
-          <q-item-section avatar><q-icon name="rule" /></q-item-section>
+          <q-item-section avatar><q-icon name="rule" color="red-6" /></q-item-section>
           <q-item-section>Regras de Horário</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/rooms'">
-          <q-item-section avatar><q-icon name="meeting_room" /></q-item-section>
+          <q-item-section avatar><q-icon name="meeting_room" color="brown-6" /></q-item-section>
           <q-item-section>Salas</q-item-section>
         </q-item>
 
@@ -81,12 +90,12 @@
         <q-item-label header caption>Curriculum</q-item-label>
 
         <q-item clickable v-ripple :to="'/subjects'">
-          <q-item-section avatar><q-icon name="book" /></q-item-section>
+          <q-item-section avatar><q-icon name="book" color="purple-7" /></q-item-section>
           <q-item-section>Disciplinas</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/classes'">
-          <q-item-section avatar><q-icon name="group" /></q-item-section>
+          <q-item-section avatar><q-icon name="group" color="blue-8" /></q-item-section>
           <q-item-section>Turmas</q-item-section>
         </q-item>
 
@@ -94,12 +103,12 @@
         <q-item-label header caption>Pessoal</q-item-label>
 
         <q-item clickable v-ripple :to="'/teachers'">
-          <q-item-section avatar><q-icon name="person" /></q-item-section>
+          <q-item-section avatar><q-icon name="person" color="deep-orange-6" /></q-item-section>
           <q-item-section>Professores</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/non-teaching'">
-          <q-item-section avatar><q-icon name="work_off" /></q-item-section>
+          <q-item-section avatar><q-icon name="work_off" color="grey-7" /></q-item-section>
           <q-item-section>Serviço Não Letivo</q-item-section>
         </q-item>
 
@@ -107,7 +116,7 @@
         <q-item-label header caption>Horários</q-item-label>
 
         <q-item clickable v-ripple :to="'/timetables'">
-          <q-item-section avatar><q-icon name="table_chart" /></q-item-section>
+          <q-item-section avatar><q-icon name="table_chart" color="green-8" /></q-item-section>
           <q-item-section>Horários</q-item-section>
         </q-item>
 
@@ -115,14 +124,18 @@
           <q-separator />
           <q-item-label header caption>Administração</q-item-label>
           <q-item clickable v-ripple :to="'/users'">
-            <q-item-section avatar><q-icon name="manage_accounts" /></q-item-section>
+            <q-item-section avatar><q-icon name="manage_accounts" color="red-7" /></q-item-section>
             <q-item-section>Utilizadores</q-item-section>
+          </q-item>
+          <q-item clickable v-ripple :to="'/backup'">
+            <q-item-section avatar><q-icon name="cloud_upload" color="teal-6" /></q-item-section>
+            <q-item-section>Cópia de Segurança</q-item-section>
           </q-item>
         </template>
 
         <q-separator />
         <q-item clickable v-ripple :to="'/about'">
-          <q-item-section avatar><q-icon name="info" /></q-item-section>
+          <q-item-section avatar><q-icon name="info" color="blue-5" /></q-item-section>
           <q-item-section>Sobre</q-item-section>
         </q-item>
       </q-list>
@@ -145,7 +158,6 @@ const auth = useAuthStore()
 const router = useRouter()
 const $q = useQuasar()
 
-// Restore dark mode preference from localStorage
 const savedDark = localStorage.getItem('darkMode')
 if (savedDark !== null) $q.dark.set(savedDark === 'true')
 

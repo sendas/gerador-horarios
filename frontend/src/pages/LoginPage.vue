@@ -1,8 +1,23 @@
 <template>
-  <div class="flex flex-center bg-grey-2" style="min-height: 100vh">
-    <q-card style="min-width: 360px; max-width: 400px; width: 100%">
+  <div
+    class="flex flex-center login-bg"
+    style="min-height: 100vh; position: relative;"
+  >
+    <!-- Dark mode toggle top-right -->
+    <div style="position: absolute; top: 16px; right: 16px;">
+      <q-btn
+        flat round
+        :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'"
+        :color="$q.dark.isActive ? 'yellow-6' : 'blue-grey-7'"
+        @click="toggleDark"
+      >
+        <q-tooltip>{{ $q.dark.isActive ? 'Modo claro' : 'Modo escuro' }}</q-tooltip>
+      </q-btn>
+    </div>
+
+    <q-card style="min-width: 360px; max-width: 420px; width: 100%">
       <q-card-section class="bg-primary text-white text-center q-pb-lg">
-        <q-icon name="schedule" size="48px" />
+        <q-icon name="schedule" size="52px" />
         <div class="text-h6 q-mt-sm">Gerador de Horários</div>
         <div class="text-caption">Acesso ao sistema</div>
       </q-card-section>
@@ -52,6 +67,21 @@
             :loading="loading"
           />
         </q-form>
+
+        <q-separator class="q-my-md" />
+
+        <q-btn
+          outline
+          color="teal"
+          icon="explore"
+          label="Explorar Demo"
+          class="full-width"
+          :loading="demoLoading"
+          @click="handleDemo"
+        />
+        <div class="text-caption text-center text-grey q-mt-xs">
+          Explore sem criar conta — dados de demonstração
+        </div>
       </q-card-section>
     </q-card>
   </div>
@@ -60,16 +90,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
 import { useAuthStore } from 'stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
+const $q = useQuasar()
 
 const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
+const demoLoading = ref(false)
 const errorMsg = ref('')
+
+// Restore dark mode preference
+const savedDark = localStorage.getItem('darkMode')
+if (savedDark !== null) $q.dark.set(savedDark === 'true')
+
+function toggleDark() {
+  $q.dark.toggle()
+  localStorage.setItem('darkMode', String($q.dark.isActive))
+}
 
 async function handleLogin() {
   errorMsg.value = ''
@@ -83,4 +125,26 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+async function handleDemo() {
+  errorMsg.value = ''
+  demoLoading.value = true
+  try {
+    await auth.demoLogin()
+    await router.push('/')
+  } catch {
+    errorMsg.value = 'Modo demo não disponível de momento'
+  } finally {
+    demoLoading.value = false
+  }
+}
 </script>
+
+<style scoped>
+.login-bg {
+  background: linear-gradient(135deg, #1a237e 0%, #1565c0 60%, #0277bd 100%);
+}
+.body--dark .login-bg {
+  background: linear-gradient(135deg, #0d0d1a 0%, #0a1929 60%, #0d2137 100%);
+}
+</style>

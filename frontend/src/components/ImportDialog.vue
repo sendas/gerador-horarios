@@ -18,6 +18,12 @@
         <q-tab-panels v-model="tab" animated>
           <!-- File tab -->
           <q-tab-panel name="file" class="q-pa-none q-pt-md">
+            <q-banner v-if="formatHint" dense rounded class="bg-blue-1 text-blue-10 q-mb-md">
+              <template #avatar><q-icon name="info" color="blue-7" /></template>
+              <div class="text-weight-medium q-mb-xs">Formato esperado:</div>
+              <div class="text-caption">Colunas: <code>{{ formatHint.columns }}</code></div>
+              <div v-if="formatHint.notes" class="text-caption q-mt-xs text-grey-7">{{ formatHint.notes }}</div>
+            </q-banner>
             <div class="q-mb-md text-caption text-grey-7">
               Formatos suportados: CSV (.csv) e Excel (.xlsx)
             </div>
@@ -132,6 +138,29 @@ import { ref, computed } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
 
+const FORMAT_HINTS: Record<string, { columns: string; notes?: string }> = {
+  teachers: {
+    columns: 'nome, email (opcional), max_aulas_dia (opcional)',
+    notes: 'max_aulas_dia: máximo de aulas por dia (padrão: 5)',
+  },
+  classes: {
+    columns: 'nome, ano, escola_id (opcional), num_alunos (opcional)',
+    notes: 'ano: nível de escolaridade (ex: 5, 6, 7)',
+  },
+  rooms: {
+    columns: 'nome, capacidade (opcional), tipo (opcional)',
+    notes: 'tipo: sala, laboratório, ginásio, etc.',
+  },
+  subjects: {
+    columns: 'nome, cor (opcional), semestral (opcional)',
+    notes: 'cor: código hex (ex: #3498db); semestral: sim/não',
+  },
+  curriculum: {
+    columns: 'ano, turma, disciplina, horas_semana, professor (opcional), articulado (opcional)',
+    notes: 'articulado: sim/não — indica se a disciplina é articulada com outra',
+  },
+}
+
 const props = withDefaults(defineProps<{
   modelValue: boolean
   title: string
@@ -157,6 +186,8 @@ const uploading = ref(false)
 const extracting = ref(false)
 const result = ref<{ created: number; skipped: number; errors: string[] } | null>(null)
 const extractedData = ref<Record<string, unknown>[] | null>(null)
+
+const formatHint = computed(() => props.entityType ? (FORMAT_HINTS[props.entityType] ?? null) : null)
 
 const missingParams = computed(() => {
   if (!props.extraParams) return false
