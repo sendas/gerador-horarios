@@ -138,3 +138,14 @@ def delete_user(id: int, db: Session = Depends(get_db), current: User = Depends(
         raise HTTPException(status_code=400, detail="Não podes eliminar a tua própria conta")
     db.delete(user)
     db.commit()
+
+
+@router.post("/demo")
+def demo_login(db: Session = Depends(get_db)):
+    """Login sem password para modo demonstração."""
+    from datetime import timedelta
+    demo_user = db.query(User).filter(User.username == "demo").first()
+    if not demo_user:
+        raise HTTPException(status_code=503, detail="Modo demo não disponível")
+    token = create_access_token({"sub": demo_user.username}, expires_delta=timedelta(minutes=60))
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(demo_user)}

@@ -279,6 +279,29 @@ class SchedulingRules(Base):
     academic_year = relationship("AcademicYear")
 
 
+class BackupConfig(Base):
+    __tablename__ = "backup_config"
+    id = Column(Integer, primary_key=True, default=1)
+    enabled = Column(Boolean, default=False)
+    frequency = Column(String, default="weekly")   # manual | daily | weekly | monthly
+    onedrive_client_id = Column(String, nullable=True)
+    onedrive_refresh_token = Column(String, nullable=True)  # encrypted
+    folder_path = Column(String, default="GeradorHorarios/Backups")
+    last_backup_at = Column(DateTime, nullable=True)
+    next_backup_at = Column(DateTime, nullable=True)
+
+
+class BackupHistory(Base):
+    __tablename__ = "backup_history"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String)           # success | error
+    destination = Column(String, default="download")  # download | onedrive
+    size_bytes = Column(Integer, nullable=True)
+    message = Column(String, nullable=True)
+    filename = Column(String, nullable=True)
+
+
 class NonTeachingType(Base):
     __tablename__ = "non_teaching_types"
 

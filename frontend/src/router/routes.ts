@@ -25,6 +25,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'non-teaching', component: () => import('pages/NonTeachingPage.vue') },
       { path: 'scheduling-rules', component: () => import('pages/SchedulingRulesPage.vue') },
       { path: 'users', component: () => import('pages/UsersPage.vue'), meta: { requiresAdmin: true } },
+      { path: 'backup', component: () => import('pages/BackupPage.vue') },
       { path: 'about', component: () => import('pages/AboutPage.vue') },
     ],
   },
