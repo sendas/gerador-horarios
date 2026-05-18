@@ -11,6 +11,12 @@ from app.schemas.schemas import (
 )
 
 
+class MoveLessonRequest(BaseModel):
+    day_of_week: int
+    slot_number: int
+    force: bool = False
+
+
 class GenerationOptions(BaseModel):
     year_levels: Optional[List[int]] = None  # None=all, [5,6]=2nd cycle, [7,8,9]=3rd cycle
     no_student_gaps: bool = True
@@ -157,3 +163,79 @@ def get_by_room(id: int, room_id: int, db: Session = Depends(get_db)):
         ScheduledLesson.room_id == room_id
     ).all()
     return [build_lesson_detail(l) for l in lessons]
+
+
+@router.patch("/{id}/lessons/{lesson_id}")
+def move_lesson(
+    id: int,
+    lesson_id: int,
+    body: MoveLessonRequest,
+    db: Session = Depends(get_db),
+):
+    """Move a scheduled lesson to a different day/slot, with conflict detection."""
+    lesson = db.query(ScheduledLesson).filter(
+        ScheduledLesson.id == lesson_id,
+        ScheduledLesson.timetable_id == id,
+    ).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Aula não encontrada")
+
+    if lesson.day_of_week == body.day_of_week and lesson.slot_number == body.slot_number:
+        return {"lesson": build_lesson_detail(lesson), "conflicts": []}
+
+    conflicts = []
+    entry = lesson.curriculum_entry
+
+    # 1. Class conflict: another lesson for the same class at the target slot
+    if entry:
+        class_conflict = (
+            db.query(ScheduledLesson)
+            .join(CurriculumEntry, ScheduledLesson.curriculum_entry_id == CurriculumEntry.id)
+            .filter(
+                ScheduledLesson.timetable_id == id,
+                ScheduledLesson.id != lesson_id,
+                ScheduledLesson.day_of_week == body.day_of_week,
+                ScheduledLesson.slot_number == body.slot_number,
+                CurriculumEntry.class_id == entry.class_id,
+            )
+            .first()
+        )
+        if class_conflict:
+            cc = class_conflict.curriculum_entry
+            conflicts.append({
+                "type": "class",
+                "lesson_id": class_conflict.id,
+                "subject_name": cc.subject.name if cc and cc.subject else "?",
+                "class_name": cc.class_.name if cc and cc.class_ else "?",
+            })
+
+    # 2. Teacher conflict: another lesson for the same teacher at the target slot
+    if lesson.teacher_id:
+        teacher_conflict = db.query(ScheduledLesson).filter(
+            ScheduledLesson.timetable_id == id,
+            ScheduledLesson.id != lesson_id,
+            ScheduledLesson.day_of_week == body.day_of_week,
+            ScheduledLesson.slot_number == body.slot_number,
+            ScheduledLesson.teacher_id == lesson.teacher_id,
+        ).first()
+        if teacher_conflict:
+            tc = teacher_conflict.curriculum_entry
+            conflicts.append({
+                "type": "teacher",
+                "lesson_id": teacher_conflict.id,
+                "subject_name": tc.subject.name if tc and tc.subject else "?",
+                "class_name": tc.class_.name if tc and tc.class_ else "?",
+                "teacher_name": lesson.teacher.name if lesson.teacher else "?",
+            })
+
+    if conflicts and not body.force:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "Conflitos detectados", "conflicts": conflicts},
+        )
+
+    lesson.day_of_week = body.day_of_week
+    lesson.slot_number = body.slot_number
+    db.commit()
+    db.refresh(lesson)
+    return {"lesson": build_lesson_detail(lesson), "conflicts": conflicts}

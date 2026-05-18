@@ -55,7 +55,13 @@
         Sem aulas agendadas
       </q-card-section>
       <q-card-section v-else>
-        <TimetableGrid :lessons="lessons" :slots="slots" :view="viewMode" />
+        <TimetableGrid
+          :lessons="lessons"
+          :slots="slots"
+          :view="viewMode"
+          :timetable-id="timetable?.id"
+          @lesson-moved="loadLessons"
+        />
       </q-card-section>
     </q-card>
   </q-page>
