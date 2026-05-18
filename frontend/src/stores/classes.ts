@@ -18,6 +18,10 @@ export interface CurriculumEntry {
   hours_per_week: number
   is_split: boolean
   split_count: number
+  consecutive_pairs: number
+  is_semestral: boolean
+  semester: number | null
+  paired_entry_id: number | null
 }
 
 export const useClassesStore = defineStore('classes', () => {

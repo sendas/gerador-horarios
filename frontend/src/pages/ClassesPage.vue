@@ -81,6 +81,37 @@
             <q-input v-model.number="entryForm.hours_per_week" label="Horas/semana *" type="number" step="0.5" min="0.5" :rules="[v => v > 0 || 'Obrigatório']" />
             <q-checkbox v-model="entryForm.is_split" label="Aula dividida?" />
             <q-input v-if="entryForm.is_split" v-model.number="entryForm.split_count" label="Nº de partes" type="number" min="2" />
+            <q-input
+              v-if="entryForm.is_split && entryForm.split_count > 1"
+              v-model.number="entryForm.consecutive_pairs"
+              label="Pares consecutivos (blocos de 2)"
+              type="number"
+              min="0"
+              :max="Math.floor(entryForm.split_count / 2)"
+              hint="Quantas das partes devem ser dadas em bloco (2 tempos consecutivos)."
+            />
+            <q-separator class="q-my-sm" />
+            <q-checkbox v-model="entryForm.is_semestral" label="Disciplina semestral?" />
+            <template v-if="entryForm.is_semestral">
+              <q-select
+                v-model="entryForm.semester"
+                :options="semesterOptions"
+                label="Semestre *"
+                emit-value
+                map-options
+                class="q-mt-sm"
+              />
+              <q-select
+                v-model="entryForm.paired_entry_id"
+                :options="semestralEntryOptions"
+                label="Disciplina par (outro semestre)"
+                emit-value
+                map-options
+                clearable
+                class="q-mt-sm"
+                hint="Selecione a disciplina que ocorre no outro semestre no mesmo horário."
+              />
+            </template>
             <div class="row justify-end q-mt-md q-gutter-sm">
               <q-btn flat label="Cancelar" v-close-popup />
               <q-btn type="submit" color="primary" label="Adicionar" />
@@ -133,11 +164,32 @@ const curriculumDialog = ref(false)
 const addEntryDialog = ref(false)
 const selectedClass = ref<SchoolClass | null>(null)
 const curriculumEntries = ref<CurriculumEntry[]>([])
-const entryForm = ref({ subject_id: null as number | null, hours_per_week: 2, is_split: false, split_count: 2 })
+const entryForm = ref({
+  subject_id: null as number | null,
+  hours_per_week: 2,
+  is_split: false,
+  split_count: 2,
+  consecutive_pairs: 0,
+  is_semestral: false,
+  semester: null as number | null,
+  paired_entry_id: null as number | null,
+})
 
 const schoolOptions = computed(() => schoolsStore.schools.map((s) => ({ label: s.name, value: s.id })))
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))
 const subjectOptions = computed(() => subjectsStore.subjects.map((s) => ({ label: s.name, value: s.id })))
+
+const semesterOptions = [
+  { label: '1.º Semestre', value: 1 },
+  { label: '2.º Semestre', value: 2 },
+]
+
+// Semestral entries of the selected class that can be paired
+const semestralEntryOptions = computed(() =>
+  curriculumEntries.value
+    .filter((e) => e.is_semestral && e.id !== undefined)
+    .map((e) => ({ label: subjectName(e.subject_id), value: e.id }))
+)
 
 function subjectName(id: number) {
   return subjectsStore.subjects.find((s) => s.id === id)?.name ?? '—'
@@ -187,7 +239,16 @@ async function openCurriculum(row: SchoolClass) {
 }
 
 function openAddEntry() {
-  entryForm.value = { subject_id: null, hours_per_week: 2, is_split: false, split_count: 2 }
+  entryForm.value = {
+    subject_id: null,
+    hours_per_week: 2,
+    is_split: false,
+    split_count: 2,
+    consecutive_pairs: 0,
+    is_semestral: false,
+    semester: null,
+    paired_entry_id: null,
+  }
   addEntryDialog.value = true
 }
 
@@ -199,6 +260,10 @@ async function addEntry() {
       hours_per_week: entryForm.value.hours_per_week,
       is_split: entryForm.value.is_split,
       split_count: entryForm.value.split_count,
+      consecutive_pairs: entryForm.value.consecutive_pairs,
+      is_semestral: entryForm.value.is_semestral,
+      semester: entryForm.value.is_semestral ? entryForm.value.semester : null,
+      paired_entry_id: entryForm.value.is_semestral ? entryForm.value.paired_entry_id : null,
       class_id: selectedClass.value.id,
     }
     const entry = await classesStore.addCurriculumEntry(selectedClass.value.id, payload)

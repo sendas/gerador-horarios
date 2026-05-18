@@ -9,7 +9,8 @@ from app.database import SessionLocal
 from app.models.models import (
     Timetable, ScheduledLesson, CurriculumEntry, Class, Subject,
     Teacher, TeacherSubject, TeacherAvailability, TeacherSchoolAssignment,
-    NonTeachingAssignment, TimeSlotConfig, Room, School
+    NonTeachingAssignment, TimeSlotConfig, Room, School, AcademicYear,
+    SchedulingRules
 )
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,28 @@ def _run_solver(db, timetable_id: int):
     # Teacher info
     teachers = {t.id: t for t in db.query(Teacher).all()}
 
+    # Load scheduling rules for this academic year / cluster
+    academic_year = db.query(AcademicYear).filter(AcademicYear.id == academic_year_id).first()
+    cluster_id = academic_year.cluster_id if academic_year else None
+
+    rules_obj = None
+    if cluster_id:
+        rules_obj = (
+            db.query(SchedulingRules)
+            .filter(
+                SchedulingRules.cluster_id == cluster_id,
+                (SchedulingRules.academic_year_id == academic_year_id) | (SchedulingRules.academic_year_id == None)  # noqa: E711
+            )
+            .order_by(SchedulingRules.academic_year_id.desc().nullslast())  # year-specific takes priority
+            .first()
+        )
+
+    max_per_day_class = rules_obj.max_periods_per_day_class if rules_obj else 5
+    max_per_day_teacher = rules_obj.max_periods_per_day_teacher if rules_obj else 6
+    max_consec_class = rules_obj.max_consecutive_periods_class if rules_obj else 2
+    max_consec_teacher = rules_obj.max_consecutive_periods_teacher if rules_obj else 4
+    avoid_isolated = rules_obj.avoid_isolated_teacher if rules_obj else False
+
     # ── Build occurrences ────────────────────────────────────────────────────
     # Each curriculum entry needs int(hours_per_week) occurrences per week
     # (handle fractional by rounding)
@@ -141,6 +164,10 @@ def _run_solver(db, timetable_id: int):
     # slot_var[(entry_id, occ)] = (day, slot) as index into all_slots
     slot_indices = {ds: i for i, ds in enumerate(all_slots)}
     n_slots = len(all_slots)
+
+    # Precompute slot metadata
+    slot_day_of = [all_slots[si][0] for si in range(n_slots)]
+    slot_num_of = [all_slots[si][1] for si in range(n_slots)]
 
     # x[(entry_id, occ, slot_idx)] = BoolVar: is this occurrence at this slot?
     x: dict[tuple, cp_model.IntVar] = {}
@@ -167,21 +194,34 @@ def _run_solver(db, timetable_id: int):
             model.AddExactlyOne(teacher_vars)
 
     # 3. No class double-booking: for each class, at most one lesson per slot
+    # Semestral pairs share a slot, so we skip counting one from each pair
     entry_by_class: dict[int, list[int]] = defaultdict(list)
     for entry in entries:
         entry_by_class[entry.class_id].append(entry.id)
 
+    # Build semestral pairs map: entry_id -> paired_entry_id
+    semestral_pairs: dict[int, int] = {}
+    for entry in entries:
+        if entry.is_semestral and entry.paired_entry_id:
+            semestral_pairs[entry.id] = entry.paired_entry_id
+
     for class_id, eids in entry_by_class.items():
         for si in range(n_slots):
-            model.AddAtMostOne([
-                x[(eid, occ, si)]
-                for eid in eids
-                for occ_idx in range(
-                    next((e.split_count if e.is_split else max(1, round(e.hours_per_week))
-                          for e in entries if e.id == eid), 1)
-                )
-                if (eid, occ_idx, si) in x
-            ])
+            # For semestral pairs, only count one of the two paired entries
+            slot_vars = []
+            for eid in eids:
+                skip = False
+                if eid in semestral_pairs:
+                    paired_id = semestral_pairs[eid]
+                    if paired_id < eid and paired_id in eids:  # the paired entry has lower id, it's already counted
+                        skip = True
+                if not skip:
+                    n_occ = next((e.split_count if e.is_split else max(1, round(e.hours_per_week)) for e in entries if e.id == eid), 1)
+                    for occ_idx in range(n_occ):
+                        if (eid, occ_idx, si) in x:
+                            slot_vars.append(x[(eid, occ_idx, si)])
+            if len(slot_vars) > 1:
+                model.AddAtMostOne(slot_vars)
 
     # 4. No teacher double-booking: for each (teacher, slot), at most one lesson
     # Use auxiliary variables: a[(eid, occ, tid, si)] = x AND t
@@ -210,6 +250,65 @@ def _run_solver(db, timetable_id: int):
                         # If teacher is assigned AND slot is this blocked slot -> forbidden
                         model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
 
+    # 5b. Max periods per day per class (hard constraint from scheduling rules)
+    for class_id, eids in entry_by_class.items():
+        for day in DAYS:
+            day_slot_indices = [si for si in range(n_slots) if slot_day_of[si] == day]
+            if not day_slot_indices:
+                continue
+            class_lessons_day = []
+            for eid in eids:
+                n_occ = next((e.split_count if e.is_split else max(1, round(e.hours_per_week)) for e in entries if e.id == eid), 1)
+                for occ in range(n_occ):
+                    for si in day_slot_indices:
+                        if (eid, occ, si) in x:
+                            class_lessons_day.append(x[(eid, occ, si)])
+            if class_lessons_day:
+                model.Add(sum(class_lessons_day) <= max_per_day_class)
+
+    # 6. Consecutive pairs constraint (hard): entries with consecutive_pairs > 0
+    # For each consecutive pair (pair_idx), occurrences occ_a = pair_idx*2 and occ_b = pair_idx*2+1
+    # must be on the same day and in consecutive slot numbers.
+    for entry in entries:
+        if not entry.consecutive_pairs or entry.consecutive_pairs <= 0:
+            continue
+        for pair_idx in range(entry.consecutive_pairs):
+            occ_a = pair_idx * 2
+            occ_b = pair_idx * 2 + 1
+            if (entry.id, occ_a, 0) not in x or (entry.id, occ_b, 0) not in x:
+                continue
+            # same day
+            day_a = sum(slot_day_of[si] * x[(entry.id, occ_a, si)] for si in range(n_slots) if (entry.id, occ_a, si) in x)
+            day_b = sum(slot_day_of[si] * x[(entry.id, occ_b, si)] for si in range(n_slots) if (entry.id, occ_b, si) in x)
+            # consecutive slot numbers
+            num_a = sum(slot_num_of[si] * x[(entry.id, occ_a, si)] for si in range(n_slots) if (entry.id, occ_a, si) in x)
+            num_b = sum(slot_num_of[si] * x[(entry.id, occ_b, si)] for si in range(n_slots) if (entry.id, occ_b, si) in x)
+            model.Add(day_a == day_b)
+            model.Add(num_b == num_a + 1)  # occ_b immediately after occ_a
+
+    # 7. Semestral paired subjects must share the same time slot
+    processed_semestral: set[int] = set()
+    for entry in entries:
+        if not entry.is_semestral or not entry.paired_entry_id:
+            continue
+        if entry.id in processed_semestral:
+            continue
+        paired = next((e for e in entries if e.id == entry.paired_entry_id), None)
+        if not paired:
+            continue
+        processed_semestral.add(entry.id)
+        processed_semestral.add(paired.id)
+        # Force them to the same slot
+        for si in range(n_slots):
+            has_a = (entry.id, 0, si) in x
+            has_b = (paired.id, 0, si) in x
+            if has_a and has_b:
+                model.Add(x[(entry.id, 0, si)] == x[(paired.id, 0, si)])
+            elif has_a:
+                model.Add(x[(entry.id, 0, si)] == 0)
+            elif has_b:
+                model.Add(x[(paired.id, 0, si)] == 0)
+
     # ── Soft constraints (objective) ─────────────────────────────────────────
     penalty_terms = []
 
@@ -230,8 +329,8 @@ def _run_solver(db, timetable_id: int):
                         model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
                         penalty_terms.append(aux)
 
-        # Soft: max_daily_lessons
-        max_daily = teacher.max_daily_lessons
+        # Soft: max_daily_lessons (combining teacher's own limit with global rule)
+        max_daily = min(teacher.max_daily_lessons, max_per_day_teacher)
         for day in DAYS:
             day_slots_idx = [si for si, (d, s) in enumerate(all_slots) if d == day]
             daily_lessons = []
@@ -247,6 +346,42 @@ def _run_solver(db, timetable_id: int):
                 model.Add(sum(daily_lessons) - max_daily <= excess)
                 model.Add(excess >= 0)
                 penalty_terms.append(excess)
+
+    # Soft: avoid isolated periods for teachers
+    if avoid_isolated:
+        for tid in all_teacher_ids:
+            for day in DAYS:
+                day_slots_sorted = sorted(
+                    [si for si in range(n_slots) if slot_day_of[si] == day],
+                    key=lambda si: slot_num_of[si]
+                )
+                for k, si in enumerate(day_slots_sorted):
+                    prev_si = day_slots_sorted[k - 1] if k > 0 else None
+                    next_si = day_slots_sorted[k + 1] if k < len(day_slots_sorted) - 1 else None
+                    for (eid, occ) in occurrences:
+                        if (eid, occ, si) not in x or (eid, occ, tid) not in t:
+                            continue
+                        # aux_here = x AND t
+                        aux_here = model.NewBoolVar(f"iso_here_{eid}_{occ}_{tid}_{si}")
+                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux_here)
+                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux_here.Not())
+                        # Check if any adjacent slot has a lesson for this teacher
+                        adj_teaching = []
+                        for adj_si in [prev_si, next_si]:
+                            if adj_si is None:
+                                continue
+                            for (eid2, occ2) in occurrences:
+                                if (eid2, occ2, adj_si) in x and (eid2, occ2, tid) in t:
+                                    aux_adj = model.NewBoolVar(f"adj_{eid}_{occ}_{tid}_{si}_{eid2}_{occ2}_{adj_si}")
+                                    model.AddBoolAnd([x[(eid2, occ2, adj_si)], t[(eid2, occ2, tid)]]).OnlyEnforceIf(aux_adj)
+                                    model.AddBoolOr([x[(eid2, occ2, adj_si)].Not(), t[(eid2, occ2, tid)].Not()]).OnlyEnforceIf(aux_adj.Not())
+                                    adj_teaching.append(aux_adj)
+                        if adj_teaching:
+                            # is_isolated = aux_here AND (none of adj_teaching)
+                            is_isolated = model.NewBoolVar(f"isol_{eid}_{occ}_{tid}_{si}")
+                            model.AddBoolAnd([aux_here] + [v.Not() for v in adj_teaching]).OnlyEnforceIf(is_isolated)
+                            model.AddBoolOr([aux_here.Not()] + adj_teaching).OnlyEnforceIf(is_isolated.Not())
+                            penalty_terms.append(is_isolated)
 
     if penalty_terms:
         model.Minimize(sum(penalty_terms))
@@ -297,6 +432,7 @@ def _run_solver(db, timetable_id: int):
                 room_id=assigned_room,
                 day_of_week=day,
                 slot_number=slot,
+                semester=entry.semester if entry and entry.is_semestral else None,
             ))
 
         db.add_all(lessons_to_add)

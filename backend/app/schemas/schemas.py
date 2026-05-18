@@ -165,6 +165,10 @@ class CurriculumEntryBase(BaseModel):
     hours_per_week: float
     is_split: bool = False
     split_count: int = 1
+    consecutive_pairs: int = 0
+    is_semestral: bool = False
+    semester: Optional[int] = None
+    paired_entry_id: Optional[int] = None
 
 class CurriculumEntryCreate(CurriculumEntryBase):
     pass
@@ -173,6 +177,10 @@ class CurriculumEntryUpdate(BaseModel):
     hours_per_week: Optional[float] = None
     is_split: Optional[bool] = None
     split_count: Optional[int] = None
+    consecutive_pairs: Optional[int] = None
+    is_semestral: Optional[bool] = None
+    semester: Optional[int] = None
+    paired_entry_id: Optional[int] = None
 
 class CurriculumEntryResponse(CurriculumEntryBase):
     model_config = ConfigDict(from_attributes=True)
@@ -302,6 +310,7 @@ class ScheduledLessonBase(BaseModel):
     room_id: Optional[int] = None
     day_of_week: int
     slot_number: int
+    semester: Optional[int] = None
 
 class ScheduledLessonCreate(ScheduledLessonBase):
     pass
@@ -320,6 +329,7 @@ class ScheduledLessonDetail(BaseModel):
     curriculum_entry_id: int
     teacher_id: Optional[int] = None
     room_id: Optional[int] = None
+    semester: Optional[int] = None
     subject_name: Optional[str] = None
     subject_color: Optional[str] = None
     class_name: Optional[str] = None

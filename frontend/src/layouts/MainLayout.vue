@@ -67,6 +67,11 @@
           <q-item-section>Tempos Letivos</q-item-section>
         </q-item>
 
+        <q-item clickable v-ripple :to="'/scheduling-rules'">
+          <q-item-section avatar><q-icon name="rule" /></q-item-section>
+          <q-item-section>Regras de Horário</q-item-section>
+        </q-item>
+
         <q-item clickable v-ripple :to="'/rooms'">
           <q-item-section avatar><q-icon name="meeting_room" /></q-item-section>
           <q-item-section>Salas</q-item-section>

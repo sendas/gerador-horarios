@@ -13,10 +13,27 @@ from app.routers import (
 )
 from app.routers import imports as imports_router
 from app.routers.auth import router as auth_router
+from app.routers import scheduling_rules as scheduling_rules_router
 
 logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
+
+# Add new columns to existing tables (SQLite does not support IF NOT EXISTS in ALTER TABLE)
+from sqlalchemy import text  # noqa: E402
+for _sql in [
+    "ALTER TABLE curriculum_entries ADD COLUMN consecutive_pairs INTEGER DEFAULT 0",
+    "ALTER TABLE curriculum_entries ADD COLUMN is_semestral BOOLEAN DEFAULT 0",
+    "ALTER TABLE curriculum_entries ADD COLUMN semester INTEGER",
+    "ALTER TABLE curriculum_entries ADD COLUMN paired_entry_id INTEGER REFERENCES curriculum_entries(id)",
+    "ALTER TABLE scheduled_lessons ADD COLUMN semester INTEGER",
+]:
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(_sql))
+            _conn.commit()
+    except Exception:
+        pass  # column already exists
 
 app = FastAPI(
     title="Gerador de Horários API",
@@ -54,6 +71,7 @@ app.include_router(non_teaching.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(timetables.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(exports.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(imports_router.router, prefix=API_PREFIX, dependencies=[_auth])
+app.include_router(scheduling_rules_router.router, prefix=API_PREFIX, dependencies=[_auth])
 
 
 @app.on_event("startup")

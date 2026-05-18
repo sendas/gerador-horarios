@@ -20,6 +20,7 @@ class Cluster(Base):
     subjects = relationship("Subject", back_populates="cluster")
     teachers = relationship("Teacher", back_populates="cluster")
     non_teaching_types = relationship("NonTeachingType", back_populates="cluster")
+    scheduling_rules = relationship("SchedulingRules")
 
 
 class School(Base):
@@ -127,6 +128,11 @@ class CurriculumEntry(Base):
     hours_per_week = Column(Float, nullable=False)
     is_split = Column(Boolean, default=False)
     split_count = Column(Integer, default=1)
+    consecutive_pairs = Column(Integer, default=0)  # how many of the splits must be consecutive doubles
+    is_semestral = Column(Boolean, default=False)
+    semester = Column(Integer, nullable=True)  # 1 or 2
+    paired_entry_id = Column(Integer, ForeignKey("curriculum_entries.id"), nullable=True)
+    paired_entry = relationship("CurriculumEntry", foreign_keys="[CurriculumEntry.paired_entry_id]", remote_side="CurriculumEntry.id", uselist=False)
 
     class_ = relationship("Class", back_populates="curriculum_entries")
     subject = relationship("Subject", back_populates="curriculum_entries")
@@ -240,11 +246,28 @@ class ScheduledLesson(Base):
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)
     day_of_week = Column(Integer, nullable=False)  # 0=Mon..4=Fri
     slot_number = Column(Integer, nullable=False)
+    semester = Column(Integer, nullable=True)  # null=both, 1=semester1, 2=semester2
 
     timetable = relationship("Timetable", back_populates="scheduled_lessons")
     curriculum_entry = relationship("CurriculumEntry", back_populates="scheduled_lessons")
     teacher = relationship("Teacher", back_populates="scheduled_lessons")
     room = relationship("Room", back_populates="scheduled_lessons")
+
+
+class SchedulingRules(Base):
+    __tablename__ = "scheduling_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(Integer, ForeignKey("clusters.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=True)  # null = applies to all years
+    max_periods_per_day_class = Column(Integer, default=5)
+    max_periods_per_day_teacher = Column(Integer, default=6)
+    max_consecutive_periods_class = Column(Integer, default=2)
+    max_consecutive_periods_teacher = Column(Integer, default=4)
+    avoid_isolated_teacher = Column(Boolean, default=False)  # penalize isolated single periods for teachers
+
+    cluster = relationship("Cluster")
+    academic_year = relationship("AcademicYear")
 
 
 class NonTeachingType(Base):
