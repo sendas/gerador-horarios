@@ -17,9 +17,9 @@
 
     <q-card style="min-width: 360px; max-width: 420px; width: 100%">
       <q-card-section class="bg-primary text-white text-center q-pb-lg">
-        <q-icon name="schedule" size="52px" />
-        <div class="text-h6 q-mt-sm">Gerador de Horários</div>
-        <div class="text-caption">Acesso ao sistema</div>
+        <q-icon name="hub" size="52px" />
+        <div class="text-h5 q-mt-sm" style="font-weight:700;letter-spacing:-0.5px">Sinaptik</div>
+        <div class="text-caption" style="opacity:0.8">Plataforma Inteligente de Horários</div>
       </q-card-section>
 
       <q-card-section class="q-pt-lg">

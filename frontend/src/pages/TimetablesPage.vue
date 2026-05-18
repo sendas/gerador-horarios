@@ -13,15 +13,19 @@
       </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn
-            flat round dense icon="play_arrow" color="positive"
-            title="Gerar"
-            :loading="store.generating"
-            :disable="props.row.status === 'generating'"
-            @click="openGenerateDialog(props.row)"
-          />
-          <q-btn flat round dense icon="visibility" color="primary" :to="`/timetables/${props.row.id}`" />
-          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
+          <div class="row no-wrap q-gutter-xs">
+            <q-btn unelevated size="sm" color="positive" icon="play_arrow" label="Gerar"
+              :loading="store.generating"
+              :disable="props.row.status === 'generating'"
+              @click="openGenerateDialog(props.row)"
+            />
+            <q-btn unelevated size="sm" color="primary" icon="table_chart" label="Ver Horário"
+              :to="`/timetables/${props.row.id}`"
+            />
+            <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar"
+              @click="confirmDelete(props.row)"
+            />
+          </div>
         </q-td>
       </template>
     </q-table>

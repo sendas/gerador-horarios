@@ -4,8 +4,8 @@
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
         <q-toolbar-title>
-          <q-icon name="schedule" class="q-mr-sm" />
-          Gerador de Horários
+          <q-icon name="hub" class="q-mr-sm" />
+          Sinaptik
         </q-toolbar-title>
 
         <!-- Demo badge -->

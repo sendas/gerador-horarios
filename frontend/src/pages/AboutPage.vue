@@ -3,12 +3,12 @@
     <!-- Hero banner -->
     <div class="hero">
       <div class="hero__icon-wrap">
-        <q-icon name="schedule" size="48px" color="white" />
+        <q-icon name="hub" size="48px" color="white" />
       </div>
-      <div class="hero__title">Gerador de Horários</div>
-      <q-badge class="hero__badge">v1.5.0</q-badge>
+      <div class="hero__title">Sinaptik</div>
+      <q-badge class="hero__badge">v1.6.0</q-badge>
       <div class="hero__subtitle">
-        Sistema inteligente de criação automática de horários para agrupamentos escolares
+        Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
     </div>
 
@@ -259,6 +259,66 @@
             </q-list>
           </q-card>
 
+          <!-- Credits -->
+          <div class="section-label">
+            <q-icon name="favorite" size="xs" class="q-mr-xs" />Créditos e direitos de autor
+          </div>
+          <q-card flat bordered class="q-mb-lg credits-card">
+            <q-card-section>
+              <div class="row items-center q-mb-md">
+                <q-icon name="hub" color="primary" size="32px" class="q-mr-md" />
+                <div>
+                  <div class="text-h6" style="font-weight:700">Sinaptik</div>
+                  <div class="text-caption text-grey-6">Plataforma Inteligente de Horários Escolares</div>
+                </div>
+                <q-space />
+                <div class="text-caption text-grey-5">© {{ new Date().getFullYear() }} Todos os direitos reservados</div>
+              </div>
+
+              <q-separator class="q-mb-md" />
+
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-sm-6">
+                  <div class="text-subtitle2 q-mb-sm">
+                    <q-icon name="person" color="blue-7" class="q-mr-xs" />Autor
+                  </div>
+                  <div class="text-body2 q-mb-xs">Desenvolvido por <strong>sendas</strong></div>
+                  <div class="text-caption text-grey-6 q-mb-sm">Com o apoio de <strong>Claude AI</strong> (Anthropic) como assistente de desenvolvimento — geração de código, arquitetura e resolução de problemas complexos.</div>
+                  <div class="row q-gutter-sm">
+                    <q-btn flat size="sm" icon="code" label="GitHub" color="grey-7"
+                      href="https://github.com/sendas/gerador-horarios" target="_blank" />
+                  </div>
+                </div>
+                <div class="col-12 col-sm-6">
+                  <div class="text-subtitle2 q-mb-sm">
+                    <q-icon name="auto_awesome" color="deep-purple-5" class="q-mr-xs" />Desenvolvido com IA
+                  </div>
+                  <div class="feature-list">
+                    <div class="feature-item">
+                      <q-icon name="psychology" size="xs" color="deep-purple-5" />
+                      Claude (Anthropic) — assistente principal de desenvolvimento
+                    </div>
+                    <div class="feature-item">
+                      <q-icon name="visibility" size="xs" color="blue-6" />
+                      Claude Vision — importação de horários por imagem
+                    </div>
+                    <div class="feature-item">
+                      <q-icon name="calculate" size="xs" color="green-7" />
+                      OR-Tools CP-SAT (Google) — motor de geração automática
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <q-separator class="q-my-md" />
+
+              <div class="text-caption text-grey-5 text-center">
+                Este software é disponibilizado para uso em agrupamentos escolares.
+                Proibida a distribuição ou comercialização sem autorização do autor.
+              </div>
+            </q-card-section>
+          </q-card>
+
         </div>
       </div>
     </div>
@@ -432,5 +492,11 @@ const importFormats = [
 
 .body--dark .field-code {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Credits card ────────────────────────────────────────── */
+.credits-card {
+  border-radius: 10px !important;
+  border-left: 4px solid #1976d2 !important;
 }
 </style>

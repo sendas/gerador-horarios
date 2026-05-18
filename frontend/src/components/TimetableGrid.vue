@@ -284,6 +284,7 @@ async function forceMove() {
   padding: 4px 8px;
   text-align: center;
   background: #ecf0f1;
+  color: #2c3e50;
   font-weight: bold;
   font-size: 12px;
   white-space: pre-line;
@@ -295,6 +296,24 @@ async function forceMove() {
   transition: background 0.12s, outline 0.12s;
   position: relative;
 }
+
+/* Dark mode overrides */
+.body--dark .tt-th { border-color: #444; }
+.body--dark .tt-td { border-color: #444; }
+.body--dark .tt-td--time {
+  background: #1e2a38;
+  color: #90caf9;
+}
+.body--dark .cell--source { background: #2a2a2a !important; }
+.body--dark .cell--over-ok {
+  background: #1b3a2a !important;
+  outline-color: #66bb6a;
+}
+.body--dark .cell--over-conflict {
+  background: #3a2a10 !important;
+  outline-color: #ffa726;
+}
+.body--dark .cell--occupied { background: #2a2a1a; }
 
 /* Lesson card */
 .lesson-card {
