@@ -83,7 +83,14 @@
         <q-card-section><div class="text-h6">Adicionar Disciplina</div></q-card-section>
         <q-card-section>
           <q-form @submit="addEntry">
-            <q-select v-model="entryForm.subject_id" :options="subjectOptions" label="Disciplina *" emit-value map-options :rules="[v => !!v || 'Obrigatório']" />
+            <q-select
+              v-model="entryForm.subject_id"
+              :options="subjectOptions"
+              label="Disciplina *"
+              emit-value map-options
+              :rules="[v => !!v || 'Obrigatório']"
+              @update:model-value="onSubjectChange"
+            />
             <q-input v-model.number="entryForm.hours_per_week" label="Horas/semana *" type="number" step="0.5" min="0.5" :rules="[v => v > 0 || 'Obrigatório']" />
             <q-checkbox v-model="entryForm.is_split" label="Aula dividida?" />
             <q-input v-if="entryForm.is_split" v-model.number="entryForm.split_count" label="Nº de partes" type="number" min="2" />
@@ -186,6 +193,25 @@ const entryForm = ref({
 const schoolOptions = computed(() => schoolsStore.schools.map((s) => ({ label: s.name, value: s.id })))
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))
 const subjectOptions = computed(() => subjectsStore.subjects.map((s) => ({ label: s.name, value: s.id })))
+
+const STRUCT_DEFAULTS: Record<string, { split_count: number; consecutive_pairs: number }> = {
+  '1':     { split_count: 1, consecutive_pairs: 0 },
+  '1+1':   { split_count: 2, consecutive_pairs: 0 },
+  '2':     { split_count: 2, consecutive_pairs: 1 },
+  '2+1':   { split_count: 3, consecutive_pairs: 1 },
+  '1+1+1': { split_count: 3, consecutive_pairs: 0 },
+}
+
+function onSubjectChange(subjectId: number | null) {
+  const subj = subjectsStore.subjects.find((s) => s.id === subjectId)
+  if (!subj) return
+  const d = STRUCT_DEFAULTS[subj.weekly_structure] ?? { split_count: 2, consecutive_pairs: 0 }
+  entryForm.value.split_count = d.split_count
+  entryForm.value.consecutive_pairs = d.consecutive_pairs
+  entryForm.value.is_split = d.split_count > 1
+  entryForm.value.is_semestral = subj.regime === 'semestral'
+  entryForm.value.semester = subj.default_semester ?? null
+}
 
 const semesterOptions = [
   { label: '1.º Semestre', value: 1 },

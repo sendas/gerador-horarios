@@ -38,6 +38,9 @@ for _sql in [
     "ALTER TABLE scheduling_rules ADD COLUMN teacher_gap_weight INTEGER DEFAULT 10",
     "ALTER TABLE scheduling_rules ADD COLUMN no_same_subject_twice_per_day BOOLEAN DEFAULT 1",
     "ALTER TABLE scheduling_rules ADD COLUMN distribute_subjects_weight INTEGER DEFAULT 5",
+    "ALTER TABLE subjects ADD COLUMN weekly_structure TEXT DEFAULT '1+1'",
+    "ALTER TABLE subjects ADD COLUMN regime TEXT DEFAULT 'annual'",
+    "ALTER TABLE subjects ADD COLUMN default_semester INTEGER",
     "CREATE TABLE IF NOT EXISTS backup_config (id INTEGER PRIMARY KEY DEFAULT 1, enabled BOOLEAN DEFAULT 0, frequency TEXT DEFAULT 'weekly', onedrive_client_id TEXT, onedrive_refresh_token TEXT, folder_path TEXT DEFAULT 'GeradorHorarios/Backups', last_backup_at DATETIME, next_backup_at DATETIME)",
     "CREATE TABLE IF NOT EXISTS backup_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME, status TEXT, destination TEXT DEFAULT 'download', size_bytes INTEGER, message TEXT, filename TEXT)",
 ]:
@@ -108,12 +111,77 @@ def create_default_admin():
         db.close()
 
 
+def _build_demo_timetable(db, timetable_id, classes_list, teacher_by_subject_id):
+    """Greedy schedule builder for demo data — no teacher conflicts, realistic spread."""
+    from app.models.models import ScheduledLesson, CurriculumEntry
+
+    class_slots: dict = {}    # {class_id: set of (day, slot)}
+    teacher_slots: dict = {}  # {teacher_id: set of (day, slot)}
+    DAYS, MAX_SLOT = 5, 7
+
+    def find_slot(class_id, teacher_id, start_day=0):
+        for day in range(start_day, DAYS + start_day):
+            d = day % DAYS
+            for slot in range(1, MAX_SLOT + 1):
+                if (d, slot) in class_slots.get(class_id, set()):
+                    continue
+                if teacher_id and (d, slot) in teacher_slots.get(teacher_id, set()):
+                    continue
+                return d, slot
+        return None, None
+
+    def find_consecutive_pair(class_id, teacher_id, start_day=0):
+        for day in range(start_day, DAYS + start_day):
+            d = day % DAYS
+            for slot in range(1, MAX_SLOT):
+                occupied_class = class_slots.get(class_id, set())
+                occupied_teacher = teacher_slots.get(teacher_id, set()) if teacher_id else set()
+                if (d, slot) not in occupied_class and (d, slot + 1) not in occupied_class:
+                    if (d, slot) not in occupied_teacher and (d, slot + 1) not in occupied_teacher:
+                        return d, slot
+        return None, None
+
+    def place(class_id, entry_id, teacher_id, day, slot):
+        class_slots.setdefault(class_id, set()).add((day, slot))
+        if teacher_id:
+            teacher_slots.setdefault(teacher_id, set()).add((day, slot))
+        db.add(ScheduledLesson(
+            timetable_id=timetable_id, curriculum_entry_id=entry_id,
+            day_of_week=day, slot_number=slot, teacher_id=teacher_id,
+        ))
+
+    for cls_idx, cls in enumerate(classes_list):
+        start_day = cls_idx % DAYS  # offset per class to spread subjects
+        entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id == cls.id).all()
+        for entry in entries:
+            n = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+            teacher_id = teacher_by_subject_id.get(entry.subject_id)
+            pairs = getattr(entry, 'consecutive_pairs', 0) or 0
+            placed = 0
+            # Place consecutive pairs first
+            for _ in range(pairs):
+                if placed + 2 > n:
+                    break
+                d, s = find_consecutive_pair(cls.id, teacher_id, start_day)
+                if d is not None:
+                    place(cls.id, entry.id, teacher_id, d, s)
+                    place(cls.id, entry.id, teacher_id, d, s + 1)
+                    placed += 2
+            # Place remaining as singles
+            while placed < n:
+                d, s = find_slot(cls.id, teacher_id, start_day)
+                if d is None:
+                    break
+                place(cls.id, entry.id, teacher_id, d, s)
+                placed += 1
+
+
 @app.on_event("startup")
 def seed_demo_data():
     from app.models.models import (
         Cluster, School, AcademicYear, TimeSlotConfig, Subject, Teacher,
         TeacherSubject, TeacherSchoolAssignment, Class, CurriculumEntry,
-        SchedulingRules
+        SchedulingRules, Timetable,
     )
     import datetime as dt
     db = SessionLocal()
@@ -127,10 +195,10 @@ def seed_demo_data():
             ))
             db.commit()
 
-        # Cluster
+        # Cluster — only seed once
         cluster = db.query(Cluster).filter(Cluster.name == "Agrupamento Demo").first()
         if not cluster:
-            cluster = Cluster(name="Agrupamento Demo", description="Dados de demonstração — não editáveis")
+            cluster = Cluster(name="Agrupamento Demo", description="Dados de demonstração")
             db.add(cluster); db.flush()
 
             school = School(cluster_id=cluster.id, name="EB 2,3 Prof. António Neves", code="DEMO-EB23")
@@ -140,54 +208,57 @@ def seed_demo_data():
                 start_date=dt.date(2025, 9, 15), end_date=dt.date(2026, 6, 20), is_active=True)
             db.add(year); db.flush()
 
-            # Time slots (Mon-Fri, 7 slots + breaks)
-            times = [
-                (1, dt.time(8, 30),  dt.time(9, 20),  False),
-                (2, dt.time(9, 20),  dt.time(10, 10), False),
-                (0, dt.time(10, 10), dt.time(10, 25), True),   # break
-                (3, dt.time(10, 25), dt.time(11, 15), False),
-                (4, dt.time(11, 15), dt.time(12, 5),  False),
-                (0, dt.time(12, 5),  dt.time(13, 30), True),   # lunch
-                (5, dt.time(13, 30), dt.time(14, 20), False),
-                (6, dt.time(14, 20), dt.time(15, 10), False),
-                (0, dt.time(15, 10), dt.time(15, 25), True),   # break
-                (7, dt.time(15, 25), dt.time(16, 15), False),
+            # Time slots Mon–Fri, 7 slots
+            slot_times = [
+                (1, dt.time(8, 30),  dt.time(9, 20)),
+                (2, dt.time(9, 20),  dt.time(10, 10)),
+                (3, dt.time(10, 25), dt.time(11, 15)),
+                (4, dt.time(11, 15), dt.time(12, 5)),
+                (5, dt.time(13, 30), dt.time(14, 20)),
+                (6, dt.time(14, 20), dt.time(15, 10)),
+                (7, dt.time(15, 25), dt.time(16, 15)),
             ]
             for day in range(5):
-                for slot_num, start, end, is_break in times:
-                    if slot_num == 0:
-                        continue  # skip breaks for time_slot_configs
+                for snum, start, end in slot_times:
                     db.add(TimeSlotConfig(
                         academic_year_id=year.id, school_id=school.id,
-                        day_of_week=day, slot_number=slot_num,
-                        start_time=start, end_time=end, is_break=False
+                        day_of_week=day, slot_number=snum,
+                        start_time=start, end_time=end, is_break=False,
                     ))
 
-            # Subjects
+            # Subjects with weekly_structure
+            # (name, color, weekly_structure, regime)
             subj_data = [
-                ("Português", "#e74c3c"), ("Matemática", "#3498db"), ("Inglês", "#2ecc71"),
-                ("Ciências Naturais", "#27ae60"), ("História", "#8e44ad"),
-                ("Geografia", "#f39c12"), ("Educação Física", "#e67e22"),
-                ("Arte", "#1abc9c"), ("TIC", "#95a5a6"), ("Ed. Moral e Religião", "#d35400"),
+                ("Português",           "#e74c3c", "2+1",   "annual"),
+                ("Matemática",          "#3498db", "2+1",   "annual"),
+                ("Inglês",              "#2ecc71", "1+1+1", "annual"),
+                ("Ciências Naturais",   "#27ae60", "1+1",   "annual"),
+                ("História",            "#8e44ad", "1+1",   "annual"),
+                ("Geografia",           "#f39c12", "1+1",   "annual"),
+                ("Educação Física",     "#e67e22", "1+1",   "annual"),
+                ("Arte",                "#1abc9c", "1+1",   "annual"),
+                ("TIC",                 "#95a5a6", "1+1",   "annual"),
+                ("Ed. Moral e Religião","#d35400", "1",     "annual"),
             ]
             subjects = {}
-            for sname, scolor in subj_data:
-                s = Subject(cluster_id=cluster.id, name=sname, color=scolor)
+            for sname, scolor, wstruct, regime in subj_data:
+                s = Subject(cluster_id=cluster.id, name=sname, color=scolor,
+                            weekly_structure=wstruct, regime=regime)
                 db.add(s); db.flush()
                 subjects[sname] = s
 
             # Teachers
-            teacher_subj = {
-                "Maria Costa": ["Português", "História"],
-                "João Silva": ["Matemática"],
-                "Ana Ferreira": ["Inglês", "TIC"],
-                "Pedro Santos": ["Ciências Naturais", "Geografia"],
-                "Sofia Rodrigues": ["Educação Física", "Arte"],
-                "Carlos Oliveira": ["Ed. Moral e Religião", "História"],
+            teacher_subj_map = {
+                "Maria Costa":    ["Português", "História"],
+                "João Silva":     ["Matemática"],
+                "Ana Ferreira":   ["Inglês", "TIC"],
+                "Pedro Santos":   ["Ciências Naturais", "Geografia"],
+                "Sofia Rodrigues":["Educação Física", "Arte"],
+                "Carlos Oliveira":["Ed. Moral e Religião", "História"],
             }
             teachers_map = {}
-            for tname, snames in teacher_subj.items():
-                t = Teacher(cluster_id=cluster.id, name=tname, max_daily_lessons=5)
+            for tname, snames in teacher_subj_map.items():
+                t = Teacher(cluster_id=cluster.id, name=tname, max_daily_lessons=6)
                 db.add(t); db.flush()
                 teachers_map[tname] = t
                 for sn in snames:
@@ -195,8 +266,16 @@ def seed_demo_data():
                         db.add(TeacherSubject(teacher_id=t.id, subject_id=subjects[sn].id))
                 db.add(TeacherSchoolAssignment(
                     teacher_id=t.id, school_id=school.id,
-                    academic_year_id=year.id, travel_time_minutes=0
+                    academic_year_id=year.id, travel_time_minutes=0,
                 ))
+
+            # teacher_id by subject_id (first teacher for each subject)
+            teacher_by_subject: dict = {}
+            for tname, snames in teacher_subj_map.items():
+                t = teachers_map[tname]
+                for sn in snames:
+                    if sn in subjects and subjects[sn].id not in teacher_by_subject:
+                        teacher_by_subject[subjects[sn].id] = t.id
 
             # Classes
             class_data = [
@@ -207,31 +286,52 @@ def seed_demo_data():
             for cname, ylevel, nstud in class_data:
                 c = Class(
                     school_id=school.id, academic_year_id=year.id,
-                    name=cname, year_level=ylevel, num_students=nstud
+                    name=cname, year_level=ylevel, num_students=nstud,
                 )
                 db.add(c); db.flush()
                 classes_list.append(c)
 
-            # Curriculum (5th/6th grade Portuguese curriculum)
-            curriculum_5 = [
-                ("Português", 5, 2), ("Matemática", 5, 2), ("Inglês", 3, 1),
-                ("Ciências Naturais", 2, 1), ("História", 2, 1), ("Geografia", 2, 1),
-                ("Educação Física", 2, 1), ("Arte", 2, 1), ("Ed. Moral e Religião", 1, 1),
+            # Curriculum: structure maps to (split_count, consecutive_pairs)
+            STRUCT = {
+                "2+1":   (3, 1),  # 3 parts, 1 consecutive pair
+                "1+1+1": (3, 0),  # 3 parts, none consecutive
+                "1+1":   (2, 0),  # 2 parts, none consecutive
+                "1":     (1, 0),  # 1 part
+            }
+            # (subject, hpw_for_display, structure_override_or_None)
+            curriculum_56 = [
+                ("Português",           5,  "2+1"),
+                ("Matemática",          5,  "2+1"),
+                ("Inglês",              3,  "1+1+1"),
+                ("Ciências Naturais",   2,  "1+1"),
+                ("História",            2,  "1+1"),
+                ("Geografia",           2,  "1+1"),
+                ("Educação Física",     2,  "1+1"),
+                ("Arte",                2,  "1+1"),
+                ("Ed. Moral e Religião",1,  "1"),
             ]
-            curriculum_7 = [
-                ("Português", 4, 2), ("Matemática", 4, 2), ("Inglês", 3, 1),
-                ("Ciências Naturais", 3, 1), ("História", 3, 1), ("Geografia", 2, 1),
-                ("Educação Física", 2, 1), ("TIC", 2, 1),
+            curriculum_789 = [
+                ("Português",           5,  "2+1"),
+                ("Matemática",          5,  "2+1"),
+                ("Inglês",              3,  "1+1+1"),
+                ("Ciências Naturais",   3,  "1+1+1"),
+                ("História",            3,  "1+1+1"),
+                ("Geografia",           2,  "1+1"),
+                ("Educação Física",     2,  "1+1"),
+                ("TIC",                 2,  "1+1"),
             ]
             for cls in classes_list:
-                curric = curriculum_5 if cls.year_level <= 6 else curriculum_7
-                for sname, hpw, split_count in curric:
-                    if sname in subjects:
-                        db.add(CurriculumEntry(
-                            class_id=cls.id, subject_id=subjects[sname].id,
-                            hours_per_week=float(hpw), is_split=split_count > 1,
-                            split_count=split_count, consecutive_pairs=0,
-                        ))
+                curric = curriculum_56 if cls.year_level <= 6 else curriculum_789
+                for sname, hpw, wstruct in curric:
+                    if sname not in subjects:
+                        continue
+                    sc, cp = STRUCT.get(wstruct, (2, 0))
+                    db.add(CurriculumEntry(
+                        class_id=cls.id, subject_id=subjects[sname].id,
+                        hours_per_week=float(hpw),
+                        is_split=sc > 1, split_count=sc, consecutive_pairs=cp,
+                    ))
+            db.flush()
 
             # Scheduling rules
             db.add(SchedulingRules(
@@ -242,6 +342,18 @@ def seed_demo_data():
                 minimize_teacher_gaps=True, teacher_gap_weight=10,
                 no_same_subject_twice_per_day=True, distribute_subjects_weight=5,
             ))
+
+            # Pre-built demo timetable
+            timetable = Timetable(
+                academic_year_id=year.id,
+                name="Horário Demo 2025/2026",
+                status="generated",
+                solver_status="FEASIBLE",
+                created_at=dt.datetime.utcnow(),
+                updated_at=dt.datetime.utcnow(),
+            )
+            db.add(timetable); db.flush()
+            _build_demo_timetable(db, timetable.id, classes_list, teacher_by_subject)
 
             db.commit()
             logger.info("Dados de demonstração criados com sucesso.")

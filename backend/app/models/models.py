@@ -98,6 +98,12 @@ class Subject(Base):
     name = Column(String, nullable=False)
     code = Column(String, nullable=True)
     color = Column(String, default="#3498db")
+    # Weekly structure: '1' | '1+1' | '2' | '2+1' | '1+1+1'
+    # Translates to (split_count, consecutive_pairs) when adding curriculum entries
+    weekly_structure = Column(String, default="1+1")
+    # Regime: 'annual' | 'semestral'
+    regime = Column(String, default="annual")
+    default_semester = Column(Integer, nullable=True)  # 1 or 2 if semestral
 
     cluster = relationship("Cluster", back_populates="subjects")
     curriculum_entries = relationship("CurriculumEntry", back_populates="subject")

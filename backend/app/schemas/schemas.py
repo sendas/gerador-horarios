@@ -121,6 +121,9 @@ class SubjectBase(BaseModel):
     name: str
     code: Optional[str] = None
     color: str = "#3498db"
+    weekly_structure: str = "1+1"
+    regime: str = "annual"
+    default_semester: Optional[int] = None
 
 class SubjectCreate(SubjectBase):
     pass
@@ -129,6 +132,9 @@ class SubjectUpdate(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
     color: Optional[str] = None
+    weekly_structure: Optional[str] = None
+    regime: Optional[str] = None
+    default_semester: Optional[int] = None
 
 class SubjectResponse(SubjectBase):
     model_config = ConfigDict(from_attributes=True)

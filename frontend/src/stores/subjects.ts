@@ -8,6 +8,9 @@ export interface Subject {
   name: string
   code?: string
   color: string
+  weekly_structure: string  // '1' | '1+1' | '2' | '2+1' | '1+1+1'
+  regime: string            // 'annual' | 'semestral'
+  default_semester?: number | null
 }
 
 export const useSubjectsStore = defineStore('subjects', () => {
