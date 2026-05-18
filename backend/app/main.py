@@ -350,9 +350,11 @@ def seed_demo_data():
             db.flush()
 
             # Scheduling rules
+            # max_periods_per_day_class=6: with 7 classes and 6 teachers, 6/day lets
+            # each class skip 1 weekday so at most 6 classes ever need slot-1 simultaneously
             db.add(SchedulingRules(
                 cluster_id=cluster.id, academic_year_id=year.id,
-                max_periods_per_day_class=5, max_periods_per_day_teacher=6,
+                max_periods_per_day_class=6, max_periods_per_day_teacher=6,
                 max_consecutive_periods_class=2, max_consecutive_periods_teacher=4,
                 avoid_isolated_teacher=True, no_student_gaps=True,
                 minimize_teacher_gaps=True, teacher_gap_weight=10,
@@ -378,6 +380,16 @@ def seed_demo_data():
         # Always rebuild demo timetable lessons so slot-1 enforcement is current
         year = db.query(AcademicYear).filter(AcademicYear.cluster_id == cluster.id).first()
         if year:
+            # Fix scheduling rules for existing DBs: max_periods_per_day_class must be
+            # >= 6 so that with 7 classes and 6 teachers the slot-1 constraint is feasible.
+            rules = db.query(SchedulingRules).filter(
+                SchedulingRules.cluster_id == cluster.id
+            ).first()
+            if rules and rules.max_periods_per_day_class < 6:
+                rules.max_periods_per_day_class = 6
+                db.commit()
+                logger.info("Demo: max_periods_per_day_class corrigido para 6 (era %d).", 5)
+
             timetable = db.query(Timetable).filter(Timetable.academic_year_id == year.id).first()
             if timetable:
                 classes_list = db.query(Class).filter(

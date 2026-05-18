@@ -177,10 +177,42 @@ def _run_solver(db, timetable_id: int, options: dict = None):
 
     if not occurrences:
         tt.status = "error"
-        tt.solver_status = "No lesson occurrences to schedule"
+        tt.solver_status = "Sem ocorrências para agendar. Verifique se as turmas têm currículo."
         tt.updated_at = datetime.utcnow()
         db.commit()
         return
+
+    # ── Pre-solve sanity checks ───────────────────────────────────────────────
+    n_classes = len(entry_by_class)
+    n_teachers = len(teachers)
+    n_days = len(DAYS)
+    slots_per_day = len(all_slots) // n_days if n_days else 0
+    logger.info(
+        "Timetable %d: %d turmas, %d professores, %d tempos/dia, %d ocorrências totais, limite=%ds",
+        timetable_id, n_classes, n_teachers, slots_per_day, len(occurrences), max_time,
+    )
+
+    # Warn when classes outnumber teachers — can make students_start_slot_1 infeasible
+    if opts.get("students_start_slot_1") and n_classes > n_teachers:
+        logger.warning(
+            "Timetable %d: %d turmas > %d professores com students_start_slot_1=True. "
+            "Pode ser inviável se todas as turmas tiverem aulas todos os dias. "
+            "Aumente max_periods_per_day_class nas Regras de Geração.",
+            timetable_id, n_classes, n_teachers,
+        )
+
+    # Warn about teachers with potentially impossible loads
+    for tid, teacher in teachers.items():
+        occ_for_teacher = sum(
+            1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, [])
+        )
+        max_weekly = teacher.max_daily_lessons * n_days
+        if occ_for_teacher > max_weekly:
+            logger.warning(
+                "Timetable %d: Professor %s tem %d ocorrências mas máx semanal é %d (%d/dia × %d dias).",
+                timetable_id, teacher.name, occ_for_teacher, max_weekly,
+                teacher.max_daily_lessons, n_days,
+            )
 
     # ── CP-SAT model ─────────────────────────────────────────────────────────
     model = cp_model.CpModel()
@@ -652,11 +684,25 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         model.Minimize(sum(penalty_terms))
 
     # ── Solve ─────────────────────────────────────────────────────────────────
+    n_bool_vars = len(x) + len(t)
+    logger.info(
+        "Timetable %d: a resolver modelo CP-SAT (%d BoolVars, limite=%ds, workers=4)…",
+        timetable_id, n_bool_vars, max_time,
+    )
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(max_time)
     solver.parameters.num_workers = 4
 
     status = solver.Solve(model)
+
+    logger.info(
+        "Timetable %d: solver terminou — status=%s, tempo=%.1fs, objective=%s",
+        timetable_id,
+        solver.StatusName(status),
+        solver.WallTime(),
+        solver.ObjectiveValue() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "n/a",
+    )
 
     # ── Persist results ───────────────────────────────────────────────────────
     db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
@@ -705,7 +751,23 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         tt.solver_status = solver.StatusName(status)
     else:
         tt.status = "error"
-        tt.solver_status = solver.StatusName(status)
+        status_name = solver.StatusName(status)
+        if status == cp_model.UNKNOWN:
+            hint = (
+                f"UNKNOWN — sem solução em {solver.WallTime():.0f}s. "
+                "Tente: aumentar o tempo de cálculo, reduzir restrições rígidas, "
+                "ou verificar se os professores têm disponibilidade suficiente."
+            )
+        elif status == cp_model.INFEASIBLE:
+            hint = (
+                "INFEASIBLE — modelo sem solução possível. Verifique: "
+                "disponibilidade dos professores, 'Alunos entram no 1.º tempo' com muitas turmas, "
+                "disciplinas sem professor atribuído."
+            )
+        else:
+            hint = status_name
+        tt.solver_status = hint
+        logger.error("Timetable %d: %s", timetable_id, hint)
 
     tt.updated_at = datetime.utcnow()
     db.commit()
