@@ -8,7 +8,7 @@ from app.schemas.schemas import SchoolCreate, SchoolUpdate, SchoolResponse
 router = APIRouter(prefix="/schools", tags=["schools"])
 
 
-@router.get("/", response_model=List[SchoolResponse])
+@router.get("", response_model=List[SchoolResponse])
 def list_schools(cluster_id: int = None, db: Session = Depends(get_db)):
     q = db.query(School)
     if cluster_id:
@@ -16,7 +16,7 @@ def list_schools(cluster_id: int = None, db: Session = Depends(get_db)):
     return q.all()
 
 
-@router.post("/", response_model=SchoolResponse, status_code=201)
+@router.post("", response_model=SchoolResponse, status_code=201)
 def create_school(data: SchoolCreate, db: Session = Depends(get_db)):
     existing = db.query(School).filter(School.code == data.code).first()
     if existing:

@@ -8,7 +8,7 @@ from app.schemas.schemas import SubjectCreate, SubjectUpdate, SubjectResponse
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
 
-@router.get("/", response_model=List[SubjectResponse])
+@router.get("", response_model=List[SubjectResponse])
 def list_subjects(cluster_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Subject)
     if cluster_id:
@@ -16,7 +16,7 @@ def list_subjects(cluster_id: int = None, db: Session = Depends(get_db)):
     return q.all()
 
 
-@router.post("/", response_model=SubjectResponse, status_code=201)
+@router.post("", response_model=SubjectResponse, status_code=201)
 def create_subject(data: SubjectCreate, db: Session = Depends(get_db)):
     obj = Subject(**data.model_dump())
     db.add(obj)

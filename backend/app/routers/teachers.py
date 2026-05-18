@@ -14,7 +14,7 @@ from app.schemas.schemas import (
 router = APIRouter(prefix="/teachers", tags=["teachers"])
 
 
-@router.get("/", response_model=List[TeacherResponse])
+@router.get("", response_model=List[TeacherResponse])
 def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Teacher)
     if cluster_id:
@@ -22,7 +22,7 @@ def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
     return q.all()
 
 
-@router.post("/", response_model=TeacherResponse, status_code=201)
+@router.post("", response_model=TeacherResponse, status_code=201)
 def create_teacher(data: TeacherCreate, db: Session = Depends(get_db)):
     obj = Teacher(**data.model_dump())
     db.add(obj)

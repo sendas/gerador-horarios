@@ -11,7 +11,7 @@ from app.schemas.schemas import (
 router = APIRouter(prefix="/subject-groups", tags=["subject_groups"])
 
 
-@router.get("/", response_model=List[SubjectGroupResponse])
+@router.get("", response_model=List[SubjectGroupResponse])
 def list_subject_groups(academic_year_id: int = None, db: Session = Depends(get_db)):
     q = db.query(SubjectGroup)
     if academic_year_id:
@@ -19,7 +19,7 @@ def list_subject_groups(academic_year_id: int = None, db: Session = Depends(get_
     return q.all()
 
 
-@router.post("/", response_model=SubjectGroupResponse, status_code=201)
+@router.post("", response_model=SubjectGroupResponse, status_code=201)
 def create_subject_group(data: SubjectGroupCreate, db: Session = Depends(get_db)):
     obj = SubjectGroup(**data.model_dump())
     db.add(obj)

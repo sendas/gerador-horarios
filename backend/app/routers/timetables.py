@@ -30,7 +30,7 @@ def build_lesson_detail(lesson: ScheduledLesson) -> dict:
     }
 
 
-@router.get("/", response_model=List[TimetableResponse])
+@router.get("", response_model=List[TimetableResponse])
 def list_timetables(academic_year_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Timetable)
     if academic_year_id:
@@ -38,7 +38,7 @@ def list_timetables(academic_year_id: int = None, db: Session = Depends(get_db))
     return q.all()
 
 
-@router.post("/", response_model=TimetableResponse, status_code=201)
+@router.post("", response_model=TimetableResponse, status_code=201)
 def create_timetable(data: TimetableCreate, db: Session = Depends(get_db)):
     obj = Timetable(**data.model_dump())
     db.add(obj)

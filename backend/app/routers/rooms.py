@@ -8,7 +8,7 @@ from app.schemas.schemas import RoomCreate, RoomUpdate, RoomResponse
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
 
-@router.get("/", response_model=List[RoomResponse])
+@router.get("", response_model=List[RoomResponse])
 def list_rooms(school_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Room)
     if school_id:
@@ -16,7 +16,7 @@ def list_rooms(school_id: int = None, db: Session = Depends(get_db)):
     return q.all()
 
 
-@router.post("/", response_model=RoomResponse, status_code=201)
+@router.post("", response_model=RoomResponse, status_code=201)
 def create_room(data: RoomCreate, db: Session = Depends(get_db)):
     obj = Room(**data.model_dump())
     db.add(obj)

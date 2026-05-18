@@ -8,7 +8,7 @@ from app.schemas.schemas import AcademicYearCreate, AcademicYearUpdate, Academic
 router = APIRouter(prefix="/academic-years", tags=["academic_years"])
 
 
-@router.get("/", response_model=List[AcademicYearResponse])
+@router.get("", response_model=List[AcademicYearResponse])
 def list_academic_years(cluster_id: int = None, db: Session = Depends(get_db)):
     q = db.query(AcademicYear)
     if cluster_id:
@@ -16,7 +16,7 @@ def list_academic_years(cluster_id: int = None, db: Session = Depends(get_db)):
     return q.all()
 
 
-@router.post("/", response_model=AcademicYearResponse, status_code=201)
+@router.post("", response_model=AcademicYearResponse, status_code=201)
 def create_academic_year(data: AcademicYearCreate, db: Session = Depends(get_db)):
     obj = AcademicYear(**data.model_dump())
     db.add(obj)

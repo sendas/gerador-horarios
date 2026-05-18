@@ -11,7 +11,7 @@ from app.schemas.schemas import (
 router = APIRouter(prefix="/classes", tags=["classes"])
 
 
-@router.get("/", response_model=List[ClassResponse])
+@router.get("", response_model=List[ClassResponse])
 def list_classes(school_id: int = None, academic_year_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Class)
     if school_id:
@@ -21,7 +21,7 @@ def list_classes(school_id: int = None, academic_year_id: int = None, db: Sessio
     return q.all()
 
 
-@router.post("/", response_model=ClassResponse, status_code=201)
+@router.post("", response_model=ClassResponse, status_code=201)
 def create_class(data: ClassCreate, db: Session = Depends(get_db)):
     obj = Class(**data.model_dump())
     db.add(obj)

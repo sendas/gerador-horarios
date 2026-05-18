@@ -8,7 +8,7 @@ from app.schemas.schemas import TimeSlotConfigCreate, TimeSlotConfigUpdate, Time
 router = APIRouter(prefix="/time-slots", tags=["time_slots"])
 
 
-@router.get("/", response_model=List[TimeSlotConfigResponse])
+@router.get("", response_model=List[TimeSlotConfigResponse])
 def list_time_slots(
     academic_year_id: int = None,
     school_id: int = None,
@@ -22,7 +22,7 @@ def list_time_slots(
     return q.order_by(TimeSlotConfig.day_of_week, TimeSlotConfig.slot_number).all()
 
 
-@router.post("/", response_model=TimeSlotConfigResponse, status_code=201)
+@router.post("", response_model=TimeSlotConfigResponse, status_code=201)
 def create_time_slot(data: TimeSlotConfigCreate, db: Session = Depends(get_db)):
     obj = TimeSlotConfig(**data.model_dump())
     db.add(obj)

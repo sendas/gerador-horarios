@@ -8,12 +8,12 @@ from app.schemas.schemas import ClusterCreate, ClusterUpdate, ClusterResponse
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 
 
-@router.get("/", response_model=List[ClusterResponse])
+@router.get("", response_model=List[ClusterResponse])
 def list_clusters(db: Session = Depends(get_db)):
     return db.query(Cluster).all()
 
 
-@router.post("/", response_model=ClusterResponse, status_code=201)
+@router.post("", response_model=ClusterResponse, status_code=201)
 def create_cluster(data: ClusterCreate, db: Session = Depends(get_db)):
     existing = db.query(Cluster).filter(Cluster.name == data.name).first()
     if existing:
