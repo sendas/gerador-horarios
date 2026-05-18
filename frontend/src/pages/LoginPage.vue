@@ -1,5 +1,5 @@
 <template>
-  <q-page class="flex flex-center bg-grey-2">
+  <div class="flex flex-center bg-grey-2" style="min-height: 100vh">
     <q-card style="min-width: 360px; max-width: 400px; width: 100%">
       <q-card-section class="bg-primary text-white text-center q-pb-lg">
         <q-icon name="schedule" size="48px" />
@@ -54,7 +54,7 @@
         </q-form>
       </q-card-section>
     </q-card>
-  </q-page>
+  </div>
 </template>
 
 <script setup lang="ts">
