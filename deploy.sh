@@ -38,13 +38,13 @@ success "Docker e Compose encontrados ($COMPOSE_CMD)"
 if [ ! -f .env ]; then
     cp .env.example .env
     warn "Ficheiro .env criado a partir do .env.example. Podes editar antes de continuar."
-    warn "  APP_PORT=8080  →  porta de acesso no NAS"
+    warn "  APP_PORT=61100  →  porta de acesso no NAS"
     echo ""
 fi
 
 # ── Carregar variáveis ────────────────────────────────────────────────────────
 set -o allexport; source .env; set +o allexport
-APP_PORT="${APP_PORT:-8080}"
+APP_PORT="${APP_PORT:-61100}"
 
 # ── Pasta de dados ────────────────────────────────────────────────────────────
 info "A preparar pasta de dados..."
