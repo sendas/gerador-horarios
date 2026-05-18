@@ -194,7 +194,7 @@ def seed_demo_data():
     from app.models.models import (
         Cluster, School, AcademicYear, TimeSlotConfig, Subject, Teacher,
         TeacherSubject, TeacherSchoolAssignment, Class, CurriculumEntry,
-        SchedulingRules, Timetable,
+        SchedulingRules, Timetable, ScheduledLesson,
     )
     import datetime as dt
     db = SessionLocal()
@@ -374,6 +374,26 @@ def seed_demo_data():
 
             db.commit()
             logger.info("Dados de demonstração criados com sucesso.")
+
+        # Always rebuild demo timetable lessons so slot-1 enforcement is current
+        year = db.query(AcademicYear).filter(AcademicYear.cluster_id == cluster.id).first()
+        if year:
+            timetable = db.query(Timetable).filter(Timetable.academic_year_id == year.id).first()
+            if timetable:
+                classes_list = db.query(Class).filter(
+                    Class.academic_year_id == year.id
+                ).order_by(Class.id).all()
+                teacher_by_subject: dict = {}
+                for ts in db.query(TeacherSubject).all():
+                    if ts.subject_id not in teacher_by_subject:
+                        teacher_by_subject[ts.subject_id] = ts.teacher_id
+                db.query(ScheduledLesson).filter(
+                    ScheduledLesson.timetable_id == timetable.id
+                ).delete()
+                _build_demo_timetable(db, timetable.id, classes_list, teacher_by_subject)
+                timetable.updated_at = dt.datetime.utcnow()
+                db.commit()
+                logger.info("Horário demo reconstruído com regras de slot-1.")
     except Exception as e:
         logger.error(f"Erro ao criar dados demo: {e}", exc_info=True)
         db.rollback()
