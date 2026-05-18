@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.6.0</q-badge>
+      <q-badge class="hero__badge">v1.7.0</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -24,6 +24,74 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="call_split" color="green-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="green-7" class="version-badge">v1.7.0</q-badge>
+                  Emparelhamento Semestral &amp; Turnos
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />18 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="sync_alt" size="xs" color="green-7" />
+                  Emparelhamento semestral bidirecional: TIC ↔ EM no mesmo horário
+                </div>
+                <div class="feature-item">
+                  <q-icon name="call_split" size="xs" color="green-7" />
+                  Gestão de turnos: CN e FQ em laboratório em simultâneo (grupos separados)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="auto_fix_high" size="xs" color="green-7" />
+                  Correção do gerador: restrição de disciplinas por dia compatível com pares consecutivos
+                </div>
+                <div class="feature-item">
+                  <q-icon name="looks_one" size="xs" color="green-7" />
+                  Horário demo reconstruído automaticamente: alunos sempre a entrar no 1.º tempo
+                </div>
+              </div>
+            </q-timeline-entry>
+
+            <q-timeline-entry icon="cloud_upload" color="indigo-6">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="indigo-6" class="version-badge">v1.6.0</q-badge>
+                  Sinaptik — Backup, PDF e Melhorias de UI
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />17 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="hub" size="xs" color="indigo-6" />
+                  Plataforma renomeada para <strong>Sinaptik</strong> com identidade visual própria
+                </div>
+                <div class="feature-item">
+                  <q-icon name="backup" size="xs" color="indigo-6" />
+                  Sistema de backup para OneDrive (OAuth Device Code) e download local
+                </div>
+                <div class="feature-item">
+                  <q-icon name="picture_as_pdf" size="xs" color="indigo-6" />
+                  Exportação de horário em PDF (impressão automática no browser)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="view_week" size="xs" color="indigo-6" />
+                  Estrutura semanal configurável por disciplina (1, 1+1, 2, 2+1, 1+1+1)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="looks_one" size="xs" color="indigo-6" />
+                  Regra: alunos entram sempre no 1.º tempo; EF nunca depois do almoço
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="drag_indicator" color="cyan-7">
               <template #title>
                 <span class="version-title">
@@ -33,7 +101,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="schedule" size="xs" class="q-mr-xs" />18 de maio de 2026, 16:30
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />14 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">
@@ -65,7 +133,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="schedule" size="xs" class="q-mr-xs" />14 de maio de 2026, 11:00
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />12 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">
@@ -101,7 +169,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="schedule" size="xs" class="q-mr-xs" />8 de maio de 2026, 14:20
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />8 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">
@@ -133,7 +201,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="schedule" size="xs" class="q-mr-xs" />5 de maio de 2026, 10:00
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />5 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">
@@ -161,7 +229,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="schedule" size="xs" class="q-mr-xs" />3 de maio de 2026, 09:00
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />3 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">
@@ -189,7 +257,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="schedule" size="xs" class="q-mr-xs" />1 de maio de 2026, 08:00
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />1 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">

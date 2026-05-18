@@ -21,11 +21,11 @@
       </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn flat round dense icon="school" color="info" title="Escolas" @click="openSchools(props.row)" />
-          <q-btn flat round dense icon="book" color="secondary" title="Disciplinas" @click="openSubjects(props.row)" />
-          <q-btn flat round dense icon="event_available" color="positive" title="Disponibilidade" @click="openAvailability(props.row)" />
-          <q-btn flat round dense icon="edit" @click="openEdit(props.row)" />
-          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
+          <q-btn unelevated size="sm" color="info" icon="school" label="Escolas" @click="openSchools(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="secondary" icon="book" label="Disciplinas" @click="openSubjects(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="positive" icon="event_available" label="Disponibilidade" @click="openAvailability(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
         </q-td>
       </template>
     </q-table>
