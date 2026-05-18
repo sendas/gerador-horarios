@@ -1,118 +1,436 @@
 <template>
-  <q-page padding>
-    <div class="row justify-center">
-      <div style="max-width: 700px; width: 100%">
-        <div class="text-center q-mb-lg">
-          <q-icon name="schedule" size="64px" color="primary" />
-          <div class="text-h4 q-mt-sm">Gerador de Horários</div>
-          <q-badge color="primary" class="q-mt-sm text-subtitle2">v1.2.0</q-badge>
-          <div class="text-caption text-grey-6 q-mt-xs">Sistema de geração automática de horários escolares</div>
-        </div>
+  <q-page>
+    <!-- Hero banner -->
+    <div class="hero">
+      <div class="hero__icon-wrap">
+        <q-icon name="schedule" size="48px" color="white" />
+      </div>
+      <div class="hero__title">Gerador de Horários</div>
+      <q-badge class="hero__badge">v1.5.0</q-badge>
+      <div class="hero__subtitle">
+        Sistema inteligente de criação automática de horários para agrupamentos escolares
+      </div>
+    </div>
 
-        <q-card flat bordered class="q-mb-md">
-          <q-card-section>
-            <div class="text-h6 q-mb-md">
-              <q-icon name="history" class="q-mr-sm" />Historial de versões
+    <!-- Page body -->
+    <div class="q-pa-md">
+      <div class="row justify-center">
+        <div style="max-width: 780px; width: 100%">
+
+          <!-- Version history -->
+          <div class="section-label">
+            <q-icon name="tag" size="xs" class="q-mr-xs" />Historial de versões
+          </div>
+
+          <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="drag_indicator" color="cyan-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="cyan-7" class="version-badge">v1.5.0</q-badge>
+                  Edição Manual — Drag &amp; Drop
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />18 de maio de 2026, 16:30
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="pan_tool" size="xs" color="cyan-7" />
+                  Arrastar e largar aulas na grelha do horário (por turma, professor ou sala)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="warning_amber" size="xs" color="orange-7" />
+                  Deteção de incompatibilidades: conflitos de turma e de professor
+                </div>
+                <div class="feature-item">
+                  <q-icon name="palette" size="xs" color="cyan-7" />
+                  Feedback visual durante o arrasto — verde (livre) · laranja (conflito)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="bolt" size="xs" color="cyan-7" />
+                  Opção de forçar a mudança mesmo com conflitos assinalados
+                </div>
+              </div>
+            </q-timeline-entry>
+
+            <q-timeline-entry icon="tune" color="deep-purple-5">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="deep-purple-5" class="version-badge">v1.4.0</q-badge>
+                  Parametrização Avançada da Geração
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />14 de maio de 2026, 11:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="filter_alt" size="xs" color="deep-purple-5" />
+                  Seleção de ciclos: 2.º (5.°-6.°), 3.º (7.°-9.°) e Secundário (10.°-12.°)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="person_pin" size="xs" color="deep-purple-5" />
+                  Preferências por professor: turno, hora mín./máx., máx. aulas consecutivas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="block" size="xs" color="deep-purple-5" />
+                  Restrição rígida: sem furos nos horários dos alunos
+                </div>
+                <div class="feature-item">
+                  <q-icon name="scatter_plot" size="xs" color="deep-purple-5" />
+                  Distribuição inteligente de disciplinas ao longo da semana
+                </div>
+                <div class="feature-item">
+                  <q-icon name="timer" size="xs" color="deep-purple-5" />
+                  Tempo limite de cálculo configurável (1, 2, 5 ou 10 minutos)
+                </div>
+              </div>
+            </q-timeline-entry>
+
+            <q-timeline-entry icon="rule" color="blue-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="blue-7" class="version-badge">v1.3.0</q-badge>
+                  Regras de Horário e Currículo
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />8 de maio de 2026, 14:20
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="settings" size="xs" color="blue-7" />
+                  Regras de criação de horário configuráveis por agrupamento e ano letivo
+                </div>
+                <div class="feature-item">
+                  <q-icon name="view_week" size="xs" color="blue-7" />
+                  Pares consecutivos (ex.: 2 tempos seguidos + 1 isolado por semana)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="calendar_month" size="xs" color="blue-7" />
+                  Disciplinas semestrais com emparelhamento automático no horário
+                </div>
+                <div class="feature-item">
+                  <q-icon name="upload_file" size="xs" color="blue-7" />
+                  Importação de currículo completo via CSV (turma, disciplina, professor, horas/semana)
+                </div>
+              </div>
+            </q-timeline-entry>
+
+            <q-timeline-entry icon="auto_awesome" color="purple-6">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="purple-6" class="version-badge">v1.2.0</q-badge>
+                  Importações e Modo Escuro
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />5 de maio de 2026, 10:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="table_chart" size="xs" color="purple-6" />
+                  Importação de professores, turmas e salas via CSV/Excel
+                </div>
+                <div class="feature-item">
+                  <q-icon name="image_search" size="xs" color="purple-6" />
+                  Importação via imagem com IA (Claude Vision)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="dark_mode" size="xs" color="purple-6" />
+                  Modo escuro com persistência de preferência
+                </div>
+              </div>
+            </q-timeline-entry>
+
+            <q-timeline-entry icon="lock" color="orange-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="orange-7" class="version-badge">v1.1.0</q-badge>
+                  Autenticação e Utilizadores
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />3 de maio de 2026, 09:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="key" size="xs" color="orange-7" />
+                  Sistema de login JWT com sessões de 8 horas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="badge" size="xs" color="orange-7" />
+                  Papéis: Administrador, Utilizador, Visualizador
+                </div>
+                <div class="feature-item">
+                  <q-icon name="manage_accounts" size="xs" color="orange-7" />
+                  Gestão de utilizadores e reposição de palavra-passe
+                </div>
+              </div>
+            </q-timeline-entry>
+
+            <q-timeline-entry icon="rocket_launch" color="teal-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="teal-7" class="version-badge">v1.0.0</q-badge>
+                  Versão Inicial
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="schedule" size="xs" class="q-mr-xs" />1 de maio de 2026, 08:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="domain" size="xs" color="teal-7" />
+                  Agrupamentos, escolas, anos letivos e tempos letivos
+                </div>
+                <div class="feature-item">
+                  <q-icon name="group" size="xs" color="teal-7" />
+                  Turmas, disciplinas, professores e currículo
+                </div>
+                <div class="feature-item">
+                  <q-icon name="auto_fix_high" size="xs" color="teal-7" />
+                  Geração automática de horários com OR-Tools CP-SAT
+                </div>
+                <div class="feature-item">
+                  <q-icon name="download" size="xs" color="teal-7" />
+                  Exportação em HTML, CSV e Excel
+                </div>
+                <div class="feature-item">
+                  <q-icon name="merge" size="xs" color="teal-7" />
+                  Grupos de disciplinas (coadjuvação, desdobramento)
+                </div>
+              </div>
+            </q-timeline-entry>
+
+          </q-timeline>
+
+          <!-- Tech stack -->
+          <div class="section-label">
+            <q-icon name="build" size="xs" class="q-mr-xs" />Tecnologias utilizadas
+          </div>
+          <div class="row q-col-gutter-sm q-mb-lg">
+            <div v-for="tech in techs" :key="tech.name" class="col-6 col-sm-4 col-md-3">
+              <q-card flat bordered class="tech-card">
+                <q-card-section class="q-pa-sm row items-center no-wrap q-gutter-sm">
+                  <q-icon :name="tech.icon" :color="tech.color" size="26px" />
+                  <div>
+                    <div class="text-weight-bold text-body2">{{ tech.name }}</div>
+                    <div class="text-caption text-grey-6">{{ tech.desc }}</div>
+                  </div>
+                </q-card-section>
+              </q-card>
             </div>
+          </div>
 
-            <q-timeline color="primary">
-              <q-timeline-entry
-                title="v1.2.0 — Importação e Modo Escuro"
-                subtitle="Maio 2026"
-                icon="auto_awesome"
-                color="purple"
-              >
-                <ul class="q-mb-none q-pl-md">
-                  <li>Importação de professores, turmas e salas via CSV/Excel</li>
-                  <li>Importação via imagem com IA (Claude Vision)</li>
-                  <li>Modo escuro com persistência de preferência</li>
-                  <li>Página Sobre com historial de versões</li>
-                </ul>
-              </q-timeline-entry>
-
-              <q-timeline-entry
-                title="v1.1.0 — Autenticação"
-                subtitle="Maio 2026"
-                icon="lock"
-                color="orange"
-              >
-                <ul class="q-mb-none q-pl-md">
-                  <li>Sistema de login JWT com sessões de 8 horas</li>
-                  <li>Papéis: Administrador, Utilizador, Visualizador</li>
-                  <li>Gestão de utilizadores (admin)</li>
-                  <li>Proteção de todas as rotas</li>
-                </ul>
-              </q-timeline-entry>
-
-              <q-timeline-entry
-                title="v1.0.0 — Versão Inicial"
-                subtitle="Maio 2026"
-                icon="rocket_launch"
-                color="positive"
-              >
-                <ul class="q-mb-none q-pl-md">
-                  <li>Gestão de agrupamentos, escolas e anos letivos</li>
-                  <li>Configuração de tempos letivos por escola</li>
-                  <li>Salas, disciplinas, turmas e currículo</li>
-                  <li>Professores — escolas, disciplinas, disponibilidade</li>
-                  <li>Geração automática de horários com OR-Tools</li>
-                  <li>Exportação HTML, CSV e Excel</li>
-                  <li>Grupos de disciplinas (coadjuvação, desdobramento)</li>
-                </ul>
-              </q-timeline-entry>
-            </q-timeline>
-          </q-card-section>
-        </q-card>
-
-        <q-card flat bordered class="q-mb-md">
-          <q-card-section>
-            <div class="text-h6 q-mb-sm">
-              <q-icon name="build" class="q-mr-sm" />Tecnologias
-            </div>
-            <div class="row q-gutter-sm">
-              <q-chip icon="memory" color="blue" text-color="white">FastAPI</q-chip>
-              <q-chip icon="storage" color="brown" text-color="white">SQLite</q-chip>
-              <q-chip icon="calculate" color="green" text-color="white">OR-Tools CP-SAT</q-chip>
-              <q-chip icon="code" color="teal" text-color="white">Vue 3</q-chip>
-              <q-chip icon="palette" color="primary" text-color="white">Quasar</q-chip>
-              <q-chip icon="auto_awesome" color="purple" text-color="white">Claude AI</q-chip>
-              <q-chip icon="inventory_2" color="orange" text-color="white">Docker</q-chip>
-            </div>
-          </q-card-section>
-        </q-card>
-
-        <q-card flat bordered>
-          <q-card-section>
-            <div class="text-h6 q-mb-sm">
-              <q-icon name="description" class="q-mr-sm" />Formatos de importação
-            </div>
-            <p class="text-body2 q-mb-sm">Os ficheiros CSV e Excel devem conter os seguintes campos:</p>
-            <q-list bordered separator dense>
-              <q-item>
-                <q-item-section avatar><q-icon name="person" color="primary" /></q-item-section>
-                <q-item-section>
-                  <q-item-label><strong>Professores:</strong> <code>nome</code>, <code>email</code> (opcional), <code>max_aulas_dia</code> (opcional)</q-item-label>
+          <!-- Import formats -->
+          <div class="section-label">
+            <q-icon name="description" size="xs" class="q-mr-xs" />Formatos de importação CSV / Excel
+          </div>
+          <q-card flat bordered class="q-mb-lg">
+            <q-list separator>
+              <q-item v-for="fmt in importFormats" :key="fmt.label">
+                <q-item-section avatar>
+                  <q-icon :name="fmt.icon" :color="fmt.color" />
                 </q-item-section>
-              </q-item>
-              <q-item>
-                <q-item-section avatar><q-icon name="group" color="secondary" /></q-item-section>
                 <q-item-section>
-                  <q-item-label><strong>Turmas:</strong> <code>nome</code>, <code>ano</code> (opcional), <code>alunos</code> (opcional)</q-item-label>
-                </q-item-section>
-              </q-item>
-              <q-item>
-                <q-item-section avatar><q-icon name="meeting_room" color="positive" /></q-item-section>
-                <q-item-section>
-                  <q-item-label><strong>Salas:</strong> <code>nome</code>, <code>capacidade</code> (opcional), <code>tipo</code> (opcional)</q-item-label>
+                  <q-item-label class="text-weight-medium">{{ fmt.label }}</q-item-label>
+                  <q-item-label caption>
+                    <template v-for="(field, i) in fmt.fields" :key="field">
+                      <code class="field-code">{{ field }}</code>
+                      <span v-if="i < fmt.fields.length - 1" class="text-grey-5"> · </span>
+                    </template>
+                  </q-item-label>
                 </q-item-section>
               </q-item>
             </q-list>
-          </q-card-section>
-        </q-card>
+          </q-card>
+
+        </div>
       </div>
     </div>
   </q-page>
 </template>
 
 <script setup lang="ts">
+const techs = [
+  { name: 'FastAPI', desc: 'API REST', icon: 'bolt', color: 'teal-6' },
+  { name: 'SQLite', desc: 'Base de dados', icon: 'storage', color: 'brown-6' },
+  { name: 'OR-Tools', desc: 'Solver CP-SAT', icon: 'calculate', color: 'green-7' },
+  { name: 'Vue 3', desc: 'Frontend', icon: 'code', color: 'teal-5' },
+  { name: 'Quasar', desc: 'UI Framework', icon: 'palette', color: 'blue-6' },
+  { name: 'Claude AI', desc: 'IA / Visão', icon: 'auto_awesome', color: 'deep-purple-5' },
+  { name: 'Docker', desc: 'Containerização', icon: 'inventory_2', color: 'blue-8' },
+  { name: 'TypeScript', desc: 'Tipagem', icon: 'integration_instructions', color: 'indigo-6' },
+]
+
+const importFormats = [
+  {
+    label: 'Currículo Completo',
+    icon: 'table_chart',
+    color: 'primary',
+    fields: ['ano', 'turma', 'disciplina', 'horas semana', 'professor', 'articulado'],
+  },
+  {
+    label: 'Professores',
+    icon: 'person',
+    color: 'orange-7',
+    fields: ['nome', 'email?', 'max_aulas_dia?'],
+  },
+  {
+    label: 'Turmas',
+    icon: 'group',
+    color: 'secondary',
+    fields: ['nome', 'ano?', 'alunos?'],
+  },
+  {
+    label: 'Salas',
+    icon: 'meeting_room',
+    color: 'positive',
+    fields: ['nome', 'capacidade?', 'tipo?'],
+  },
+]
 </script>
+
+<style scoped>
+/* ── Hero ─────────────────────────────────────────────────── */
+.hero {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 25%, #1565c0 60%, #0277bd 100%);
+  padding: 52px 24px 44px;
+  text-align: center;
+  color: #fff;
+}
+
+.hero__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  margin-bottom: 18px;
+  backdrop-filter: blur(4px);
+}
+
+.hero__title {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+}
+
+.hero__badge {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 14px;
+}
+
+.hero__subtitle {
+  font-size: 0.95rem;
+  opacity: 0.82;
+  max-width: 480px;
+  margin: 12px auto 0;
+  line-height: 1.5;
+}
+
+/* ── Section labels ──────────────────────────────────────── */
+.section-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #9e9e9e;
+  margin-top: 28px;
+  margin-bottom: 14px;
+}
+
+/* ── Version timeline entries ────────────────────────────── */
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.version-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.version-date {
+  font-size: 0.78rem;
+  color: #9e9e9e;
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #555;
+}
+
+.body--dark .feature-item {
+  color: #bbb;
+}
+
+/* ── Tech cards ──────────────────────────────────────────── */
+.tech-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 8px !important;
+}
+
+.tech-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ── Import format codes ─────────────────────────────────── */
+.field-code {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+.body--dark .field-code {
+  background: rgba(255, 255, 255, 0.1);
+}
+</style>
