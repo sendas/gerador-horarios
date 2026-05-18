@@ -28,6 +28,10 @@ frontend/.env.*
 *.swp
 *.swo
 
+# Deployment
+.env
+data/
+
 # OS
 .DS_Store
 Thumbs.db
