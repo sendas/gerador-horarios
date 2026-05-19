@@ -182,38 +182,6 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         db.commit()
         return
 
-    # ── Pre-solve sanity checks ───────────────────────────────────────────────
-    n_classes = len(entry_by_class)
-    n_teachers = len(teachers)
-    n_days = len(DAYS)
-    slots_per_day = len(all_slots) // n_days if n_days else 0
-    logger.info(
-        "Timetable %d: %d turmas, %d professores, %d tempos/dia, %d ocorrências totais, limite=%ds",
-        timetable_id, n_classes, n_teachers, slots_per_day, len(occurrences), max_time,
-    )
-
-    # Warn when classes outnumber teachers — can make students_start_slot_1 infeasible
-    if opts.get("students_start_slot_1") and n_classes > n_teachers:
-        logger.warning(
-            "Timetable %d: %d turmas > %d professores com students_start_slot_1=True. "
-            "Pode ser inviável se todas as turmas tiverem aulas todos os dias. "
-            "Aumente max_periods_per_day_class nas Regras de Geração.",
-            timetable_id, n_classes, n_teachers,
-        )
-
-    # Warn about teachers with potentially impossible loads
-    for tid, teacher in teachers.items():
-        occ_for_teacher = sum(
-            1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, [])
-        )
-        max_weekly = teacher.max_daily_lessons * n_days
-        if occ_for_teacher > max_weekly:
-            logger.warning(
-                "Timetable %d: Professor %s tem %d ocorrências mas máx semanal é %d (%d/dia × %d dias).",
-                timetable_id, teacher.name, occ_for_teacher, max_weekly,
-                teacher.max_daily_lessons, n_days,
-            )
-
     # ── CP-SAT model ─────────────────────────────────────────────────────────
     model = cp_model.CpModel()
 
@@ -254,6 +222,30 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     entry_by_class: dict[int, list[int]] = defaultdict(list)
     for entry in entries:
         entry_by_class[entry.class_id].append(entry.id)
+
+    # ── Pre-solve sanity checks ───────────────────────────────────────────────
+    n_classes = len(entry_by_class)
+    n_teachers = len(teachers)
+    n_days_count = len(DAYS)
+    slots_per_day_count = len(all_slots) // n_days_count if n_days_count else 0
+    logger.info(
+        "Timetable %d: %d turmas, %d professores, %d tempos/dia, %d ocorrências, limite=%ds",
+        timetable_id, n_classes, n_teachers, slots_per_day_count, len(occurrences), max_time,
+    )
+    if opts.get("students_start_slot_1") and n_classes > n_teachers:
+        logger.warning(
+            "Timetable %d: %d turmas > %d professores com students_start_slot_1=True. "
+            "Pode ser inviável. Aumente max_periods_per_day_class nas Regras de Geração.",
+            timetable_id, n_classes, n_teachers,
+        )
+    for tid, teacher in teachers.items():
+        occ_for_teacher = sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, []))
+        max_weekly = teacher.max_daily_lessons * n_days_count
+        if occ_for_teacher > max_weekly:
+            logger.warning(
+                "Timetable %d: Professor %s tem %d ocorrências mas máx semanal é %d.",
+                timetable_id, teacher.name, occ_for_teacher, max_weekly,
+            )
 
     # Build semestral pairs map: entry_id -> paired_entry_id
     semestral_pairs: dict[int, int] = {}
