@@ -124,24 +124,36 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             ).all()
             entry_teachers[entry.id] = [t.teacher_id for t in ts]
 
-    # ── Pre-model diagnostic checks (fail fast without wiping existing lessons) ─
-    diag_errors: list[str] = []
+    # ── Entries without eligible teacher: skip (warn but continue generation) ──
+    no_teacher: list[str] = []
+    entries_with_teacher = []
     for entry in entries:
         if not entry_teachers.get(entry.id):
             subj_name = entry.subject.name if entry.subject else f"id={entry.subject_id}"
             class_name = entry.class_.name if entry.class_ else f"id={entry.class_id}"
-            diag_errors.append(f"Turma {class_name} · {subj_name}: sem professor atribuído")
+            no_teacher.append(f"{class_name} · {subj_name}")
+        else:
+            entries_with_teacher.append(entry)
+    entries = entries_with_teacher
 
-    if diag_errors:
+    if no_teacher:
+        skip_msg = (
+            f"{len(no_teacher)} entrada(s) sem professor atribuído — excluídas da geração:\n"
+            + "\n".join(f"  • {e}" for e in no_teacher[:40])
+        )
+        _log(db, tt, f"Aviso: {skip_msg}")
+        logger.warning("Timetable %d: %d entradas sem professor ignoradas.", timetable_id, len(no_teacher))
+        tt.solver_status = skip_msg
+        db.commit()
+
+    if not entries:
         tt.status = "error"
-        prefix = f"{len(diag_errors)} erro(s) detetado(s) — corrigir antes de gerar:\n"
-        tt.solver_status = prefix + "\n".join(f"• {e}" for e in diag_errors)
-        _log(db, tt, f"Erro: {len(diag_errors)} problema(s) nos dados — geração cancelada.")
-        logger.error("Timetable %d: %d erros de dados:\n%s",
-                     timetable_id, len(diag_errors), "\n".join(diag_errors))
-        return  # existing lessons are preserved
+        tt.solver_status = "Nenhuma entrada com professor atribuído. Atribua professores antes de gerar."
+        tt.updated_at = datetime.utcnow()
+        db.commit()
+        return
 
-    _log(db, tt, f"Dados carregados: {len(entries)} entradas curriculares, {len(entry_teachers)} com professor atribuído.")
+    _log(db, tt, f"Dados carregados: {len(entries)} entradas com professor; {len(no_teacher)} excluídas sem docente.")
 
     # Teacher availability: blocked slots {teacher_id: set of (day, slot)}
     blocked: dict[int, set] = defaultdict(set)
@@ -460,6 +472,50 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                 for si, (day, slot_num) in enumerate(all_slots):
                     if slot_num > teacher.max_end_slot and (eid, occ, si) in x:
                         model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
+
+    # 5d. Travel time: teacher cannot have back-to-back lessons at different schools.
+    # Any teacher assigned to 2+ schools needs at least 1 free slot when switching school.
+    entries_map_by_id = {e.id: e for e in entries}
+    for tid in all_teacher_ids:
+        t_school_ids = set(teacher_schools.get(tid, {}).keys())
+        if len(t_school_ids) < 2:
+            continue  # single school — no travel gap needed
+
+        for day in DAYS:
+            day_slots_sorted = sorted(
+                [si for si in range(n_slots) if slot_day_of[si] == day],
+                key=lambda si: slot_num_of[si],
+            )
+            if len(day_slots_sorted) < 2:
+                continue
+
+            # For each slot build: [(aux_var, school_id)] = "T teaches at school S at this slot"
+            slot_school_aux: dict[int, list] = {}
+            for si in day_slots_sorted:
+                aux_list = []
+                for (eid, occ) in occurrences:
+                    if (eid, occ, tid) not in t or (eid, occ, si) not in x:
+                        continue
+                    entry_t = entries_map_by_id.get(eid)
+                    if not entry_t:
+                        continue
+                    sch = class_school.get(entry_t.class_id)
+                    if sch not in t_school_ids:
+                        continue
+                    aux = model.NewBoolVar(f"ttrv_{tid}_{eid}_{occ}_{si}")
+                    model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                    model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                    aux_list.append((aux, sch))
+                slot_school_aux[si] = aux_list
+
+            # Consecutive slot pairs: forbid switching school without a free period
+            for k in range(len(day_slots_sorted) - 1):
+                si_a = day_slots_sorted[k]
+                si_b = day_slots_sorted[k + 1]
+                for (aux_a, sch_a) in slot_school_aux.get(si_a, []):
+                    for (aux_b, sch_b) in slot_school_aux.get(si_b, []):
+                        if sch_a != sch_b:
+                            model.AddBoolOr([aux_a.Not(), aux_b.Not()])
 
     # 5b. Max periods per day per class (hard constraint from scheduling rules)
     for class_id, eids in entry_by_class.items():
