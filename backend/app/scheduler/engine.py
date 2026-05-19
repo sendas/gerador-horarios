@@ -21,6 +21,7 @@ DAYS = [0, 1, 2, 3, 4]  # Mon-Fri
 
 
 def generate_timetable(timetable_id: int, options: dict = None):
+    from app.notifications import notify_timetable_done
     db = SessionLocal()
     try:
         _run_solver(db, timetable_id, options)
@@ -33,6 +34,12 @@ def generate_timetable(timetable_id: int, options: dict = None):
             tt.updated_at = datetime.utcnow()
             db.commit()
     finally:
+        try:
+            tt = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+            if tt:
+                notify_timetable_done(db, tt.name, tt.status, tt.solver_status or "")
+        except Exception:
+            pass
         db.close()
 
 

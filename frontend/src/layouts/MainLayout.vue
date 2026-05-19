@@ -154,6 +154,11 @@
         </template>
 
         <q-separator />
+        <q-item clickable v-ripple :to="'/app-settings'">
+          <q-item-section avatar><q-icon name="notifications" color="teal-7" /></q-item-section>
+          <q-item-section>Configurações</q-item-section>
+        </q-item>
+
         <q-item clickable v-ripple :to="'/about'">
           <q-item-section avatar><q-icon name="info" color="blue-5" /></q-item-section>
           <q-item-section>Sobre</q-item-section>

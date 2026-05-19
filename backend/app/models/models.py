@@ -356,3 +356,10 @@ class TimetableLock(Base):
     entity_id = Column(Integer, nullable=False)
 
     timetable = relationship("Timetable", back_populates="locks")
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=True)

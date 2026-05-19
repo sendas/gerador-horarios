@@ -31,6 +31,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'users', component: () => import('pages/UsersPage.vue'), meta: { requiresAdmin: true } },
       { path: 'backup', component: () => import('pages/BackupPage.vue') },
       { path: 'about', component: () => import('pages/AboutPage.vue') },
+      { path: 'app-settings', component: () => import('pages/AppSettingsPage.vue') },
     ],
   },
   {
