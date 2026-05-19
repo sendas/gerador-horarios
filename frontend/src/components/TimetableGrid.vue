@@ -40,12 +40,17 @@
                 <div class="lesson-meta" v-if="view !== 'room' && lesson.room_name">{{ lesson.room_name }}</div>
               </div>
 
-              <!-- Drop target hint for empty cells while dragging -->
+              <!-- Drop target hint while dragging: green checkmark or red X -->
               <div
-                v-if="dragging && !cellLessons(dayIdx, slot).length && dragOverCell?.day === dayIdx && dragOverCell?.slot === slot"
+                v-if="dragging && dragOverCell?.day === dayIdx && dragOverCell?.slot === slot"
                 class="drop-hint"
               >
-                <q-icon name="arrow_downward" size="sm" color="positive" />
+                <template v-if="canDrop(dayIdx, slot)">
+                  <q-icon name="check_circle" size="sm" color="positive" />
+                </template>
+                <template v-else>
+                  <q-icon name="cancel" size="sm" color="negative" />
+                </template>
               </div>
             </td>
           </tr>
@@ -178,18 +183,20 @@ function cardStyle(lesson: ScheduledLesson) {
   }
 }
 
+function canDrop(day: number, slot: number): boolean {
+  if (!dragging.value) return false
+  return !props.lessons.some(
+    (l) => l.day_of_week === day && l.slot_number === slot && l.id !== dragging.value!.id
+  )
+}
+
 function getCellClass(day: number, slot: number): string {
   if (!dragging.value) return ''
   const isSource = dragging.value.day_of_week === day && dragging.value.slot_number === slot
   const isHover = dragOverCell.value?.day === day && dragOverCell.value?.slot === slot
-  const hasOther = props.lessons.some(
-    (l) => l.day_of_week === day && l.slot_number === slot && l.id !== dragging.value!.id
-  )
   if (isSource) return 'cell--source'
-  if (isHover && hasOther) return 'cell--over-conflict'
-  if (isHover) return 'cell--over-ok'
-  if (hasOther) return 'cell--occupied'
-  return 'cell--free'
+  if (isHover) return canDrop(day, slot) ? 'cell--over-ok' : 'cell--over-conflict'
+  return ''
 }
 
 function onDragStart(event: DragEvent, lesson: ScheduledLesson) {
@@ -310,10 +317,9 @@ async function forceMove() {
   outline-color: #66bb6a;
 }
 .body--dark .cell--over-conflict {
-  background: #3a2a10 !important;
-  outline-color: #ffa726;
+  background: #3a1515 !important;
+  outline-color: #ef5350;
 }
-.body--dark .cell--occupied { background: #2a2a1a; }
 
 /* Lesson card */
 .lesson-card {
@@ -337,8 +343,9 @@ async function forceMove() {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  opacity: 0.6;
+  min-height: 28px;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 /* Cell states during drag */
@@ -349,18 +356,12 @@ async function forceMove() {
 }
 .cell--over-ok {
   background: #e8f5e9 !important;
-  outline: 2px dashed #43a047;
+  outline: 2px solid #43a047;
   outline-offset: -2px;
 }
 .cell--over-conflict {
-  background: #fff3e0 !important;
-  outline: 2px dashed #fb8c00;
+  background: #ffebee !important;
+  outline: 2px solid #e53935;
   outline-offset: -2px;
-}
-.cell--occupied {
-  background: #fffde7;
-}
-.cell--free {
-  /* no special style for free cells during drag */
 }
 </style>

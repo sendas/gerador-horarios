@@ -248,6 +248,7 @@ class Timetable(Base):
 
     academic_year = relationship("AcademicYear", back_populates="timetables")
     scheduled_lessons = relationship("ScheduledLesson", back_populates="timetable", cascade="all, delete-orphan")
+    locks = relationship("TimetableLock", back_populates="timetable", cascade="all, delete-orphan")
 
 
 class ScheduledLesson(Base):
@@ -341,3 +342,14 @@ class NonTeachingAssignment(Base):
     teacher = relationship("Teacher", back_populates="non_teaching_assignments")
     non_teaching_type = relationship("NonTeachingType", back_populates="assignments")
     academic_year = relationship("AcademicYear", back_populates="non_teaching_assignments")
+
+
+class TimetableLock(Base):
+    __tablename__ = "timetable_locks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timetable_id = Column(Integer, ForeignKey("timetables.id"), nullable=False)
+    lock_type = Column(String, nullable=False)  # 'teacher' | 'class'
+    entity_id = Column(Integer, nullable=False)
+
+    timetable = relationship("Timetable", back_populates="locks")

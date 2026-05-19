@@ -39,6 +39,11 @@
               <q-btn flat icon="picture_as_pdf" label="PDF" @click="exportFile('pdf')" color="red-7" />
             </q-btn-group>
           </div>
+          <div class="col-auto">
+            <q-btn flat icon="lock" label="Bloqueios" color="warning" @click="showLocksDialog = true">
+              <q-tooltip>Bloquear turmas/professores para preservar o horário durante a próxima geração</q-tooltip>
+            </q-btn>
+          </div>
         </div>
       </q-card-section>
     </q-card>
@@ -65,6 +70,13 @@
         />
       </q-card-section>
     </q-card>
+
+    <TimetableLocksDialog
+      v-model="showLocksDialog"
+      :timetable-id="timetable?.id ?? null"
+      :teachers="teachersStore.teachers"
+      :classes="classesStore.classes"
+    />
   </q-page>
 </template>
 
@@ -76,6 +88,7 @@ import { useClassesStore } from 'stores/classes'
 import { useTeachersStore } from 'stores/teachers'
 import { api } from 'boot/axios'
 import TimetableGrid from 'components/TimetableGrid.vue'
+import TimetableLocksDialog from 'components/TimetableLocksDialog.vue'
 
 const route = useRoute()
 const store = useTimetablesStore()
@@ -89,6 +102,7 @@ const lessons = ref<ScheduledLesson[]>([])
 const slots = ref<{ slot_number: number; start_time?: string; end_time?: string }[]>([])
 const loading = ref(false)
 const rooms = ref<{ id: number; name: string }[]>([])
+const showLocksDialog = ref(false)
 
 const entityLabel = computed(() => {
   if (viewMode.value === 'class') return 'Turma'

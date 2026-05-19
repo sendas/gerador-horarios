@@ -12,7 +12,7 @@ from app.models.models import (
     Timetable, ScheduledLesson, CurriculumEntry, Class, Subject,
     Teacher, TeacherSubject, TeacherAvailability, TeacherSchoolAssignment,
     NonTeachingAssignment, TimeSlotConfig, Room, School, AcademicYear,
-    SchedulingRules
+    SchedulingRules, TimetableLock
 )
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,62 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         opts["no_pe_after_lunch"] = bool(getattr(rules_obj, "no_pe_after_lunch", True))
     if rules_obj and "lunch_after_slot" not in opts:
         opts["lunch_after_slot"] = getattr(rules_obj, "lunch_after_slot", 4) or 4
+
+    # ── Process timetable locks ───────────────────────────────────────────────
+    # Locked teachers/classes keep their existing ScheduledLessons intact.
+    # Their entries are removed from the solver so only the rest is re-scheduled.
+    locked_teacher_ids: set[int] = set()
+    locked_class_ids: set[int] = set()
+    for lock in db.query(TimetableLock).filter(TimetableLock.timetable_id == timetable_id).all():
+        if lock.lock_type == "teacher":
+            locked_teacher_ids.add(lock.entity_id)
+        else:
+            locked_class_ids.add(lock.entity_id)
+
+    pinned_lesson_ids: set[int] = set()
+    pinned_entry_ids: set[int] = set()
+    blocked_class_slots: dict[int, set] = defaultdict(set)  # class_id -> {(day, slot)}
+
+    if locked_teacher_ids or locked_class_ids:
+        entries_map = {e.id: e for e in entries}
+        pinned_entry_occ: dict[int, list] = defaultdict(list)
+
+        existing_lessons = db.query(ScheduledLesson).filter(
+            ScheduledLesson.timetable_id == timetable_id
+        ).all()
+        for lesson in existing_lessons:
+            entry = entries_map.get(lesson.curriculum_entry_id)
+            if not entry:
+                continue
+            is_locked_lesson = (
+                entry.class_id in locked_class_ids or
+                (lesson.teacher_id and lesson.teacher_id in locked_teacher_ids)
+            )
+            if is_locked_lesson:
+                pinned_lesson_ids.add(lesson.id)
+                pinned_entry_occ[lesson.curriculum_entry_id].append(
+                    (lesson.day_of_week, lesson.slot_number, lesson.teacher_id)
+                )
+                blocked_class_slots[entry.class_id].add((lesson.day_of_week, lesson.slot_number))
+                if lesson.teacher_id:
+                    blocked[lesson.teacher_id].add((lesson.day_of_week, lesson.slot_number))
+
+        # An entry is "fully pinned" when all its occurrences are covered by pinned lessons
+        for eid, occ_list in pinned_entry_occ.items():
+            entry = entries_map.get(eid)
+            if entry:
+                expected = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+                if len(occ_list) >= expected:
+                    pinned_entry_ids.add(eid)
+
+        if pinned_entry_ids:
+            entries = [e for e in entries if e.id not in pinned_entry_ids]
+            _log(db, tt, (
+                f"Bloqueados: {len(pinned_entry_ids)} entradas de "
+                f"{len(locked_class_ids)} turma(s) e {len(locked_teacher_ids)} professor(es); "
+                f"{len(pinned_lesson_ids)} aulas preservadas."
+            ))
+
     # Each curriculum entry needs int(hours_per_week) occurrences per week
     # (handle fractional by rounding)
     occurrences: list[tuple[int, int]] = []  # (entry_id, occ_index)
@@ -244,6 +300,18 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             t[(eid, occ, tid)] = model.NewBoolVar(f"t_{eid}_{occ}_{tid}")
 
     # ── Constraints ──────────────────────────────────────────────────────────
+
+    # 0. Locked class slots: remaining entries of a class with pinned lessons
+    #    cannot use those already-occupied slots.
+    if blocked_class_slots:
+        for (eid, occ) in occurrences:
+            entry = next((e for e in entries if e.id == eid), None)
+            if not entry:
+                continue
+            for (day, slot) in blocked_class_slots.get(entry.class_id, set()):
+                si = slot_indices.get((day, slot))
+                if si is not None and (eid, occ, si) in x:
+                    model.Add(x[(eid, occ, si)] == 0)
 
     # 1. Each occurrence is scheduled exactly once
     for (eid, occ) in occurrences:
@@ -795,11 +863,18 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                 semester=entry.semester if entry and entry.is_semestral else None,
             ))
 
-        db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
+        if pinned_lesson_ids:
+            # Delete only non-pinned lessons; keep the locked ones intact
+            db.query(ScheduledLesson).filter(
+                ScheduledLesson.timetable_id == timetable_id,
+                ScheduledLesson.id.notin_(pinned_lesson_ids),
+            ).delete(synchronize_session=False)
+        else:
+            db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
         db.add_all(lessons_to_add)
         tt.status = "generated"
         tt.solver_status = solver.StatusName(status)
-        _log(db, tt, f"Completo: {len(lessons_to_add)} aulas agendadas.")
+        _log(db, tt, f"Completo: {len(lessons_to_add)} novas aulas + {len(pinned_lesson_ids)} bloqueadas preservadas.")
     else:
         tt.status = "error"
         status_name = solver.StatusName(status)
