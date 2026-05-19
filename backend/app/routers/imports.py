@@ -24,7 +24,9 @@ def parse_upload(file: UploadFile) -> List[Dict[str, Any]]:
 
     if filename.lower().endswith(".csv"):
         text = content.decode("utf-8-sig", errors="replace")
-        reader = csv.DictReader(io.StringIO(text))
+        first_line = text.split('\n')[0] if text else ''
+        delimiter = ';' if first_line.count(';') > first_line.count(',') else ','
+        reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
         return [dict(row) for row in reader]
 
     elif filename.lower().endswith((".xlsx", ".xls")):
@@ -469,18 +471,30 @@ def import_curriculum_stream(
     def generate():
         stats: Dict[str, int] = dict(created=0, skipped=0, new_classes=0, new_subjects=0, new_teachers=0)
         errors: List[str] = []
+        try:
+            for i, row in enumerate(rows):
+                row_num = i + 2
+                try:
+                    _process_curriculum_row(db, row, row_num, cluster_id, school_id, academic_year_id, stats, errors, schools_by_code)
+                    db.commit()
+                except Exception as exc:
+                    db.rollback()
+                    errors.append(f"Linha {row_num}: {str(exc)[:120]}")
 
-        for i, row in enumerate(rows):
-            row_num = i + 2
-            try:
-                _process_curriculum_row(db, row, row_num, cluster_id, school_id, academic_year_id, stats, errors, schools_by_code)
-                db.commit()
-            except Exception as exc:
-                db.rollback()
-                errors.append(f"Linha {row_num}: {str(exc)[:120]}")
+                yield json.dumps({
+                    "processed": i + 1,
+                    "total": total,
+                    "created": stats["created"],
+                    "skipped": stats["skipped"],
+                    "new_classes": stats["new_classes"],
+                    "new_subjects": stats["new_subjects"],
+                    "new_teachers": stats["new_teachers"],
+                    "errors": errors[-50:],
+                }) + "\n"
 
             yield json.dumps({
-                "processed": i + 1,
+                "done": True,
+                "processed": total,
                 "total": total,
                 "created": stats["created"],
                 "skipped": stats["skipped"],
@@ -489,18 +503,20 @@ def import_curriculum_stream(
                 "new_teachers": stats["new_teachers"],
                 "errors": errors,
             }) + "\n"
-
-        yield json.dumps({
-            "done": True,
-            "processed": total,
-            "total": total,
-            "created": stats["created"],
-            "skipped": stats["skipped"],
-            "new_classes": stats["new_classes"],
-            "new_subjects": stats["new_subjects"],
-            "new_teachers": stats["new_teachers"],
-            "errors": errors,
-        }) + "\n"
+        except Exception as fatal:
+            db.rollback()
+            yield json.dumps({
+                "done": True,
+                "error": f"Erro interno: {str(fatal)[:200]}",
+                "processed": 0,
+                "total": total,
+                "created": stats["created"],
+                "skipped": stats["skipped"],
+                "new_classes": stats["new_classes"],
+                "new_subjects": stats["new_subjects"],
+                "new_teachers": stats["new_teachers"],
+                "errors": errors + [f"Erro fatal: {str(fatal)[:200]}"],
+            }) + "\n"
 
     return StreamingResponse(
         generate(),

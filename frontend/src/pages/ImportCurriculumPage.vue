@@ -535,6 +535,7 @@ async function upload() {
     const reader = response.body!.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let streamDone = false
 
     while (true) {
       const { done, value } = await reader.read()
@@ -544,18 +545,24 @@ async function upload() {
       buffer = lines.pop() ?? ''
       for (const line of lines) {
         if (!line.trim()) continue
-        const update = JSON.parse(line) as {
+        let update: {
           processed: number; total: number; created: number; skipped: number;
           new_classes: number; new_subjects: number; new_teachers: number;
-          errors: string[]; done?: boolean
+          errors: string[]; done?: boolean; error?: string
+        }
+        try {
+          update = JSON.parse(line)
+        } catch {
+          continue
         }
         progressProcessed.value = update.processed
         progressTotal.value = update.total
-        progressCreated.value = update.created
-        progressSkipped.value = update.skipped
+        progressCreated.value = update.created ?? 0
+        progressSkipped.value = update.skipped ?? 0
         progress.value = update.total > 0 ? update.processed / update.total : 0
 
         if (update.done) {
+          streamDone = true
           result.value = {
             created: update.created,
             skipped: update.skipped,
@@ -564,12 +571,34 @@ async function upload() {
             new_teachers: update.new_teachers,
             errors: update.errors,
           }
-          $q.notify({ color: 'positive', message: `${update.created} entradas de currículo importadas` })
+          if (update.created > 0) {
+            $q.notify({ color: 'positive', message: `${update.created} entradas de currículo importadas` })
+          } else if (!update.error) {
+            $q.notify({ color: 'warning', message: 'Importação concluída — 0 entradas criadas. Veja os erros abaixo.' })
+          }
+          if (update.error) {
+            $q.notify({ color: 'negative', message: update.error })
+          }
         }
       }
     }
-  } catch {
-    $q.notify({ color: 'negative', message: 'Erro de ligação durante a importação' })
+
+    if (!streamDone) {
+      $q.notify({ color: 'negative', message: 'A ligação ao servidor foi interrompida durante a importação. Tente novamente.' })
+      if (progressProcessed.value > 0) {
+        result.value = {
+          created: progressCreated.value,
+          skipped: progressSkipped.value,
+          new_classes: 0,
+          new_subjects: 0,
+          new_teachers: 0,
+          errors: ['A ligação foi interrompida antes de concluir. As linhas já processadas foram guardadas.'],
+        }
+      }
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Erro de ligação durante a importação'
+    $q.notify({ color: 'negative', message: msg })
   } finally {
     loading.value = false
   }
