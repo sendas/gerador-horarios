@@ -4,7 +4,6 @@
       <div class="text-h5 col">Turmas</div>
       <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
       <q-btn color="secondary" icon="upload" label="Importar Turmas" @click="showImport = true" class="q-ml-sm" />
-      <q-btn color="purple" icon="table_chart" label="Importar Currículo" @click="showCurriculumImport = true" class="q-ml-sm" />
     </div>
 
     <ImportDialog
@@ -13,11 +12,6 @@
       endpoint="/imports/classes"
       :extra-params="{ school_id: selectedSchoolId, academic_year_id: selectedYearId }"
       entity-type="classes"
-      @done="classesStore.fetchAll()"
-    />
-
-    <ImportCurriculumDialog
-      v-model="showCurriculumImport"
       @done="classesStore.fetchAll()"
     />
 
@@ -31,9 +25,9 @@
       </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn flat round dense icon="menu_book" color="primary" title="Currículo" @click="openCurriculum(props.row)" />
-          <q-btn flat round dense icon="edit" @click="openEdit(props.row)" />
-          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
+          <q-btn unelevated size="sm" color="primary" icon="menu_book" label="Currículo" @click="openCurriculum(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
         </q-td>
       </template>
     </q-table>
@@ -89,7 +83,7 @@
             </template>
             <template #body-cell-actions="props">
               <q-td :props="props">
-                <q-btn flat round dense icon="delete" color="negative" @click="removeEntry(props.row.id)" />
+                <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="removeEntry(props.row.id)" />
               </q-td>
             </template>
           </q-table>
@@ -110,9 +104,9 @@
                 color="secondary" text-color="white" size="sm">
                 {{ entrySubjectName(ge.curriculum_entry_id) }}
               </q-chip>
-              <q-btn flat round dense icon="add_circle" size="sm" color="secondary" @click="openAddEntryToGroup(group)" />
+              <q-btn unelevated size="sm" color="secondary" icon="add_circle" label="Adicionar" @click="openAddEntryToGroup(group)" />
               <q-space />
-              <q-btn flat round dense icon="delete" size="sm" color="negative" @click="deleteGroup(group.id)" />
+              <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="deleteGroup(group.id)" />
             </div>
           </div>
         </q-card-section>
@@ -221,7 +215,6 @@ import { useAcademicYearsStore } from 'stores/academicYears'
 import { useSubjectsStore } from 'stores/subjects'
 import { api } from 'boot/axios'
 import ImportDialog from 'components/ImportDialog.vue'
-import ImportCurriculumDialog from 'components/ImportCurriculumDialog.vue'
 
 const $q = useQuasar()
 const classesStore = useClassesStore()
@@ -230,7 +223,6 @@ const yearsStore = useAcademicYearsStore()
 const subjectsStore = useSubjectsStore()
 
 const showImport = ref(false)
-const showCurriculumImport = ref(false)
 const selectedSchoolId = computed(() => schoolsStore.schools[0]?.id ?? null)
 const selectedYearId = computed(() => yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null)
 

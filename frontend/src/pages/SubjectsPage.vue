@@ -29,8 +29,8 @@
       </template>
       <template #body-cell-actions="{ row }">
         <q-td auto-width>
-          <q-btn flat round dense icon="edit" @click="openEdit(row)" />
-          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(row)" />
+          <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(row)" />
         </q-td>
       </template>
     </q-table>

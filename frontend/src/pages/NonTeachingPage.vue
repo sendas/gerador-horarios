@@ -9,7 +9,7 @@
           <q-card-section>
             <div class="row items-center">
               <div class="text-h6 col">Tipos</div>
-              <q-btn flat icon="add" dense @click="openTypeCreate" />
+              <q-btn unelevated size="sm" color="primary" icon="add" label="Novo" @click="openTypeCreate" />
             </div>
           </q-card-section>
           <q-list separator>
@@ -20,8 +20,8 @@
               <q-item-section>{{ t.name }}</q-item-section>
               <q-item-section side>
                 <div class="row">
-                  <q-btn flat round dense icon="edit" size="sm" @click="openTypeEdit(t)" />
-                  <q-btn flat round dense icon="delete" size="sm" color="negative" @click="deleteType(t.id)" />
+                  <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openTypeEdit(t)" class="q-mr-xs" />
+                  <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="deleteType(t.id)" />
                 </div>
               </q-item-section>
             </q-item>
@@ -55,7 +55,7 @@
               </template>
               <template #body-cell-actions="props">
                 <q-td :props="props">
-                  <q-btn flat round dense icon="delete" size="sm" color="negative" @click="deleteAssignment(props.row.id)" />
+                  <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="deleteAssignment(props.row.id)" />
                 </q-td>
               </template>
             </q-table>

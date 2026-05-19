@@ -26,6 +26,11 @@
           <span v-else class="text-caption text-grey-6">{{ props.row.solver_status }}</span>
         </q-td>
       </template>
+      <template #body-cell-updated_at="props">
+        <q-td :props="props">
+          <span class="text-caption">{{ formatDateTime(props.row.updated_at) }}</span>
+        </q-td>
+      </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
           <div class="row no-wrap q-gutter-xs">
@@ -144,9 +149,19 @@ const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
   { name: 'status', label: 'Estado', field: 'status', align: 'center' as const },
   { name: 'solver_status', label: 'Solver', field: 'solver_status', align: 'left' as const },
-  { name: 'created_at', label: 'Criado em', field: 'created_at', align: 'left' as const },
+  { name: 'updated_at', label: 'Última atualização', field: 'updated_at', align: 'left' as const },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
+
+function formatDateTime(iso: string | undefined | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z')
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString('pt-PT', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
 
 const dialog = ref(false)
 const form = ref({ academic_year_id: null as number | null, name: '' })

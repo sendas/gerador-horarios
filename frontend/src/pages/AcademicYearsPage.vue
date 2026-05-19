@@ -13,9 +13,9 @@
       </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn v-if="!props.row.is_active" flat round dense icon="check_circle" color="positive" @click="activate(props.row)" title="Ativar" />
-          <q-btn flat round dense icon="edit" @click="openEdit(props.row)" />
-          <q-btn flat round dense icon="delete" color="negative" @click="confirmDelete(props.row)" />
+          <q-btn v-if="!props.row.is_active" unelevated size="sm" color="positive" icon="check_circle" label="Ativar" @click="activate(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
         </q-td>
       </template>
     </q-table>

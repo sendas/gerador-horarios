@@ -99,6 +99,11 @@
           <q-item-section>Turmas</q-item-section>
         </q-item>
 
+        <q-item clickable v-ripple :to="'/import-curriculum'">
+          <q-item-section avatar><q-icon name="upload_file" color="purple-7" /></q-item-section>
+          <q-item-section>Importar Currículo</q-item-section>
+        </q-item>
+
         <q-separator />
         <q-item-label header caption>Pessoal</q-item-label>
 

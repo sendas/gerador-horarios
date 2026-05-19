@@ -122,7 +122,7 @@
               <q-item-section>{{ schoolName(a.school_id) }} (Ano: {{ yearName(a.academic_year_id) }})</q-item-section>
               <q-item-section side>{{ a.travel_time_minutes }} min viagem</q-item-section>
               <q-item-section side>
-                <q-btn flat round dense icon="delete" color="negative" @click="removeSchoolAssignment(a.id)" />
+                <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="removeSchoolAssignment(a.id)" />
               </q-item-section>
             </q-item>
           </q-list>

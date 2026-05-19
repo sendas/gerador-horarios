@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <q-btn flat round dense icon="arrow_back" :to="'/timetables'" class="q-mr-sm" />
+      <q-btn unelevated icon="arrow_back" label="Voltar" :to="'/timetables'" class="q-mr-sm" />
       <div class="text-h5 col">{{ timetable?.name }}</div>
       <q-badge v-if="timetable" :color="statusColor(timetable.status)" :label="statusLabel(timetable.status)" class="q-mr-sm" />
     </div>

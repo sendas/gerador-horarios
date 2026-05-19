@@ -1,10 +1,12 @@
 import csv
 import io
 import os
+import json
 import base64
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -221,6 +223,193 @@ def import_rooms(
 
     db.commit()
     return {"created": created, "skipped": skipped, "errors": errors}
+
+
+def _process_curriculum_row(
+    db: Session,
+    row: Dict[str, Any],
+    row_num: int,
+    cluster_id: int,
+    school_id: int,
+    academic_year_id: int,
+    stats: Dict[str, int],
+    errors: List[str],
+) -> None:
+    turma = get_col(row, "turma", "Turma") or ""
+    disciplina = get_col(row, "disciplina", "Disciplina") or ""
+    if not turma or not disciplina:
+        errors.append(f"Linha {row_num}: turma e disciplina obrigatórias")
+        return
+
+    ano_raw = get_col(row, "ano", "Ano")
+    try:
+        year_level = int(ano_raw) if ano_raw else 5
+    except ValueError:
+        year_level = 5
+
+    horas_raw = get_col(row, "horas semana", "horas_semana", "horas", "Horas semana", "Horas") or "2"
+    horas_raw = horas_raw.replace(",", ".")
+    try:
+        hours_per_week = float(horas_raw)
+    except ValueError:
+        hours_per_week = 2.0
+
+    professor = get_col(row, "professor", "Professor") or None
+
+    articulado_raw = (get_col(row, "articulado", "Articulado") or "").strip()
+    articulado_lower = articulado_raw.lower()
+    is_articulated = articulado_lower in ("sim", "s", "yes", "y", "1", "true")
+    articulado_note = articulado_raw if articulado_raw and not is_articulated else None
+
+    cls = db.query(Class).filter(
+        Class.school_id == school_id,
+        Class.academic_year_id == academic_year_id,
+        Class.name == turma,
+    ).first()
+    if not cls:
+        cls = Class(
+            school_id=school_id,
+            academic_year_id=academic_year_id,
+            name=turma,
+            year_level=year_level,
+            num_students=25,
+            notes=articulado_note,
+        )
+        db.add(cls)
+        db.flush()
+        stats["new_classes"] += 1
+    elif articulado_note and not cls.notes:
+        cls.notes = articulado_note
+
+    subj = db.query(Subject).filter(
+        Subject.cluster_id == cluster_id,
+        Subject.name == disciplina,
+    ).first()
+    if not subj:
+        subj = Subject(
+            cluster_id=cluster_id,
+            name=disciplina,
+            can_exempt_articulado=is_articulated,
+        )
+        db.add(subj)
+        db.flush()
+        stats["new_subjects"] += 1
+    elif is_articulated and not subj.can_exempt_articulado:
+        subj.can_exempt_articulado = True
+
+    teacher = None
+    if professor:
+        teacher = db.query(Teacher).filter(
+            Teacher.cluster_id == cluster_id,
+            Teacher.name == professor,
+        ).first()
+        if not teacher:
+            teacher = Teacher(cluster_id=cluster_id, name=professor)
+            db.add(teacher)
+            db.flush()
+            stats["new_teachers"] += 1
+
+        if not db.query(TeacherSubject).filter(
+            TeacherSubject.teacher_id == teacher.id,
+            TeacherSubject.subject_id == subj.id,
+        ).first():
+            db.add(TeacherSubject(teacher_id=teacher.id, subject_id=subj.id))
+
+        if not db.query(TeacherSchoolAssignment).filter(
+            TeacherSchoolAssignment.teacher_id == teacher.id,
+            TeacherSchoolAssignment.school_id == school_id,
+            TeacherSchoolAssignment.academic_year_id == academic_year_id,
+        ).first():
+            db.add(TeacherSchoolAssignment(
+                teacher_id=teacher.id,
+                school_id=school_id,
+                academic_year_id=academic_year_id,
+                travel_time_minutes=0,
+            ))
+
+    existing_entry = db.query(CurriculumEntry).filter(
+        CurriculumEntry.class_id == cls.id,
+        CurriculumEntry.subject_id == subj.id,
+    ).first()
+    if existing_entry:
+        stats["skipped"] += 1
+        return
+
+    split_count = max(1, round(hours_per_week))
+    entry = CurriculumEntry(
+        class_id=cls.id,
+        subject_id=subj.id,
+        hours_per_week=hours_per_week,
+        is_split=split_count > 1,
+        split_count=split_count,
+        consecutive_pairs=0,
+        is_semestral=False,
+    )
+    db.add(entry)
+    stats["created"] += 1
+
+
+@router.post("/curriculum/stream")
+def import_curriculum_stream(
+    file: UploadFile = File(...),
+    cluster_id: int = Form(...),
+    school_id: int = Form(...),
+    academic_year_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Stream curriculum import progress as NDJSON. Commits each row individually for resumability."""
+    school = db.query(School).filter(School.id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Escola não encontrada")
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Agrupamento não encontrado")
+
+    rows = parse_upload(file)
+    total = len(rows)
+
+    def generate():
+        stats: Dict[str, int] = dict(created=0, skipped=0, new_classes=0, new_subjects=0, new_teachers=0)
+        errors: List[str] = []
+
+        for i, row in enumerate(rows):
+            row_num = i + 2
+            try:
+                _process_curriculum_row(db, row, row_num, cluster_id, school_id, academic_year_id, stats, errors)
+                db.commit()
+            except Exception as exc:
+                db.rollback()
+                errors.append(f"Linha {row_num}: {str(exc)[:120]}")
+
+            yield json.dumps({
+                "processed": i + 1,
+                "total": total,
+                "created": stats["created"],
+                "skipped": stats["skipped"],
+                "new_classes": stats["new_classes"],
+                "new_subjects": stats["new_subjects"],
+                "new_teachers": stats["new_teachers"],
+                "errors": errors,
+            }) + "\n"
+
+        yield json.dumps({
+            "done": True,
+            "processed": total,
+            "total": total,
+            "created": stats["created"],
+            "skipped": stats["skipped"],
+            "new_classes": stats["new_classes"],
+            "new_subjects": stats["new_subjects"],
+            "new_teachers": stats["new_teachers"],
+            "errors": errors,
+        }) + "\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/curriculum")

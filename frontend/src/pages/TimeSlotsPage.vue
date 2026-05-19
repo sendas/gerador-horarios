@@ -32,7 +32,7 @@
         >
           <template #body-cell-actions="props">
             <q-td :props="props">
-              <q-btn flat round dense icon="delete" color="negative" @click="deleteSlot(props.row.id)" />
+              <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="deleteSlot(props.row.id)" />
             </q-td>
           </template>
         </q-table>
