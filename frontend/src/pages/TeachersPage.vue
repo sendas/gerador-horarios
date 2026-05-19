@@ -16,6 +16,12 @@
     />
 
     <q-table :rows="teachersStore.teachers" :columns="columns" row-key="id" :loading="teachersStore.loading">
+      <template #body-cell-subject_names="props">
+        <q-td :props="props">
+          <q-chip v-for="s in props.row.subject_names" :key="s" size="sm" :label="s" color="blue-2" text-color="dark" class="q-mr-xs" />
+          <span v-if="!props.row.subject_names?.length" class="text-grey-5">—</span>
+        </q-td>
+      </template>
       <template #body-cell-preferred_free_day="props">
         <q-td :props="props">{{ props.row.preferred_free_day !== null && props.row.preferred_free_day !== undefined ? DAYS[props.row.preferred_free_day] : '—' }}</q-td>
       </template>
@@ -23,6 +29,7 @@
         <q-td :props="props">
           <q-btn unelevated size="sm" color="info" icon="school" label="Escolas" @click="openSchools(props.row)" class="q-mr-xs" />
           <q-btn unelevated size="sm" color="secondary" icon="book" label="Disciplinas" @click="openSubjects(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="teal" icon="groups" label="Turmas" @click="openCurriculum(props.row)" class="q-mr-xs" />
           <q-btn unelevated size="sm" color="positive" icon="event_available" label="Disponibilidade" @click="openAvailability(props.row)" class="q-mr-xs" />
           <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
           <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
@@ -178,6 +185,53 @@
       </q-card>
     </q-dialog>
 
+    <!-- Curriculum / class assignment dialog -->
+    <q-dialog v-model="curriculumDialog" full-width>
+      <q-card>
+        <q-card-section class="row items-center">
+          <div class="text-h6">Turmas: {{ selectedTeacher?.name }}</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <q-select v-model="curriculumYear" :options="yearOptions" label="Ano Letivo" emit-value map-options class="q-mb-md" style="max-width:220px" @update:model-value="loadCurriculum" />
+          <div v-if="curriculumYear">
+            <div class="text-subtitle2 q-mb-sm">Disciplinas e turmas atribuídas</div>
+            <q-list bordered separator class="q-mb-md" style="max-height:320px;overflow-y:auto">
+              <q-item v-if="!teacherCurriculum.length"><q-item-section class="text-grey-5">Sem atribuições</q-item-section></q-item>
+              <q-item v-for="e in teacherCurriculum" :key="e.id">
+                <q-item-section>
+                  <q-item-label>{{ e.class_name }} — <strong>{{ e.subject_name }}</strong></q-item-label>
+                  <q-item-label caption>{{ e.hours_per_week }}h/semana · {{ e.year_level }}.º ano</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn flat round dense icon="link_off" color="negative" @click="unassignEntry(e.id)" title="Remover atribuição" />
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-separator class="q-mb-md" />
+            <div class="text-subtitle2 q-mb-sm">Adicionar atribuição</div>
+            <div class="row q-col-gutter-sm items-end">
+              <div class="col-grow">
+                <q-select
+                  v-model="newCurriculumEntryId"
+                  :options="unassignedEntryOptions"
+                  label="Turma / Disciplina disponível"
+                  emit-value map-options dense clearable
+                  use-input
+                  input-debounce="0"
+                  @filter="filterEntries"
+                />
+              </div>
+              <div class="col-auto">
+                <q-btn round color="teal" icon="add" dense @click="assignEntry" :disable="!newCurriculumEntryId" />
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- Availability dialog -->
     <q-dialog v-model="availabilityDialog" full-width>
       <q-card>
@@ -245,6 +299,7 @@ const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
   { name: 'email', label: 'Email', field: 'email', align: 'left' as const },
+  { name: 'subject_names', label: 'Disciplinas', field: 'subject_names', align: 'left' as const },
   { name: 'teaching_component', label: 'Comp. Letiva', field: 'teaching_component', align: 'center' as const },
   { name: 'max_daily_lessons', label: 'Máx/dia', field: 'max_daily_lessons', align: 'center' as const },
   { name: 'preferred_free_day', label: 'Dia livre', field: 'preferred_free_day', align: 'center' as const },
@@ -294,6 +349,75 @@ const availableSubjectOptions = computed(() => {
   const assigned = new Set(teacherSubjects.value.map((ts) => ts.subject_id))
   return subjectsStore.subjects.filter((s) => !assigned.has(s.id)).map((s) => ({ label: s.name, value: s.id }))
 })
+
+// Curriculum assignment
+type CurriculumEntry = {
+  id: number
+  class_id: number
+  class_name: string
+  year_level: number
+  subject_id: number
+  subject_name: string
+  hours_per_week: number
+  teacher_id: number | null
+  teacher_name: string | null
+}
+
+const curriculumDialog = ref(false)
+const curriculumYear = ref<number | null>(null)
+const teacherCurriculum = ref<CurriculumEntry[]>([])
+const allClusterEntries = ref<CurriculumEntry[]>([])
+const newCurriculumEntryId = ref<number | null>(null)
+const entryFilterText = ref('')
+
+const clusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
+
+const unassignedEntryOptions = computed(() => {
+  const assignedIds = new Set(teacherCurriculum.value.map((e) => e.id))
+  return allClusterEntries.value
+    .filter((e) => !assignedIds.has(e.id) && (e.teacher_id === null || e.teacher_id === undefined || e.teacher_id === selectedTeacher.value?.id))
+    .filter((e) => {
+      if (!entryFilterText.value) return true
+      const txt = entryFilterText.value.toLowerCase()
+      return e.class_name.toLowerCase().includes(txt) || e.subject_name.toLowerCase().includes(txt)
+    })
+    .map((e) => ({ label: `${e.class_name} — ${e.subject_name} (${e.hours_per_week}h)`, value: e.id }))
+})
+
+function filterEntries(val: string, update: (fn: () => void) => void) {
+  update(() => { entryFilterText.value = val })
+}
+
+async function openCurriculum(teacher: Teacher) {
+  selectedTeacher.value = teacher
+  curriculumYear.value = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null
+  curriculumDialog.value = true
+  if (curriculumYear.value) await loadCurriculum()
+}
+
+async function loadCurriculum() {
+  if (!selectedTeacher.value || !curriculumYear.value) return
+  const [curr, all] = await Promise.all([
+    api.get(`/teachers/${selectedTeacher.value.id}/curriculum`, { params: { academic_year_id: curriculumYear.value } }),
+    clusterId.value ? api.get('/classes/curriculum-overview', { params: { cluster_id: clusterId.value, academic_year_id: curriculumYear.value } }) : Promise.resolve({ data: [] }),
+  ])
+  teacherCurriculum.value = curr.data
+  allClusterEntries.value = all.data
+  newCurriculumEntryId.value = null
+}
+
+async function unassignEntry(entryId: number) {
+  await api.put(`/classes/curriculum/${entryId}`, { teacher_id: null })
+  await loadCurriculum()
+  await teachersStore.fetchAll()
+}
+
+async function assignEntry() {
+  if (!selectedTeacher.value || !newCurriculumEntryId.value) return
+  await api.put(`/classes/curriculum/${newCurriculumEntryId.value}`, { teacher_id: selectedTeacher.value.id })
+  await loadCurriculum()
+  await teachersStore.fetchAll()
+}
 
 // Availability
 const availabilityDialog = ref(false)

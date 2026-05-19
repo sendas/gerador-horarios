@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.database import get_db
-from app.models.models import Class, CurriculumEntry
+from app.models.models import Class, CurriculumEntry, School
 from app.schemas.schemas import (
     ClassCreate, ClassUpdate, ClassResponse,
     CurriculumEntryCreate, CurriculumEntryUpdate, CurriculumEntryResponse
@@ -61,12 +61,16 @@ def delete_class(id: int, db: Session = Depends(get_db)):
 
 # Curriculum entries
 
-@router.get("/{id}/curriculum", response_model=List[CurriculumEntryResponse])
+@router.get("/{id}/curriculum")
 def list_curriculum(id: int, db: Session = Depends(get_db)):
     cls = db.query(Class).filter(Class.id == id).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
-    return db.query(CurriculumEntry).filter(CurriculumEntry.class_id == id).all()
+    entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id == id).all()
+    return [{
+        **CurriculumEntryResponse.model_validate(e).model_dump(),
+        "teacher_name": e.teacher.name if e.teacher else None,
+    } for e in entries]
 
 
 @router.post("/{id}/curriculum", response_model=CurriculumEntryResponse, status_code=201)
@@ -100,3 +104,27 @@ def delete_curriculum_entry(entry_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Curriculum entry not found")
     db.delete(obj)
     db.commit()
+
+
+@router.get("/curriculum-overview")
+def curriculum_overview(cluster_id: int, academic_year_id: int, db: Session = Depends(get_db)):
+    """All curriculum entries in a cluster/year with class, subject and assigned teacher."""
+    school_ids = [s.id for s in db.query(School).filter(School.cluster_id == cluster_id).all()]
+    entries = (
+        db.query(CurriculumEntry)
+        .join(Class, CurriculumEntry.class_id == Class.id)
+        .filter(Class.school_id.in_(school_ids), Class.academic_year_id == academic_year_id)
+        .order_by(Class.year_level, Class.name)
+        .all()
+    )
+    return [{
+        "id": e.id,
+        "class_id": e.class_id,
+        "class_name": e.class_.name if e.class_ else "",
+        "year_level": e.class_.year_level if e.class_ else 0,
+        "subject_id": e.subject_id,
+        "subject_name": e.subject.name if e.subject else "",
+        "hours_per_week": e.hours_per_week,
+        "teacher_id": e.teacher_id,
+        "teacher_name": e.teacher.name if e.teacher else None,
+    } for e in entries]

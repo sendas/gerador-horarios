@@ -274,7 +274,13 @@ def _process_curriculum_row(
     except ValueError:
         hours_per_week = 2.0
 
-    professor = get_col(row, "professor", "Professor") or None
+    professor_raw = get_col(row, "professor", "Professor") or None
+    # When no professor given, create a placeholder so the solver can proceed
+    if not professor_raw:
+        abbrev = ''.join(c for c in disciplina.upper() if c.isalpha())[:8]
+        professor = f"PROF_{abbrev}_1"
+    else:
+        professor = professor_raw
 
     articulado_raw = (get_col(row, "articulado", "Articulado") or "").strip()
     articulado_lower = articulado_raw.lower()
@@ -352,6 +358,8 @@ def _process_curriculum_row(
         CurriculumEntry.subject_id == subj.id,
     ).first()
     if existing_entry:
+        if teacher and not existing_entry.teacher_id:
+            existing_entry.teacher_id = teacher.id
         stats["skipped"] += 1
         return
 
@@ -364,6 +372,7 @@ def _process_curriculum_row(
         split_count=split_count,
         consecutive_pairs=0,
         is_semestral=False,
+        teacher_id=teacher.id if teacher else None,
     )
     db.add(entry)
     stats["created"] += 1
@@ -663,6 +672,8 @@ def import_curriculum(
             CurriculumEntry.subject_id == subj.id,
         ).first()
         if existing_entry:
+            if teacher and not existing_entry.teacher_id:
+                existing_entry.teacher_id = teacher.id
             stats["skipped"] += 1
             continue
 
@@ -675,6 +686,7 @@ def import_curriculum(
             split_count=split_count,
             consecutive_pairs=0,
             is_semestral=False,
+            teacher_id=teacher.id if teacher else None,
         )
         db.add(entry)
         stats["entries"] += 1

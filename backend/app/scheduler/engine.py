@@ -111,14 +111,18 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     if year_levels_filter:
         entries = [e for e in entries if e.class_.year_level in year_levels_filter]
 
-    # Teachers eligible for each entry (via TeacherSubject)
+    # Teachers eligible for each entry.
+    # If entry.teacher_id is set, that teacher is the only option (hard assignment).
+    # Otherwise fall back to TeacherSubject links.
     entry_teachers: dict[int, list[int]] = {}
     for entry in entries:
-        ts = db.query(TeacherSubject).filter(
-            TeacherSubject.subject_id == entry.subject_id
-        ).all()
-        teacher_ids = [t.teacher_id for t in ts]
-        entry_teachers[entry.id] = teacher_ids
+        if entry.teacher_id:
+            entry_teachers[entry.id] = [entry.teacher_id]
+        else:
+            ts = db.query(TeacherSubject).filter(
+                TeacherSubject.subject_id == entry.subject_id
+            ).all()
+            entry_teachers[entry.id] = [t.teacher_id for t in ts]
 
     # ── Pre-model diagnostic checks (fail fast without wiping existing lessons) ─
     diag_errors: list[str] = []

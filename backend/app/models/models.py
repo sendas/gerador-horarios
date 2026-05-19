@@ -141,10 +141,12 @@ class CurriculumEntry(Base):
     is_semestral = Column(Boolean, default=False)
     semester = Column(Integer, nullable=True)  # 1 or 2
     paired_entry_id = Column(Integer, ForeignKey("curriculum_entries.id"), nullable=True)
+    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
     paired_entry = relationship("CurriculumEntry", foreign_keys="[CurriculumEntry.paired_entry_id]", remote_side="CurriculumEntry.id", uselist=False)
 
     class_ = relationship("Class", back_populates="curriculum_entries")
     subject = relationship("Subject", back_populates="curriculum_entries")
+    teacher = relationship("Teacher", foreign_keys="[CurriculumEntry.teacher_id]")
     scheduled_lessons = relationship("ScheduledLesson", back_populates="curriculum_entry", cascade="all, delete-orphan")
     subject_group_entries = relationship("SubjectGroupEntry", back_populates="curriculum_entry", cascade="all, delete-orphan")
 

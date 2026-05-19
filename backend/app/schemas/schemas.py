@@ -193,10 +193,13 @@ class CurriculumEntryUpdate(BaseModel):
     is_semestral: Optional[bool] = None
     semester: Optional[int] = None
     paired_entry_id: Optional[int] = None
+    teacher_id: Optional[int] = None
 
 class CurriculumEntryResponse(CurriculumEntryBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    teacher_id: Optional[int] = None
+    teacher_name: Optional[str] = None
 
 
 # ── SubjectGroup ──────────────────────────────────────────────────────────────
@@ -259,6 +262,7 @@ class TeacherUpdate(BaseModel):
 class TeacherResponse(TeacherBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    subject_names: List[str] = []
 
 
 # ── TeacherSchoolAssignment ───────────────────────────────────────────────────

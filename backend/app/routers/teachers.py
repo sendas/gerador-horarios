@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.models.models import (
-    Teacher, TeacherSchoolAssignment, TeacherSubject, TeacherAvailability
+    Teacher, TeacherSchoolAssignment, TeacherSubject, TeacherAvailability,
+    CurriculumEntry, Class, Subject
 )
 from app.schemas.schemas import (
     TeacherCreate, TeacherUpdate, TeacherResponse,
@@ -19,7 +20,13 @@ def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Teacher)
     if cluster_id:
         q = q.filter(Teacher.cluster_id == cluster_id)
-    return q.all()
+    teachers = q.all()
+    result = []
+    for t in teachers:
+        r = TeacherResponse.model_validate(t)
+        r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
+        result.append(r)
+    return result
 
 
 @router.post("", response_model=TeacherResponse, status_code=201)
@@ -58,6 +65,25 @@ def delete_teacher(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Teacher not found")
     db.delete(obj)
     db.commit()
+
+
+@router.get("/{id}/curriculum")
+def list_teacher_curriculum(id: int, academic_year_id: int = None, db: Session = Depends(get_db)):
+    """Return all curriculum entries assigned to this teacher, with class/subject names."""
+    q = db.query(CurriculumEntry).filter(CurriculumEntry.teacher_id == id)
+    if academic_year_id:
+        q = q.join(Class).filter(Class.academic_year_id == academic_year_id)
+    entries = q.all()
+    return [{
+        "id": e.id,
+        "class_id": e.class_id,
+        "class_name": e.class_.name if e.class_ else "",
+        "year_level": e.class_.year_level if e.class_ else 0,
+        "subject_id": e.subject_id,
+        "subject_name": e.subject.name if e.subject else "",
+        "hours_per_week": e.hours_per_week,
+        "teacher_id": e.teacher_id,
+    } for e in entries]
 
 
 # School assignments
