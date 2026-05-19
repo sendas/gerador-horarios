@@ -5,10 +5,24 @@
       <q-btn color="primary" icon="add" label="Novo" @click="openCreate" />
     </div>
 
-    <q-table :rows="store.timetables" :columns="columns" row-key="id" :loading="store.loading">
+    <!-- Active generation banner -->
+    <q-banner v-if="anyGenerating" rounded class="bg-warning text-dark q-mb-md">
+      <template #avatar>
+        <q-spinner size="22px" color="dark" />
+      </template>
+      <strong>Geração em curso</strong> — o horário está a ser calculado em segundo plano.
+      Pode fechar esta página; a lista atualiza automaticamente de 3 em 3 segundos.
+    </q-banner>
+
+    <q-table :rows="store.timetables" :columns="columns" row-key="id" :loading="store.loading"
+      :row-class="(row) => row.status === 'generating' ? 'row-generating' : ''"
+    >
       <template #body-cell-status="props">
         <q-td :props="props">
-          <q-badge :color="statusColor(props.row.status)" :label="statusLabel(props.row.status)" />
+          <div class="row items-center no-wrap q-gutter-xs">
+            <q-spinner v-if="props.row.status === 'generating'" size="14px" color="warning" />
+            <q-badge :color="statusColor(props.row.status)" :label="statusLabel(props.row.status)" />
+          </div>
         </q-td>
       </template>
       <template #body-cell-solver_status="props">
@@ -104,10 +118,28 @@ const $q = useQuasar()
 const store = useTimetablesStore()
 const yearsStore = useAcademicYearsStore()
 
+const anyGenerating = computed(() => store.timetables.some((t) => t.status === 'generating'))
+
 const showLogDialog = ref(false)
 const logTimetable = ref<{ id: number; status: string; generation_log?: string | null } | null>(null)
 const logContent = ref('')
 let logPollInterval: ReturnType<typeof setInterval> | null = null
+let globalPollInterval: ReturnType<typeof setInterval> | null = null
+
+function startGlobalPolling() {
+  if (globalPollInterval) return
+  globalPollInterval = setInterval(async () => {
+    await store.fetchAll()
+    if (!anyGenerating.value) stopGlobalPolling()
+  }, 3000)
+}
+
+function stopGlobalPolling() {
+  if (globalPollInterval) {
+    clearInterval(globalPollInterval)
+    globalPollInterval = null
+  }
+}
 
 const showGenerateDialog = ref(false)
 const generateTargetId = ref<number | null>(null)
@@ -143,7 +175,7 @@ function stopLogPolling() {
   }
 }
 
-onUnmounted(stopLogPolling)
+onUnmounted(() => { stopLogPolling(); stopGlobalPolling() })
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
@@ -179,6 +211,7 @@ function statusLabel(s: string) {
 
 onMounted(async () => {
   await Promise.all([store.fetchAll(), yearsStore.fetchAll()])
+  if (anyGenerating.value) startGlobalPolling()
 })
 
 async function load() {
@@ -187,6 +220,7 @@ async function load() {
 
 async function onGenerationStarted() {
   await load()
+  startGlobalPolling()
   if (generateTargetId.value) {
     const target = store.timetables.find((t) => t.id === generateTargetId.value)
     if (target) openLog(target)
@@ -228,6 +262,16 @@ function confirmDelete(row: { id: number; name: string }) {
 </script>
 
 <style scoped>
+.row-generating {
+  background: rgba(255, 193, 7, 0.08) !important;
+  animation: pulse-row 2s ease-in-out infinite;
+}
+
+@keyframes pulse-row {
+  0%, 100% { background-color: rgba(255, 193, 7, 0.08) !important; }
+  50%       { background-color: rgba(255, 193, 7, 0.18) !important; }
+}
+
 .log-output {
   font-family: monospace;
   font-size: 0.8rem;
