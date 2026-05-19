@@ -263,6 +263,7 @@ class TeacherResponse(TeacherBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     subject_names: List[str] = []
+    school_ids: List[int] = []
 
 
 # ── TeacherSchoolAssignment ───────────────────────────────────────────────────

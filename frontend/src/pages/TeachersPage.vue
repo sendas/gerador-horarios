@@ -15,7 +15,24 @@
       @done="teachersStore.fetchAll()"
     />
 
-    <q-table :rows="teachersStore.teachers" :columns="columns" row-key="id" :loading="teachersStore.loading">
+    <!-- School filter -->
+    <div class="row items-center q-mb-sm q-gutter-xs">
+      <span class="text-caption text-grey-7 q-mr-xs">Filtrar por escola:</span>
+      <q-chip
+        v-for="school in schoolsStore.schools"
+        :key="school.id"
+        clickable
+        :color="selectedSchoolIds.has(school.id) ? 'teal-7' : 'grey-3'"
+        :text-color="selectedSchoolIds.has(school.id) ? 'white' : 'dark'"
+        :icon="selectedSchoolIds.has(school.id) ? 'check' : undefined"
+        :label="school.name"
+        @click="toggleSchoolFilter(school.id)"
+      />
+      <q-btn v-if="selectedSchoolIds.size > 0" flat dense size="sm" icon="close" color="grey-6" label="Limpar" @click="selectedSchoolIds.clear()" />
+      <q-badge v-if="selectedSchoolIds.size > 0" color="teal-7" :label="`${filteredTeachers.length} professor(es)`" class="q-ml-xs" />
+    </div>
+
+    <q-table :rows="filteredTeachers" :columns="columns" row-key="id" :loading="teachersStore.loading">
       <template #body-cell-subject_names="props">
         <q-td :props="props">
           <q-chip v-for="s in props.row.subject_names" :key="s" size="sm" :label="s" color="blue-2" text-color="dark" class="q-mr-xs" />
@@ -274,7 +291,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useTeachersStore, type Teacher } from 'stores/teachers'
 import { useClustersStore } from 'stores/clusters'
@@ -324,6 +341,19 @@ const form = ref({
   preferred_shift: null as string | null,
   max_consecutive_lessons: null as number | null,
   teaching_component: null as number | null,
+})
+
+// School filter
+const selectedSchoolIds = reactive(new Set<number>())
+function toggleSchoolFilter(id: number) {
+  if (selectedSchoolIds.has(id)) selectedSchoolIds.delete(id)
+  else selectedSchoolIds.add(id)
+}
+const filteredTeachers = computed(() => {
+  if (selectedSchoolIds.size === 0) return teachersStore.teachers
+  return teachersStore.teachers.filter((t) =>
+    (t.school_ids ?? []).some((sid) => selectedSchoolIds.has(sid))
+  )
 })
 
 const clusterOptions = computed(() => clustersStore.clusters.map((c) => ({ label: c.name, value: c.id })))

@@ -14,6 +14,8 @@ export interface Teacher {
   preferred_shift?: string | null
   max_consecutive_lessons?: number | null
   teaching_component?: number | null
+  subject_names?: string[]
+  school_ids?: number[]
 }
 
 export interface TeacherSchoolAssignment {
