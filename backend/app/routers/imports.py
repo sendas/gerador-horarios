@@ -413,6 +413,7 @@ def import_curriculum_stream(
     cluster_id: int = Form(...),
     school_id: int = Form(...),
     academic_year_id: int = Form(...),
+    filter_classes: str = Form(default=""),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -425,6 +426,14 @@ def import_curriculum_stream(
         raise HTTPException(status_code=404, detail="Agrupamento não encontrado")
 
     rows = parse_upload(file)
+
+    if filter_classes.strip():
+        try:
+            allowed = set(json.loads(filter_classes))
+            rows = [r for r in rows if (get_col(r, "turma", "Turma") or "") in allowed]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     total = len(rows)
 
     def generate():

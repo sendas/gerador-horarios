@@ -32,7 +32,7 @@
       <div class="text-subtitle1 text-weight-bold q-mb-md">Acesso Rápido</div>
       <div class="row q-col-gutter-md q-mb-xl">
         <div class="col-6 col-sm-4 col-md-3" v-for="link in quickLinks" :key="link.to">
-          <q-card flat bordered class="link-card" :to="link.to" clickable v-ripple>
+          <q-card flat bordered class="link-card" clickable v-ripple @click="router.push(link.to)">
             <q-card-section class="column items-center text-center q-pa-md">
               <q-icon :name="link.icon" :color="link.color" size="32px" class="q-mb-sm" />
               <div class="text-body2 text-weight-medium">{{ link.label }}</div>
@@ -53,7 +53,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from 'boot/axios'
+
+const router = useRouter()
 
 const stats = ref([
   { label: 'Professores', value: 0, icon: 'person',      color: 'deep-orange-6' },

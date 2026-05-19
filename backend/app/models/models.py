@@ -15,12 +15,12 @@ class Cluster(Base):
     description = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    schools = relationship("School", back_populates="cluster")
-    academic_years = relationship("AcademicYear", back_populates="cluster")
-    subjects = relationship("Subject", back_populates="cluster")
-    teachers = relationship("Teacher", back_populates="cluster")
-    non_teaching_types = relationship("NonTeachingType", back_populates="cluster")
-    scheduling_rules = relationship("SchedulingRules")
+    schools = relationship("School", back_populates="cluster", cascade="all, delete-orphan")
+    academic_years = relationship("AcademicYear", back_populates="cluster", cascade="all, delete-orphan")
+    subjects = relationship("Subject", back_populates="cluster", cascade="all, delete-orphan")
+    teachers = relationship("Teacher", back_populates="cluster", cascade="all, delete-orphan")
+    non_teaching_types = relationship("NonTeachingType", back_populates="cluster", cascade="all, delete-orphan")
+    scheduling_rules = relationship("SchedulingRules", cascade="all, delete-orphan")
 
 
 class School(Base):
@@ -34,10 +34,10 @@ class School(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     cluster = relationship("Cluster", back_populates="schools")
-    classes = relationship("Class", back_populates="school")
-    rooms = relationship("Room", back_populates="school")
-    teacher_assignments = relationship("TeacherSchoolAssignment", back_populates="school")
-    time_slot_configs = relationship("TimeSlotConfig", back_populates="school")
+    classes = relationship("Class", back_populates="school", cascade="all, delete-orphan")
+    rooms = relationship("Room", back_populates="school", cascade="all, delete-orphan")
+    teacher_assignments = relationship("TeacherSchoolAssignment", back_populates="school", cascade="all, delete-orphan")
+    time_slot_configs = relationship("TimeSlotConfig", back_populates="school", cascade="all, delete-orphan")
 
 
 class AcademicYear(Base):
@@ -52,13 +52,13 @@ class AcademicYear(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     cluster = relationship("Cluster", back_populates="academic_years")
-    classes = relationship("Class", back_populates="academic_year")
-    timetables = relationship("Timetable", back_populates="academic_year")
-    time_slot_configs = relationship("TimeSlotConfig", back_populates="academic_year")
-    teacher_school_assignments = relationship("TeacherSchoolAssignment", back_populates="academic_year")
-    teacher_availabilities = relationship("TeacherAvailability", back_populates="academic_year")
-    non_teaching_assignments = relationship("NonTeachingAssignment", back_populates="academic_year")
-    subject_groups = relationship("SubjectGroup", back_populates="academic_year")
+    classes = relationship("Class", back_populates="academic_year", cascade="all, delete-orphan")
+    timetables = relationship("Timetable", back_populates="academic_year", cascade="all, delete-orphan")
+    time_slot_configs = relationship("TimeSlotConfig", back_populates="academic_year", cascade="all, delete-orphan")
+    teacher_school_assignments = relationship("TeacherSchoolAssignment", back_populates="academic_year", cascade="all, delete-orphan")
+    teacher_availabilities = relationship("TeacherAvailability", back_populates="academic_year", cascade="all, delete-orphan")
+    non_teaching_assignments = relationship("NonTeachingAssignment", back_populates="academic_year", cascade="all, delete-orphan")
+    subject_groups = relationship("SubjectGroup", back_populates="academic_year", cascade="all, delete-orphan")
 
 
 class TimeSlotConfig(Base):
@@ -108,8 +108,8 @@ class Subject(Base):
     can_exempt_articulado = Column(Boolean, default=False)   # students can have dispensation
 
     cluster = relationship("Cluster", back_populates="subjects")
-    curriculum_entries = relationship("CurriculumEntry", back_populates="subject")
-    teacher_subjects = relationship("TeacherSubject", back_populates="subject")
+    curriculum_entries = relationship("CurriculumEntry", back_populates="subject", cascade="all, delete-orphan")
+    teacher_subjects = relationship("TeacherSubject", back_populates="subject", cascade="all, delete-orphan")
 
 
 class Class(Base):
@@ -125,7 +125,7 @@ class Class(Base):
 
     school = relationship("School", back_populates="classes")
     academic_year = relationship("AcademicYear", back_populates="classes")
-    curriculum_entries = relationship("CurriculumEntry", back_populates="class_")
+    curriculum_entries = relationship("CurriculumEntry", back_populates="class_", cascade="all, delete-orphan")
 
 
 class CurriculumEntry(Base):
@@ -145,8 +145,8 @@ class CurriculumEntry(Base):
 
     class_ = relationship("Class", back_populates="curriculum_entries")
     subject = relationship("Subject", back_populates="curriculum_entries")
-    scheduled_lessons = relationship("ScheduledLesson", back_populates="curriculum_entry")
-    subject_group_entries = relationship("SubjectGroupEntry", back_populates="curriculum_entry")
+    scheduled_lessons = relationship("ScheduledLesson", back_populates="curriculum_entry", cascade="all, delete-orphan")
+    subject_group_entries = relationship("SubjectGroupEntry", back_populates="curriculum_entry", cascade="all, delete-orphan")
 
 
 class SubjectGroup(Base):
@@ -157,7 +157,7 @@ class SubjectGroup(Base):
     academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
 
     academic_year = relationship("AcademicYear", back_populates="subject_groups")
-    entries = relationship("SubjectGroupEntry", back_populates="group")
+    entries = relationship("SubjectGroupEntry", back_populates="group", cascade="all, delete-orphan")
 
 
 class SubjectGroupEntry(Base):
@@ -187,11 +187,11 @@ class Teacher(Base):
     teaching_component = Column(Integer, nullable=True)  # letivas/semana configuradas (14–22)
 
     cluster = relationship("Cluster", back_populates="teachers")
-    school_assignments = relationship("TeacherSchoolAssignment", back_populates="teacher")
-    teacher_subjects = relationship("TeacherSubject", back_populates="teacher")
-    availabilities = relationship("TeacherAvailability", back_populates="teacher")
+    school_assignments = relationship("TeacherSchoolAssignment", back_populates="teacher", cascade="all, delete-orphan")
+    teacher_subjects = relationship("TeacherSubject", back_populates="teacher", cascade="all, delete-orphan")
+    availabilities = relationship("TeacherAvailability", back_populates="teacher", cascade="all, delete-orphan")
     scheduled_lessons = relationship("ScheduledLesson", back_populates="teacher")
-    non_teaching_assignments = relationship("NonTeachingAssignment", back_populates="teacher")
+    non_teaching_assignments = relationship("NonTeachingAssignment", back_populates="teacher", cascade="all, delete-orphan")
 
 
 class TeacherSchoolAssignment(Base):
@@ -326,7 +326,7 @@ class NonTeachingType(Base):
     color = Column(String, default="#e74c3c")
 
     cluster = relationship("Cluster", back_populates="non_teaching_types")
-    assignments = relationship("NonTeachingAssignment", back_populates="non_teaching_type")
+    assignments = relationship("NonTeachingAssignment", back_populates="non_teaching_type", cascade="all, delete-orphan")
 
 
 class NonTeachingAssignment(Base):

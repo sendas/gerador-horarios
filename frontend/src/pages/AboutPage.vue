@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.9.0</q-badge>
+      <q-badge class="hero__badge">v1.10.0</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,42 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="tune" color="blue-9">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="blue-9" class="version-badge">v1.10.0</q-badge>
+                  Streaming, Botões com Texto e Correções de Modo Escuro
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026, 15:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="upload_file" size="xs" color="blue-9" />
+                  Página dedicada de importação de currículo com barra de progresso em tempo real (streaming NDJSON)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="save" size="xs" color="blue-9" />
+                  Importação resumível: cada linha é confirmada individualmente — se interrompida, retoma do ponto de paragem
+                </div>
+                <div class="feature-item">
+                  <q-icon name="assignment_ind" size="xs" color="blue-9" />
+                  Importação de Componente Letiva via CSV: atualiza horas semanais de cada professor
+                </div>
+                <div class="feature-item">
+                  <q-icon name="smart_button" size="xs" color="blue-9" />
+                  Botões com texto em toda a aplicação (substituição de ícones sem legenda)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="dark_mode" size="xs" color="blue-9" />
+                  Correções de modo escuro: banners, chips, tabelas e fundos em todos os menus
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="dashboard_customize" color="deep-purple-7">
               <template #title>
