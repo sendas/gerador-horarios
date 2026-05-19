@@ -165,8 +165,6 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         opts["no_pe_after_lunch"] = bool(getattr(rules_obj, "no_pe_after_lunch", True))
     if rules_obj and "lunch_after_slot" not in opts:
         opts["lunch_after_slot"] = getattr(rules_obj, "lunch_after_slot", 4) or 4
-
-    # ── Build occurrences ────────────────────────────────────────────────────
     # Each curriculum entry needs int(hours_per_week) occurrences per week
     # (handle fractional by rounding)
     occurrences: list[tuple[int, int]] = []  # (entry_id, occ_index)
@@ -223,7 +221,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     for entry in entries:
         entry_by_class[entry.class_id].append(entry.id)
 
-    # ── Pre-solve sanity checks ───────────────────────────────────────────────
+    # ── Pre-solve sanity checks + auto-adjust ────────────────────────────────
     n_classes = len(entry_by_class)
     n_teachers = len(teachers)
     n_days_count = len(DAYS)
@@ -232,12 +230,28 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         "Timetable %d: %d turmas, %d professores, %d tempos/dia, %d ocorrências, limite=%ds",
         timetable_id, n_classes, n_teachers, slots_per_day_count, len(occurrences), max_time,
     )
-    if opts.get("students_start_slot_1") and n_classes > n_teachers:
-        logger.warning(
-            "Timetable %d: %d turmas > %d professores com students_start_slot_1=True. "
-            "Pode ser inviável. Aumente max_periods_per_day_class nas Regras de Geração.",
-            timetable_id, n_classes, n_teachers,
-        )
+
+    # Auto-adjust max_per_day_class when students_start_slot_1 is active and there are
+    # more classes than teachers. By pigeonhole, with N classes and T teachers (N>T),
+    # some day will always have N classes needing slot-1 simultaneously — impossible with
+    # only T teachers. Fix: raise max_per_day so every class can skip at least 1 day.
+    if opts.get("students_start_slot_1") and n_classes > n_teachers and n_days_count > 1:
+        # Each class needs ceil(total_occ / (n_days-1)) lessons/day to fit in n_days-1 days
+        for class_id, eids in entry_by_class.items():
+            class_occ = sum(
+                (e.split_count if e.is_split else max(1, round(e.hours_per_week)))
+                for e in entries if e.id in eids
+            )
+            needed = -(-class_occ // (n_days_count - 1))  # ceiling division
+            if needed > max_per_day_class:
+                logger.warning(
+                    "Timetable %d: auto-ajuste max_per_day_class %d→%d "
+                    "(turma %d tem %d aulas e precisa de poder saltar 1 dia com %d turmas > %d professores).",
+                    timetable_id, max_per_day_class, needed, class_id,
+                    class_occ, n_classes, n_teachers,
+                )
+                max_per_day_class = needed
+
     for tid, teacher in teachers.items():
         occ_for_teacher = sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, []))
         max_weekly = teacher.max_daily_lessons * n_days_count
