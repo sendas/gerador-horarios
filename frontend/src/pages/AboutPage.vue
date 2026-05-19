@@ -449,12 +449,25 @@
 
               <q-separator class="q-mb-md" />
 
+              <!-- Proprietary notice -->
+              <q-banner rounded class="copyright-banner q-mb-md">
+                <template #avatar>
+                  <q-icon name="gavel" color="blue-9" size="28px" />
+                </template>
+                <div class="text-body2 text-weight-bold q-mb-xs">
+                  O Helpdesk Escolar é propriedade exclusiva de Pedro Sendas de Moura Pereira.
+                </div>
+                <div class="text-body2">
+                  A utilização, reprodução, distribuição, modificação ou qualquer outra forma de exploração deste software — no todo ou em parte — sem autorização escrita prévia do titular dos direitos de autor, é expressamente proibida.
+                </div>
+              </q-banner>
+
               <div class="row q-col-gutter-md">
                 <div class="col-12 col-sm-6">
                   <div class="text-subtitle2 q-mb-sm">
                     <q-icon name="person" color="blue-7" class="q-mr-xs" />Autor
                   </div>
-                  <div class="text-body2 q-mb-xs">Desenvolvido por <strong>sendas</strong></div>
+                  <div class="text-body2 q-mb-xs"><strong>Pedro Sendas de Moura Pereira</strong></div>
                   <div class="text-caption text-grey-6 q-mb-sm">Com o apoio de <strong>Claude AI</strong> (Anthropic) como assistente de desenvolvimento — geração de código, arquitetura e resolução de problemas complexos.</div>
                   <div class="row q-gutter-sm">
                     <q-btn flat size="sm" icon="code" label="GitHub" color="grey-7"
@@ -480,13 +493,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <q-separator class="q-my-md" />
-
-              <div class="text-caption text-grey-5 text-center">
-                Este software é disponibilizado para uso em agrupamentos escolares.
-                Proibida a distribuição ou comercialização sem autorização do autor.
               </div>
             </q-card-section>
           </q-card>
@@ -670,5 +676,17 @@ const importFormats = [
 .credits-card {
   border-radius: 10px !important;
   border-left: 4px solid #1976d2 !important;
+}
+
+/* ── Copyright banner ────────────────────────────────────── */
+.copyright-banner {
+  background: rgba(25, 118, 210, 0.07) !important;
+  border: 1px solid rgba(25, 118, 210, 0.25) !important;
+  border-radius: 8px !important;
+}
+
+.body--dark .copyright-banner {
+  background: rgba(25, 118, 210, 0.12) !important;
+  border-color: rgba(25, 118, 210, 0.35) !important;
 }
 </style>
