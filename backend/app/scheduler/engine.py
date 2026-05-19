@@ -874,12 +874,35 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     _log(db, tt, f"Modelo criado: {n_bool_vars} variáveis booleanas. A resolver... (limite: {max_time}s)")
 
     import os
+    import threading
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(max_time)
     solver.parameters.num_workers = 4
     solver.parameters.max_memory_in_mb = int(os.environ.get("SOLVER_MAX_MEMORY_MB", 512))
 
+    # Heartbeat: write a log line every 60s while solver runs so updated_at stays fresh
+    heartbeat_stop = threading.Event()
+    def _heartbeat():
+        elapsed = 0
+        while not heartbeat_stop.wait(60):
+            elapsed += 60
+            try:
+                from app.database import SessionLocal as _SL
+                from app.models.models import Timetable as _TT
+                _db = _SL()
+                _tt = _db.query(_TT).filter(_TT.id == timetable_id).first()
+                if _tt:
+                    _log(_db, _tt, f"A calcular... ({elapsed}s decorridos)")
+                _db.close()
+            except Exception:
+                pass
+    hb = threading.Thread(target=_heartbeat, daemon=True)
+    hb.start()
+
     status = solver.Solve(model)
+
+    heartbeat_stop.set()
+    hb.join(timeout=2)
 
     logger.info(
         "Timetable %d: solver terminou — status=%s, tempo=%.1fs, objective=%s",
