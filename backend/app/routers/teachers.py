@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from app.database import get_db
 from app.models.models import (
     Teacher, TeacherSchoolAssignment, TeacherSubject, TeacherAvailability,
@@ -13,6 +14,12 @@ from app.schemas.schemas import (
 )
 
 router = APIRouter(prefix="/teachers", tags=["teachers"])
+
+
+class BulkTeacherUpdate(BaseModel):
+    id: int
+    teaching_component: Optional[int] = None
+    credit_hours: Optional[int] = None
 
 
 @router.get("", response_model=List[TeacherResponse])
@@ -28,6 +35,22 @@ def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
         r.school_ids = list({sa.school_id for sa in t.school_assignments})
         result.append(r)
     return result
+
+
+@router.put("/bulk-update")
+def bulk_update_teachers(items: List[BulkTeacherUpdate], db: Session = Depends(get_db)):
+    updated = []
+    for item in items:
+        t = db.query(Teacher).filter(Teacher.id == item.id).first()
+        if not t:
+            continue
+        if item.teaching_component is not None:
+            t.teaching_component = item.teaching_component
+        if item.credit_hours is not None:
+            t.credit_hours = item.credit_hours
+        updated.append(t.id)
+    db.commit()
+    return {"updated": updated}
 
 
 @router.post("", response_model=TeacherResponse, status_code=201)

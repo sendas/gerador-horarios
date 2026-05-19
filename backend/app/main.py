@@ -57,6 +57,7 @@ for _sql in [
     "CREATE TABLE IF NOT EXISTS backup_config (id INTEGER PRIMARY KEY DEFAULT 1, enabled BOOLEAN DEFAULT 0, frequency TEXT DEFAULT 'weekly', onedrive_client_id TEXT, onedrive_refresh_token TEXT, folder_path TEXT DEFAULT 'GeradorHorarios/Backups', last_backup_at DATETIME, next_backup_at DATETIME)",
     "CREATE TABLE IF NOT EXISTS backup_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME, status TEXT, destination TEXT DEFAULT 'download', size_bytes INTEGER, message TEXT, filename TEXT)",
     "CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)",
+    "ALTER TABLE teachers ADD COLUMN credit_hours INTEGER DEFAULT 0",
 ]:
     try:
         with engine.connect() as _conn:

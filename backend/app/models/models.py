@@ -187,6 +187,7 @@ class Teacher(Base):
     preferred_shift = Column(String, nullable=True)   # 'morning' | 'afternoon' | None
     max_consecutive_lessons = Column(Integer, nullable=True)
     teaching_component = Column(Integer, nullable=True)  # letivas/semana configuradas (14–22)
+    credit_hours = Column(Integer, nullable=True, default=0)  # horas de crédito/redução
 
     cluster = relationship("Cluster", back_populates="teachers")
     school_assignments = relationship("TeacherSchoolAssignment", back_populates="teacher", cascade="all, delete-orphan")

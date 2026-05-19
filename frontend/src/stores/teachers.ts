@@ -16,6 +16,7 @@ export interface Teacher {
   teaching_component?: number | null
   subject_names?: string[]
   school_ids?: number[]
+  credit_hours?: number | null
 }
 
 export interface TeacherSchoolAssignment {
