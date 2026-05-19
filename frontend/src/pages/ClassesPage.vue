@@ -22,6 +22,13 @@
     />
 
     <q-table :rows="classesStore.classes" :columns="columns" row-key="id" :loading="classesStore.loading">
+      <template #body-cell-notes="props">
+        <q-td :props="props">
+          <span v-if="props.row.notes" class="text-caption text-grey-8">
+            <q-icon name="info" size="xs" color="info" class="q-mr-xs" />{{ props.row.notes }}
+          </span>
+        </q-td>
+      </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
           <q-btn flat round dense icon="menu_book" color="primary" title="Currículo" @click="openCurriculum(props.row)" />
@@ -42,6 +49,7 @@
             <q-input v-model="form.name" label="Nome da turma *" :rules="[v => !!v || 'Obrigatório']" />
             <q-input v-model.number="form.year_level" label="Ano de escolaridade *" type="number" min="1" />
             <q-input v-model.number="form.num_students" label="Nº de alunos" type="number" min="1" />
+            <q-input v-model="form.notes" label="Observações" clearable hint="Ex: info de articulado, condições especiais" />
             <div class="row justify-end q-mt-md q-gutter-sm">
               <q-btn flat label="Cancelar" v-close-popup />
               <q-btn type="submit" color="primary" :label="editing ? 'Guardar' : 'Criar'" />
@@ -230,6 +238,7 @@ const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
   { name: 'year_level', label: 'Ano', field: 'year_level', align: 'center' as const },
   { name: 'num_students', label: 'Alunos', field: 'num_students', align: 'center' as const },
+  { name: 'notes', label: 'Observações', field: 'notes', align: 'left' as const },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
 
@@ -244,7 +253,7 @@ const currColumns = [
 
 const dialog = ref(false)
 const editing = ref<null | SchoolClass>(null)
-const form = ref({ school_id: null as number | null, academic_year_id: null as number | null, name: '', year_level: 5, num_students: 25 })
+const form = ref({ school_id: null as number | null, academic_year_id: null as number | null, name: '', year_level: 5, num_students: 25, notes: '' })
 
 const curriculumDialog = ref(false)
 const addEntryDialog = ref(false)
@@ -383,13 +392,13 @@ onMounted(async () => {
 
 function openCreate() {
   editing.value = null
-  form.value = { school_id: null, academic_year_id: null, name: '', year_level: 5, num_students: 25 }
+  form.value = { school_id: null, academic_year_id: null, name: '', year_level: 5, num_students: 25, notes: '' }
   dialog.value = true
 }
 
 function openEdit(row: SchoolClass) {
   editing.value = row
-  form.value = { school_id: row.school_id, academic_year_id: row.academic_year_id, name: row.name, year_level: row.year_level, num_students: row.num_students }
+  form.value = { school_id: row.school_id, academic_year_id: row.academic_year_id, name: row.name, year_level: row.year_level, num_students: row.num_students, notes: row.notes ?? '' }
   dialog.value = true
 }
 

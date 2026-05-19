@@ -274,9 +274,14 @@ def import_curriculum(
         # Teacher name (optional)
         professor = get_col(row, "professor", "Professor") or None
 
-        # Articulado flag
-        articulado_raw = (get_col(row, "articulado", "Articulado") or "").lower().strip()
-        is_articulated = articulado_raw in ("sim", "s", "yes", "y", "1", "true")
+        # Articulado field:
+        #   empty              → sem articulado
+        #   "sim"/"s"/… → can_exempt_articulado = True na disciplina
+        #   outro valor        → observação importante; guardada em cls.notes
+        articulado_raw = (get_col(row, "articulado", "Articulado") or "").strip()
+        articulado_lower = articulado_raw.lower()
+        is_articulated = articulado_lower in ("sim", "s", "yes", "y", "1", "true")
+        articulado_note = articulado_raw if articulado_raw and not is_articulated else None
 
         # ── Find or create Class ──────────────────────────────────────────────
         cls = db.query(Class).filter(
@@ -291,10 +296,14 @@ def import_curriculum(
                 name=turma,
                 year_level=year_level,
                 num_students=25,
+                notes=articulado_note,
             )
             db.add(cls)
             db.flush()
             stats["classes"] += 1
+        elif articulado_note and not cls.notes:
+            # Only fill notes if not already set and articulado has a non-"sim" value
+            cls.notes = articulado_note
 
         # ── Find or create Subject ────────────────────────────────────────────
         subj = db.query(Subject).filter(
@@ -302,10 +311,16 @@ def import_curriculum(
             Subject.name == disciplina,
         ).first()
         if not subj:
-            subj = Subject(cluster_id=cluster_id, name=disciplina)
+            subj = Subject(
+                cluster_id=cluster_id,
+                name=disciplina,
+                can_exempt_articulado=is_articulated,
+            )
             db.add(subj)
             db.flush()
             stats["subjects"] += 1
+        elif is_articulated and not subj.can_exempt_articulado:
+            subj.can_exempt_articulado = True
 
         # ── Find or create Teacher ────────────────────────────────────────────
         teacher = None
@@ -354,7 +369,7 @@ def import_curriculum(
             class_id=cls.id,
             subject_id=subj.id,
             hours_per_week=hours_per_week,
-            is_split=split_count > 1 or is_articulated,
+            is_split=split_count > 1,
             split_count=split_count,
             consecutive_pairs=0,
             is_semestral=False,

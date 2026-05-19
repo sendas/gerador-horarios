@@ -50,6 +50,7 @@ for _sql in [
     "ALTER TABLE scheduling_rules ADD COLUMN lunch_after_slot INTEGER DEFAULT 4",
     "ALTER TABLE teachers ADD COLUMN teaching_component INTEGER",
     "ALTER TABLE timetables ADD COLUMN generation_log TEXT",
+    "ALTER TABLE classes ADD COLUMN notes TEXT",
     "CREATE TABLE IF NOT EXISTS timetable_locks (id INTEGER PRIMARY KEY AUTOINCREMENT, timetable_id INTEGER NOT NULL REFERENCES timetables(id), lock_type TEXT NOT NULL, entity_id INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS backup_config (id INTEGER PRIMARY KEY DEFAULT 1, enabled BOOLEAN DEFAULT 0, frequency TEXT DEFAULT 'weekly', onedrive_client_id TEXT, onedrive_refresh_token TEXT, folder_path TEXT DEFAULT 'GeradorHorarios/Backups', last_backup_at DATETIME, next_backup_at DATETIME)",
     "CREATE TABLE IF NOT EXISTS backup_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME, status TEXT, destination TEXT DEFAULT 'download', size_bytes INTEGER, message TEXT, filename TEXT)",

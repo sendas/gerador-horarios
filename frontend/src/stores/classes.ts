@@ -9,6 +9,7 @@ export interface SchoolClass {
   name: string
   year_level: number
   num_students: number
+  notes?: string | null
 }
 
 export interface CurriculumEntry {

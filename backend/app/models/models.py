@@ -121,6 +121,7 @@ class Class(Base):
     name = Column(String, nullable=False)
     year_level = Column(Integer, nullable=False)
     num_students = Column(Integer, default=25)
+    notes = Column(String, nullable=True)  # observações (ex: info do campo articulado)
 
     school = relationship("School", back_populates="classes")
     academic_year = relationship("AcademicYear", back_populates="classes")

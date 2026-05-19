@@ -153,6 +153,7 @@ class ClassBase(BaseModel):
     name: str
     year_level: int
     num_students: int = 25
+    notes: Optional[str] = None
 
 class ClassCreate(ClassBase):
     pass
@@ -161,6 +162,7 @@ class ClassUpdate(BaseModel):
     name: Optional[str] = None
     year_level: Optional[int] = None
     num_students: Optional[int] = None
+    notes: Optional[str] = None
 
 class ClassResponse(ClassBase):
     model_config = ConfigDict(from_attributes=True)

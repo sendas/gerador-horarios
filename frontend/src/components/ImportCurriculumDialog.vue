@@ -14,10 +14,17 @@
         <q-banner class="bg-blue-1 q-mb-md" rounded>
           <template #avatar><q-icon name="info" color="blue" /></template>
           Importa turmas, disciplinas, professores e o currículo completo a partir de um ficheiro CSV/Excel.
-          <br />
+          <br /><br />
           <strong>Colunas esperadas:</strong>
           <code>ano</code>, <code>turma</code>, <code>disciplina</code>,
-          <code>horas semana</code>, <code>professor</code>, <code>articulado</code>
+          <code>horas semana</code>, <code>ano+turma+disc</code> (ignorada), <code>professor</code>, <code>articulado</code>
+          <br /><br />
+          <strong>Campo <code>articulado</code>:</strong>
+          <ul class="q-mb-none q-mt-xs" style="padding-left:1.2em">
+            <li><em>Vazio</em> — sem articulado</li>
+            <li><em>"sim"</em> — disciplina pode ter dispensa (articulado)</li>
+            <li><em>Outro valor</em> — texto guardado nas observações da turma</li>
+          </ul>
         </q-banner>
 
         <div class="q-gutter-md">
