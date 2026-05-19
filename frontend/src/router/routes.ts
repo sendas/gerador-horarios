@@ -20,6 +20,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'subjects', component: () => import('pages/SubjectsPage.vue') },
       { path: 'classes', component: () => import('pages/ClassesPage.vue') },
       { path: 'teachers', component: () => import('pages/TeachersPage.vue') },
+      { path: 'teacher-assignment', component: () => import('pages/TeacherAssignmentPage.vue') },
       { path: 'timetables', component: () => import('pages/TimetablesPage.vue') },
       { path: 'timetables/:id', component: () => import('pages/TimetableDetailPage.vue') },
       { path: 'service-distribution', component: () => import('pages/ServiceDistributionPage.vue') },

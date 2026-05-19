@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app.models.models import Class, CurriculumEntry, School
+from app.models.models import Class, CurriculumEntry, School, TeacherSubject
 from app.schemas.schemas import (
     ClassCreate, ClassUpdate, ClassResponse,
     CurriculumEntryCreate, CurriculumEntryUpdate, CurriculumEntryResponse
@@ -92,6 +92,13 @@ def update_curriculum_entry(entry_id: int, data: CurriculumEntryUpdate, db: Sess
         raise HTTPException(status_code=404, detail="Curriculum entry not found")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(obj, field, value)
+    # Auto-link teacher → subject so the solver fallback also works
+    if data.teacher_id and obj.subject_id:
+        if not db.query(TeacherSubject).filter(
+            TeacherSubject.teacher_id == data.teacher_id,
+            TeacherSubject.subject_id == obj.subject_id,
+        ).first():
+            db.add(TeacherSubject(teacher_id=data.teacher_id, subject_id=obj.subject_id))
     db.commit()
     db.refresh(obj)
     return obj

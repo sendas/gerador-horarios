@@ -112,6 +112,11 @@
           <q-item-section>Professores</q-item-section>
         </q-item>
 
+        <q-item clickable v-ripple :to="'/teacher-assignment'">
+          <q-item-section avatar><q-icon name="assignment_ind" color="teal-7" /></q-item-section>
+          <q-item-section>Atribuição de Professores</q-item-section>
+        </q-item>
+
         <q-item clickable v-ripple :to="'/non-teaching'">
           <q-item-section avatar><q-icon name="work_off" color="grey-7" /></q-item-section>
           <q-item-section>Serviço Não Letivo</q-item-section>
