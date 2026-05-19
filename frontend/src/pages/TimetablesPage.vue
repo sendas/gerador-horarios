@@ -11,6 +11,21 @@
           <q-badge :color="statusColor(props.row.status)" :label="statusLabel(props.row.status)" />
         </q-td>
       </template>
+      <template #body-cell-solver_status="props">
+        <q-td :props="props">
+          <template v-if="props.row.status === 'error' && props.row.solver_status">
+            <span class="text-negative text-caption" style="max-width:260px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle">
+              {{ props.row.solver_status.split('\n')[0] }}
+            </span>
+            <q-btn v-if="props.row.solver_status.includes('\n')" flat round dense size="xs" icon="info" color="negative" class="q-ml-xs">
+              <q-tooltip max-width="420px" anchor="bottom middle" self="top middle">
+                <div style="white-space:pre-wrap;font-size:0.78rem">{{ props.row.solver_status }}</div>
+              </q-tooltip>
+            </q-btn>
+          </template>
+          <span v-else class="text-caption text-grey-6">{{ props.row.solver_status }}</span>
+        </q-td>
+      </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
           <div class="row no-wrap q-gutter-xs">

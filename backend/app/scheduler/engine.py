@@ -99,6 +99,24 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         teacher_ids = [t.teacher_id for t in ts]
         entry_teachers[entry.id] = teacher_ids
 
+    # ── Pre-model diagnostic checks (fail fast without wiping existing lessons) ─
+    diag_errors: list[str] = []
+    for entry in entries:
+        if not entry_teachers.get(entry.id):
+            subj_name = entry.subject.name if entry.subject else f"id={entry.subject_id}"
+            class_name = entry.class_.name if entry.class_ else f"id={entry.class_id}"
+            diag_errors.append(f"Turma {class_name} · {subj_name}: sem professor atribuído")
+
+    if diag_errors:
+        tt.status = "error"
+        prefix = f"{len(diag_errors)} erro(s) detetado(s) — corrigir antes de gerar:\n"
+        tt.solver_status = prefix + "\n".join(f"• {e}" for e in diag_errors)
+        tt.updated_at = datetime.utcnow()
+        db.commit()
+        logger.error("Timetable %d: %d erros de dados:\n%s",
+                     timetable_id, len(diag_errors), "\n".join(diag_errors))
+        return  # existing lessons are preserved
+
     # Teacher availability: blocked slots {teacher_id: set of (day, slot)}
     blocked: dict[int, set] = defaultdict(set)
     avail_rows = db.query(TeacherAvailability).filter(
@@ -711,8 +729,8 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     )
 
     # ── Persist results ───────────────────────────────────────────────────────
-    db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
-
+    # Only wipe existing lessons when we have a new valid solution to replace them.
+    # On failure the previous timetable (if any) is preserved intact.
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         lessons_to_add = []
         for (eid, occ) in occurrences:
@@ -752,6 +770,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                 semester=entry.semester if entry and entry.is_semestral else None,
             ))
 
+        db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
         db.add_all(lessons_to_add)
         tt.status = "generated"
         tt.solver_status = solver.StatusName(status)
