@@ -86,7 +86,7 @@
         <div class="text-h6 q-mb-sm">
           <q-icon name="cloud" color="blue-8" class="q-mr-sm" />Ligar ao OneDrive
         </div>
-        <q-banner v-if="!config?.onedrive_connected" class="bg-blue-1 q-mb-md" rounded dense>
+        <q-banner v-if="!config?.onedrive_connected" :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1'" class="q-mb-md" rounded dense>
           <template #avatar><q-icon name="info" color="blue" /></template>
           Para ligar ao OneDrive é necessário um <strong>Client ID</strong> de uma aplicação registada no
           <a href="https://portal.azure.com" target="_blank" class="text-primary">portal.azure.com</a>.

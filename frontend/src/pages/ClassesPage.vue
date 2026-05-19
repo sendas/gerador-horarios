@@ -171,7 +171,7 @@
                 v-if="entryForm.semester"
                 dense
                 rounded
-                class="bg-blue-1 text-blue-10 q-mt-sm q-mb-xs"
+                :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1 text-blue-10'" class="q-mt-sm q-mb-xs"
               >
                 <template #avatar><q-icon name="info" color="blue-7" /></template>
                 Disciplina semestral: ocorre apenas no {{ entryForm.semester === 1 ? '1.º' : '2.º' }} semestre. Para emparelhamento, selecione a disciplina que ocorre no outro semestre no mesmo horário.
@@ -191,7 +191,7 @@
             <div class="text-caption text-weight-medium q-mb-xs">
               <q-icon name="call_split" class="q-mr-xs" />Turno / Desdobramento
             </div>
-            <q-banner dense rounded class="bg-blue-1 text-blue-10 q-mb-sm" v-if="entryForm.is_split">
+            <q-banner dense rounded :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1 text-blue-10'" class="q-mb-sm" v-if="entryForm.is_split">
               <template #avatar><q-icon name="info" color="blue-7" /></template>
               Para turnos (ex: metade da turma em CN, outra em FQ ao mesmo tempo), configure o emparelhamento semestral acima ou use os Grupos de Disciplinas.
             </q-banner>

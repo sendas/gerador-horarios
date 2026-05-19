@@ -2,8 +2,8 @@
   <q-page padding>
     <div class="text-h5 q-mb-md">Distribuição de Serviço</div>
 
-    <!-- Selectors -->
-    <div class="row q-col-gutter-md q-mb-md">
+    <!-- Selectors + actions -->
+    <div class="row q-col-gutter-md q-mb-md items-end">
       <div class="col-12 col-sm-4">
         <q-select
           v-model="selectedYearId"
@@ -39,8 +39,83 @@
           :disable="teachers.length === 0"
           @click="exportCsv"
         />
+        <q-btn
+          color="secondary"
+          icon="upload"
+          label="Importar Comp. Letiva"
+          dense
+          :disable="!selectedYearId"
+          @click="showImport = true"
+        />
       </div>
     </div>
+
+    <!-- Import dialog -->
+    <q-dialog v-model="showImport">
+      <q-card style="min-width: 420px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Importar Componentes Letivas</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <q-banner :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1'" rounded class="q-mb-md">
+            <template #avatar><q-icon name="info" color="blue" /></template>
+            Importa a <strong>Componente Letiva</strong> de cada professor a partir de um ficheiro CSV/Excel.
+            <br /><br />
+            <strong>Colunas esperadas:</strong> <code>professor</code> (ou <code>nome</code>)
+            e <code>comp. letiva</code> (ou <code>teaching_component</code>).
+            <br />
+            <span class="text-caption">O ficheiro exportado por esta página pode ser reimportado após edição.</span>
+          </q-banner>
+
+          <q-file
+            v-model="importFile"
+            label="Ficheiro CSV ou Excel"
+            outlined
+            accept=".csv,.xlsx,.xls"
+            :disable="importLoading"
+          >
+            <template #prepend><q-icon name="attach_file" /></template>
+          </q-file>
+
+          <q-linear-progress v-if="importLoading" indeterminate color="primary" class="q-mt-sm" />
+
+          <q-banner
+            v-if="importResult"
+            rounded
+            :class="importResult.errors?.length ? ($q.dark.isActive ? 'bg-orange-9' : 'bg-orange-1') : ($q.dark.isActive ? 'bg-green-9' : 'bg-green-1')"
+            class="q-mt-md"
+          >
+            <template #avatar>
+              <q-icon
+                :name="importResult.errors?.length ? 'warning' : 'check_circle'"
+                :color="importResult.errors?.length ? 'warning' : 'positive'"
+              />
+            </template>
+            <div class="text-weight-medium q-mb-xs">Importação concluída</div>
+            <div class="text-body2">
+              Professores atualizados: <strong>{{ importResult.updated }}</strong><br />
+              Não encontrados: <strong>{{ importResult.not_found }}</strong>
+            </div>
+            <ul v-if="importResult.errors?.length" class="q-mt-xs q-mb-none" style="max-height:140px;overflow-y:auto">
+              <li v-for="(e, i) in importResult.errors" :key="i" class="text-caption text-negative">{{ e }}</li>
+            </ul>
+          </q-banner>
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Fechar" v-close-popup />
+          <q-btn
+            color="primary"
+            icon="upload"
+            label="Importar"
+            :loading="importLoading"
+            :disable="!importFile"
+            @click="doImport"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Summary stats -->
     <div v-if="teachers.length > 0" class="row q-col-gutter-md q-mb-md">
@@ -101,58 +176,6 @@
       :pagination="{ rowsPerPage: 0 }"
       hide-bottom
     >
-      <!-- Teaching component badge -->
-      <template #body-cell-teaching_component="props">
-        <q-td :props="props" class="text-center">
-          <q-badge
-            :color="componentColor(props.row)"
-            :label="props.row.teaching_component ?? '—'"
-          />
-        </q-td>
-      </template>
-
-      <!-- Scheduled hours -->
-      <template #body-cell-scheduled_hours="props">
-        <q-td :props="props" class="text-center">
-          <span :class="scheduledHoursClass(props.row)">
-            {{ props.row.scheduled_hours }}
-          </span>
-        </q-td>
-      </template>
-
-      <!-- Classes taught as chips with expansion -->
-      <template #body-cell-classes_taught="props">
-        <q-td :props="props">
-          <template v-if="props.row.classes_taught.length === 0">
-            <span class="text-grey-5">—</span>
-          </template>
-          <template v-else>
-            <q-chip
-              v-for="ct in props.row.classes_taught.slice(0, 2)"
-              :key="ct.class_name + ct.subject_name"
-              dense
-              size="sm"
-              color="blue-grey-2"
-              text-color="dark"
-            >
-              {{ ct.class_name }} · {{ ct.subject_name }}
-            </q-chip>
-            <q-chip
-              v-if="props.row.classes_taught.length > 2"
-              dense
-              size="sm"
-              color="grey-4"
-              text-color="dark"
-              @click="expandRow(props.row)"
-              clickable
-            >
-              +{{ props.row.classes_taught.length - 2 }} mais
-            </q-chip>
-          </template>
-        </q-td>
-      </template>
-
-      <!-- Row expansion -->
       <template #body="props">
         <q-tr :props="props" @click="toggleExpand(props.row)" class="cursor-pointer">
           <q-td
@@ -161,7 +184,6 @@
             :props="props"
             :class="col.classes"
           >
-            <!-- teaching_component -->
             <template v-if="col.name === 'teaching_component'">
               <q-badge
                 :color="componentColor(props.row)"
@@ -169,14 +191,12 @@
               />
             </template>
 
-            <!-- scheduled_hours -->
             <template v-else-if="col.name === 'scheduled_hours'">
               <span :class="scheduledHoursClass(props.row)">
                 {{ props.row.scheduled_hours }}
               </span>
             </template>
 
-            <!-- classes_taught -->
             <template v-else-if="col.name === 'classes_taught'">
               <template v-if="props.row.classes_taught.length === 0">
                 <span class="text-grey-5">—</span>
@@ -187,8 +207,8 @@
                   :key="ct.class_name + ct.subject_name"
                   dense
                   size="sm"
-                  color="blue-grey-2"
-                  text-color="dark"
+                  :color="$q.dark.isActive ? 'blue-grey-7' : 'blue-grey-2'"
+                  :text-color="$q.dark.isActive ? 'white' : 'dark'"
                 >
                   {{ ct.class_name }} · {{ ct.subject_name }}
                 </q-chip>
@@ -196,15 +216,14 @@
                   v-if="props.row.classes_taught.length > 3"
                   dense
                   size="sm"
-                  color="grey-4"
-                  text-color="dark"
+                  :color="$q.dark.isActive ? 'grey-7' : 'grey-4'"
+                  :text-color="$q.dark.isActive ? 'white' : 'dark'"
                 >
                   +{{ props.row.classes_taught.length - 3 }}
                 </q-chip>
               </template>
             </template>
 
-            <!-- default -->
             <template v-else>
               {{ col.field instanceof Function ? col.field(props.row) : props.row[col.field as keyof TeacherDistribution] }}
             </template>
@@ -213,10 +232,10 @@
 
         <!-- Expanded detail row -->
         <q-tr v-if="expandedRows.has(props.row.id)" :props="props">
-          <q-td colspan="100%" class="bg-blue-grey-1">
+          <q-td colspan="100%" :class="$q.dark.isActive ? 'bg-blue-grey-9' : 'bg-blue-grey-1'">
             <div class="q-pa-sm">
               <div class="text-subtitle2 q-mb-sm">Turmas e Disciplinas — {{ props.row.name }}</div>
-              <q-markup-table dense flat bordered class="bg-white" style="max-width: 560px">
+              <q-markup-table dense flat bordered style="max-width: 560px">
                 <thead>
                   <tr>
                     <th class="text-left">Turma</th>
@@ -281,11 +300,21 @@ const teachers = ref<TeacherDistribution[]>([])
 const timetableOptions = ref<{ label: string; value: number }[]>([])
 const expandedRows = ref<Set<number>>(new Set())
 
+const showImport = ref(false)
+const importFile = ref<File | null>(null)
+const importLoading = ref(false)
+const importResult = ref<{ updated: number; not_found: number; errors: string[] } | null>(null)
+
 // ── Computed ─────────────────────────────────────────────────────────────────
 
 const yearOptions = computed(() =>
   yearsStore.years.map((y) => ({ label: y.name, value: y.id }))
 )
+
+const selectedClusterId = computed(() => {
+  const year = yearsStore.years.find((y) => y.id === selectedYearId.value)
+  return year?.cluster_id ?? null
+})
 
 const totalScheduledHours = computed(() =>
   teachers.value.reduce((sum, t) => sum + t.scheduled_hours, 0)
@@ -299,53 +328,12 @@ const averageScheduledHours = computed(() => {
 // ── Columns ───────────────────────────────────────────────────────────────────
 
 const columns = [
-  {
-    name: 'name',
-    label: 'Professor',
-    field: 'name',
-    align: 'left' as const,
-    sortable: true,
-    classes: 'text-left',
-  },
-  {
-    name: 'teaching_component',
-    label: 'Comp. Letiva',
-    field: 'teaching_component',
-    align: 'center' as const,
-    sortable: true,
-    classes: 'text-center',
-  },
-  {
-    name: 'scheduled_hours',
-    label: 'Horas Marcadas',
-    field: 'scheduled_hours',
-    align: 'center' as const,
-    sortable: true,
-    classes: 'text-center',
-  },
-  {
-    name: 'non_teaching_hours',
-    label: 'Serv. Não Letivo',
-    field: 'non_teaching_hours',
-    align: 'center' as const,
-    sortable: true,
-    classes: 'text-center',
-  },
-  {
-    name: 'total_service',
-    label: 'Total Serviço',
-    field: 'total_service',
-    align: 'center' as const,
-    sortable: true,
-    classes: 'text-center',
-  },
-  {
-    name: 'classes_taught',
-    label: 'Turmas',
-    field: 'classes_taught',
-    align: 'left' as const,
-    classes: 'text-left',
-  },
+  { name: 'name', label: 'Professor', field: 'name', align: 'left' as const, sortable: true, classes: 'text-left' },
+  { name: 'teaching_component', label: 'Comp. Letiva', field: 'teaching_component', align: 'center' as const, sortable: true, classes: 'text-center' },
+  { name: 'scheduled_hours', label: 'Horas Marcadas', field: 'scheduled_hours', align: 'center' as const, sortable: true, classes: 'text-center' },
+  { name: 'non_teaching_hours', label: 'Serv. Não Letivo', field: 'non_teaching_hours', align: 'center' as const, sortable: true, classes: 'text-center' },
+  { name: 'total_service', label: 'Total Serviço', field: 'total_service', align: 'center' as const, sortable: true, classes: 'text-center' },
+  { name: 'classes_taught', label: 'Turmas', field: 'classes_taught', align: 'left' as const, classes: 'text-left' },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -370,12 +358,6 @@ function toggleExpand(row: TeacherDistribution) {
   } else {
     expandedRows.value.add(row.id)
   }
-  // Trigger Vue reactivity on the Set
-  expandedRows.value = new Set(expandedRows.value)
-}
-
-function expandRow(row: TeacherDistribution) {
-  expandedRows.value.add(row.id)
   expandedRows.value = new Set(expandedRows.value)
 }
 
@@ -388,21 +370,36 @@ async function loadData() {
   try {
     const params: Record<string, number> = { academic_year_id: selectedYearId.value }
     if (selectedTimetableId.value) params.timetable_id = selectedTimetableId.value
-
     const { data } = await api.get('/service-distribution', { params })
-
     teachers.value = data.teachers as TeacherDistribution[]
-
-    // Update timetable selector options
-    timetableOptions.value = (data.timetables as TimetableOption[]).map((t) => ({
-      label: t.name,
-      value: t.id,
-    }))
-  } catch (err) {
+    timetableOptions.value = (data.timetables as TimetableOption[]).map((t) => ({ label: t.name, value: t.id }))
+  } catch {
     $q.notify({ type: 'negative', message: 'Erro ao carregar distribuição de serviço' })
     teachers.value = []
   } finally {
     loading.value = false
+  }
+}
+
+// ── Import ────────────────────────────────────────────────────────────────────
+
+async function doImport() {
+  if (!importFile.value || !selectedClusterId.value) return
+  importLoading.value = true
+  importResult.value = null
+  try {
+    const fd = new FormData()
+    fd.append('file', importFile.value)
+    fd.append('cluster_id', String(selectedClusterId.value))
+    const { data } = await api.post('/imports/teaching-components', fd)
+    importResult.value = data
+    $q.notify({ color: 'positive', message: `${data.updated} professores atualizados` })
+    await loadData()
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    $q.notify({ color: 'negative', message: err.response?.data?.detail ?? 'Erro ao importar' })
+  } finally {
+    importLoading.value = false
   }
 }
 
@@ -423,15 +420,7 @@ async function onTimetableChange() {
 // ── Export CSV ────────────────────────────────────────────────────────────────
 
 function exportCsv() {
-  const header = [
-    'Professor',
-    'Comp. Letiva',
-    'Horas Marcadas',
-    'Serv. Não Letivo',
-    'Total Serviço',
-    'Turmas',
-  ]
-
+  const header = ['Professor', 'Comp. Letiva', 'Horas Marcadas', 'Serv. Não Letivo', 'Total Serviço', 'Turmas']
   const rows = teachers.value.map((t) => [
     t.name,
     t.teaching_component ?? '',
@@ -440,15 +429,9 @@ function exportCsv() {
     t.total_service,
     t.classes_taught.map((ct) => `${ct.class_name} ${ct.subject_name} (${ct.hours_per_week}h)`).join(' | '),
   ])
-
   const csvContent = [header, ...rows]
-    .map((row) =>
-      row
-        .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-        .join(',')
-    )
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\n')
-
   const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')

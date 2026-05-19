@@ -18,7 +18,7 @@
         <q-tab-panels v-model="tab" animated>
           <!-- File tab -->
           <q-tab-panel name="file" class="q-pa-none q-pt-md">
-            <q-banner v-if="formatHint" dense rounded class="bg-blue-1 text-blue-10 q-mb-md">
+            <q-banner v-if="formatHint" dense rounded :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1 text-blue-10'" class="q-mb-md">
               <template #avatar><q-icon name="info" color="blue-7" /></template>
               <div class="text-weight-medium q-mb-xs">Formato esperado:</div>
               <div class="text-caption">Colunas: <code>{{ formatHint.columns }}</code></div>
@@ -105,7 +105,7 @@
             <div v-if="extractedData !== null" class="q-mt-md">
               <div class="text-subtitle2 q-mb-sm">Dados extraídos ({{ extractedData.length }} registos):</div>
               <q-scroll-area style="height: 200px" class="q-mb-md">
-                <pre class="text-caption bg-grey-2 q-pa-sm rounded-borders" style="white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(extractedData, null, 2) }}</pre>
+                <pre class="text-caption q-pa-sm rounded-borders" :class="$q.dark.isActive ? 'bg-grey-9' : 'bg-grey-2'" style="white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(extractedData, null, 2) }}</pre>
               </q-scroll-area>
 
               <div v-if="missingParams" class="q-mb-md">

@@ -11,7 +11,7 @@
       </q-card-section>
 
       <q-card-section>
-        <q-banner class="bg-blue-1 q-mb-md" rounded>
+        <q-banner :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1'" class="q-mb-md" rounded>
           <template #avatar><q-icon name="info" color="blue" /></template>
           Importa turmas, disciplinas, professores e o currículo completo a partir de um ficheiro CSV/Excel.
           <br /><br />
@@ -71,7 +71,7 @@
             <template #prepend><q-icon name="attach_file" /></template>
           </q-file>
 
-          <q-banner v-if="result" rounded :class="result.errors?.length ? 'bg-orange-1' : 'bg-green-1'">
+          <q-banner v-if="result" rounded :class="result.errors?.length ? ($q.dark.isActive ? 'bg-orange-9' : 'bg-orange-1') : ($q.dark.isActive ? 'bg-green-9' : 'bg-green-1')">
             <template #avatar>
               <q-icon :name="result.errors?.length ? 'warning' : 'check_circle'" :color="result.errors?.length ? 'warning' : 'positive'" />
             </template>

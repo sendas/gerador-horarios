@@ -212,7 +212,7 @@
         @click="showForm = true"
       />
 
-      <q-card class="q-mt-lg bg-blue-1" flat bordered v-if="currentRule">
+      <q-card :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1'" flat bordered v-if="currentRule">
         <q-card-section>
           <div class="text-subtitle1 q-mb-sm"><q-icon name="help_outline" class="q-mr-sm" />O que significam estas regras?</div>
           <q-list dense>
@@ -252,7 +252,7 @@
     </template>
 
     <template v-else>
-      <q-banner class="bg-grey-2" rounded>
+      <q-banner :class="$q.dark.isActive ? 'bg-grey-8' : 'bg-grey-2'" rounded>
         <template #avatar><q-icon name="arrow_upward" color="grey" /></template>
         Selecione um agrupamento para ver ou editar as regras de horário.
       </q-banner>

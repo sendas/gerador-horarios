@@ -349,6 +349,64 @@ def _process_curriculum_row(
     stats["created"] += 1
 
 
+@router.post("/teaching-components")
+def import_teaching_components(
+    file: UploadFile = File(...),
+    cluster_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Import/update teaching component hours for teachers from CSV/XLSX.
+    Columns: professor (or nome), comp. letiva (or teaching_component).
+    Matches teachers by name within the cluster and updates their teaching_component.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Agrupamento não encontrado")
+
+    rows = parse_upload(file)
+    updated = 0
+    not_found = 0
+    errors: List[str] = []
+
+    for i, row in enumerate(rows, start=2):
+        name = get_col(row, "professor", "nome", "Professor", "Nome", "name")
+        if not name:
+            errors.append(f"Linha {i}: nome do professor em falta")
+            continue
+
+        comp_raw = get_col(
+            row,
+            "comp. letiva", "comp_letiva", "componente letiva", "componente_letiva",
+            "teaching_component", "Comp. Letiva", "Componente Letiva",
+        )
+        if comp_raw is None:
+            errors.append(f"Linha {i}: componente letiva em falta")
+            continue
+
+        try:
+            comp = int(float(str(comp_raw).replace(",", ".")))
+        except (ValueError, TypeError):
+            errors.append(f"Linha {i}: valor inválido para componente letiva: {comp_raw}")
+            continue
+
+        teacher = db.query(Teacher).filter(
+            Teacher.cluster_id == cluster_id,
+            Teacher.name == name,
+        ).first()
+
+        if not teacher:
+            not_found += 1
+            errors.append(f"Linha {i}: professor '{name}' não encontrado no agrupamento")
+            continue
+
+        teacher.teaching_component = comp
+        updated += 1
+
+    db.commit()
+    return {"updated": updated, "not_found": not_found, "errors": errors}
+
+
 @router.post("/curriculum/stream")
 def import_curriculum_stream(
     file: UploadFile = File(...),

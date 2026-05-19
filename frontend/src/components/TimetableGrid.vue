@@ -94,7 +94,7 @@
             </q-item>
           </q-list>
 
-          <q-banner class="bg-orange-1 q-mt-md" rounded dense>
+          <q-banner :class="$q.dark.isActive ? 'bg-orange-9' : 'bg-orange-1'" class="q-mt-md" rounded dense>
             <template #avatar><q-icon name="info" color="orange" /></template>
             Ao forçar a mudança, o horário ficará com um conflito visível. Pode corrigir
             movendo as outras aulas para outros tempos.
