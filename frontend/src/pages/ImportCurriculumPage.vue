@@ -34,12 +34,13 @@
           <q-select
             v-model="selectedSchool"
             :options="schoolOptions"
-            label="Escola *"
+            label="Escola (opcional)"
             outlined
             emit-value
             map-options
+            clearable
             :disable="!selectedCluster || loading"
-            :rules="[(v) => !!v || 'Obrigatório']"
+            :hint="schoolHint"
           />
 
           <q-select
@@ -86,7 +87,9 @@
                   :text-color="isPrefixAllSelected(p.prefix) ? 'white' : ($q.dark.isActive ? 'white' : 'dark')"
                   @click="togglePrefix(p.prefix)"
                 >
-                  {{ p.prefix }} ({{ p.count }})
+                  {{ p.prefix }}
+                  <span v-if="prefixSchoolName(p.prefix)" class="text-caption q-ml-xs opacity-75">{{ prefixSchoolName(p.prefix) }}</span>
+                  ({{ p.count }})
                 </q-chip>
               </div>
             </div>
@@ -179,7 +182,7 @@
           icon="upload"
           label="Importar"
           :loading="loading"
-          :disable="!selectedFile || !selectedCluster || !selectedSchool || !selectedYear || selectedClasses.size === 0"
+          :disable="!selectedFile || !selectedCluster || !selectedYear || selectedClasses.size === 0"
           @click="upload"
         />
       </q-card-actions>
@@ -227,16 +230,38 @@ const selectedClasses = ref(new Set<string>())
 const clusterOptions = computed(() =>
   clustersStore.clusters.map((c) => ({ label: c.name, value: c.id }))
 )
+const clusterSchools = computed(() =>
+  schoolsStore.schools.filter((s) => !selectedCluster.value || s.cluster_id === selectedCluster.value)
+)
 const schoolOptions = computed(() =>
-  schoolsStore.schools
-    .filter((s) => !selectedCluster.value || s.cluster_id === selectedCluster.value)
-    .map((s) => ({ label: s.name, value: s.id }))
+  clusterSchools.value.map((s) => ({ label: s.name, value: s.id }))
 )
 const yearOptions = computed(() =>
   yearsStore.years
     .filter((y) => !selectedCluster.value || y.cluster_id === selectedCluster.value)
     .map((y) => ({ label: y.name, value: y.id }))
 )
+
+const detectedSchoolNames = computed(() => {
+  if (!parsedClasses.value.length) return []
+  const schools = clusterSchools.value
+  const names: string[] = []
+  const seen = new Set<number>()
+  for (const p of uniquePrefixes.value) {
+    const school = schools.find((s) => s.code?.toUpperCase() === p.prefix)
+    if (school && !seen.has(school.id)) {
+      seen.add(school.id)
+      names.push(school.name)
+    }
+  }
+  return names
+})
+
+const schoolHint = computed(() => {
+  if (!parsedClasses.value.length) return 'Se não selecionada, a escola é detetada automaticamente pelo código da turma (ex: PN, VG)'
+  if (detectedSchoolNames.value.length === 0) return 'Nenhuma escola detetada automaticamente — selecione manualmente'
+  return `Detetada automaticamente: ${detectedSchoolNames.value.join(', ')}`
+})
 
 const uniquePrefixes = computed(() => {
   const map = new Map<string, number>()
@@ -257,6 +282,11 @@ const uniqueYears = computed(() => {
     .map(([year, count]) => ({ year, count }))
     .sort((a, b) => a.year - b.year)
 })
+
+function prefixSchoolName(prefix: string): string {
+  const school = clusterSchools.value.find((s) => s.code?.toUpperCase() === prefix)
+  return school ? school.name : ''
+}
 
 function isPrefixAllSelected(prefix: string) {
   return parsedClasses.value
@@ -368,6 +398,21 @@ async function parseFile(file: File) {
 
   parsedClasses.value = classes
   selectedClasses.value = new Set(classes.map((c) => c.name))
+
+  // Auto-fill school if all classes share a single matched school
+  const schools = clusterSchools.value
+  const matchedSchoolIds = new Set(
+    [...new Set(classes.map((c) => c.prefix))]
+      .map((prefix) => schools.find((s) => s.code?.toUpperCase() === prefix)?.id)
+      .filter((id): id is number => id !== undefined)
+  )
+  if (matchedSchoolIds.size === 1) {
+    const [schoolId] = matchedSchoolIds
+    if (!selectedSchool.value) selectedSchool.value = schoolId
+  } else if (matchedSchoolIds.size > 1) {
+    // Multiple schools detected — clear any manual selection so backend uses auto-detection
+    selectedSchool.value = null
+  }
 }
 
 function onFileSelected(file: File | null) {
@@ -402,7 +447,7 @@ async function upload() {
   const fd = new FormData()
   fd.append('file', selectedFile.value)
   fd.append('cluster_id', String(selectedCluster.value))
-  fd.append('school_id', String(selectedSchool.value))
+  if (selectedSchool.value) fd.append('school_id', String(selectedSchool.value))
   fd.append('academic_year_id', String(selectedYear.value))
 
   if (parsedClasses.value.length > 0 && selectedClasses.value.size < parsedClasses.value.length) {

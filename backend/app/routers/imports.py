@@ -3,7 +3,7 @@ import io
 import os
 import json
 import base64
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
@@ -225,20 +225,38 @@ def import_rooms(
     return {"created": created, "skipped": skipped, "errors": errors}
 
 
+def _resolve_school_id(turma: str, school_id: Optional[int], schools_by_code: Dict[str, Any]) -> Optional[int]:
+    if school_id is not None:
+        return school_id
+    parts = turma.strip().split()
+    if len(parts) >= 2:
+        prefix = parts[-1].upper()
+        school = schools_by_code.get(prefix)
+        if school:
+            return school.id
+    return None
+
+
 def _process_curriculum_row(
     db: Session,
     row: Dict[str, Any],
     row_num: int,
     cluster_id: int,
-    school_id: int,
+    school_id: Optional[int],
     academic_year_id: int,
     stats: Dict[str, int],
     errors: List[str],
+    schools_by_code: Optional[Dict[str, Any]] = None,
 ) -> None:
     turma = get_col(row, "turma", "Turma") or ""
     disciplina = get_col(row, "disciplina", "Disciplina") or ""
     if not turma or not disciplina:
         errors.append(f"Linha {row_num}: turma e disciplina obrigatórias")
+        return
+
+    effective_school_id = _resolve_school_id(turma, school_id, schools_by_code or {})
+    if effective_school_id is None:
+        errors.append(f"Linha {row_num}: escola não encontrada para turma '{turma}' (verifique o código da escola no agrupamento)")
         return
 
     ano_raw = get_col(row, "ano", "Ano")
@@ -262,13 +280,13 @@ def _process_curriculum_row(
     articulado_note = articulado_raw if articulado_raw and not is_articulated else None
 
     cls = db.query(Class).filter(
-        Class.school_id == school_id,
+        Class.school_id == effective_school_id,
         Class.academic_year_id == academic_year_id,
         Class.name == turma,
     ).first()
     if not cls:
         cls = Class(
-            school_id=school_id,
+            school_id=effective_school_id,
             academic_year_id=academic_year_id,
             name=turma,
             year_level=year_level,
@@ -317,12 +335,12 @@ def _process_curriculum_row(
 
         if not db.query(TeacherSchoolAssignment).filter(
             TeacherSchoolAssignment.teacher_id == teacher.id,
-            TeacherSchoolAssignment.school_id == school_id,
+            TeacherSchoolAssignment.school_id == effective_school_id,
             TeacherSchoolAssignment.academic_year_id == academic_year_id,
         ).first():
             db.add(TeacherSchoolAssignment(
                 teacher_id=teacher.id,
-                school_id=school_id,
+                school_id=effective_school_id,
                 academic_year_id=academic_year_id,
                 travel_time_minutes=0,
             ))
@@ -411,19 +429,31 @@ def import_teaching_components(
 def import_curriculum_stream(
     file: UploadFile = File(...),
     cluster_id: int = Form(...),
-    school_id: int = Form(...),
+    school_id: Optional[int] = Form(default=None),
     academic_year_id: int = Form(...),
     filter_classes: str = Form(default=""),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
-    """Stream curriculum import progress as NDJSON. Commits each row individually for resumability."""
-    school = db.query(School).filter(School.id == school_id).first()
-    if not school:
-        raise HTTPException(status_code=404, detail="Escola não encontrada")
+    """Stream curriculum import progress as NDJSON. Commits each row individually for resumability.
+    school_id is optional: if omitted, the school is resolved per row from the class name suffix
+    (e.g. '5 A PN' matches a school with code 'PN' in the cluster).
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Agrupamento não encontrado")
+
+    if school_id is not None:
+        school = db.query(School).filter(School.id == school_id).first()
+        if not school:
+            raise HTTPException(status_code=404, detail="Escola não encontrada")
+
+    # Pre-load schools by code so each row can auto-resolve its school from the class name suffix
+    schools_by_code: Dict[str, Any] = {}
+    if school_id is None:
+        for s in db.query(School).filter(School.cluster_id == cluster_id).all():
+            if s.code:
+                schools_by_code[s.code.upper()] = s
 
     rows = parse_upload(file)
 
@@ -443,7 +473,7 @@ def import_curriculum_stream(
         for i, row in enumerate(rows):
             row_num = i + 2
             try:
-                _process_curriculum_row(db, row, row_num, cluster_id, school_id, academic_year_id, stats, errors)
+                _process_curriculum_row(db, row, row_num, cluster_id, school_id, academic_year_id, stats, errors, schools_by_code)
                 db.commit()
             except Exception as exc:
                 db.rollback()
