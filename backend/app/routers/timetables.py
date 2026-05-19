@@ -4,7 +4,10 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 from app.database import get_db
-from app.models.models import Timetable, ScheduledLesson, CurriculumEntry, Teacher, Room
+from app.models.models import (
+    Timetable, ScheduledLesson, CurriculumEntry, Teacher, Room,
+    Class, TimeSlotConfig, SchedulingRules, TeacherSchoolAssignment, School
+)
 from app.schemas.schemas import (
     TimetableCreate, TimetableUpdate, TimetableResponse,
     TimetableDetail, ScheduledLessonDetail
@@ -48,6 +51,89 @@ def build_lesson_detail(lesson: ScheduledLesson) -> dict:
         "teacher_name": lesson.teacher.name if lesson.teacher else None,
         "room_name": lesson.room.name if lesson.room else None,
     }
+
+
+@router.get("/preflight-check")
+def preflight_check(academic_year_id: int, cluster_id: int, db: Session = Depends(get_db)):
+    errors, warnings, info = [], [], []
+
+    # 1. Time slots
+    slots = db.query(TimeSlotConfig).filter(TimeSlotConfig.academic_year_id == academic_year_id).count()
+    if slots == 0:
+        errors.append({"message": "Sem tempos letivos configurados para este ano letivo.", "fix": "/time-slots"})
+    else:
+        info.append({"message": f"{slots} tempos letivos configurados."})
+
+    # 2. Scheduling rules
+    rules = db.query(SchedulingRules).filter(
+        SchedulingRules.cluster_id == cluster_id,
+        SchedulingRules.academic_year_id == academic_year_id
+    ).first()
+    if not rules:
+        warnings.append({"message": "Sem regras de horário definidas — serão usados valores por omissão.", "fix": "/scheduling-rules"})
+
+    # 3. Schools and classes in cluster
+    school_ids = [s.id for s in db.query(School).filter(School.cluster_id == cluster_id).all()]
+    if not school_ids:
+        errors.append({"message": "Sem escolas no agrupamento.", "fix": "/schools"})
+        return {"errors": errors, "warnings": warnings, "info": info, "can_generate": False}
+
+    classes = db.query(Class).filter(
+        Class.school_id.in_(school_ids),
+        Class.academic_year_id == academic_year_id
+    ).all()
+    class_ids = [c.id for c in classes]
+    if not class_ids:
+        errors.append({"message": "Sem turmas para este ano letivo.", "fix": "/classes"})
+        return {"errors": errors, "warnings": warnings, "info": info, "can_generate": False}
+    info.append({"message": f"{len(classes)} turmas encontradas."})
+
+    # 4. Curriculum entries
+    all_entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id.in_(class_ids)).all()
+    if not all_entries:
+        errors.append({"message": "Sem entradas curriculares para estas turmas.", "fix": "/import-curriculum"})
+        return {"errors": errors, "warnings": warnings, "info": info, "can_generate": False}
+    info.append({"message": f"{len(all_entries)} entradas curriculares no total."})
+
+    # 5. Entries without teacher
+    no_teacher = [e for e in all_entries if not e.teacher_id]
+    with_teacher = [e for e in all_entries if e.teacher_id]
+    if not with_teacher:
+        errors.append({
+            "message": "Nenhuma entrada tem professor atribuído — impossível gerar horários.",
+            "fix": "/service-distribution",
+            "items": [f"{e.class_.name} · {e.subject.name if e.subject else '?'}" for e in no_teacher[:20]]
+        })
+    elif no_teacher:
+        warnings.append({
+            "message": f"{len(no_teacher)} entrada(s) sem professor — serão excluídas da geração.",
+            "fix": "/teacher-assignment",
+            "items": [f"{e.class_.name} · {e.subject.name if e.subject else '?'}" for e in no_teacher[:20]]
+        })
+    else:
+        info.append({"message": f"Todos os {len(with_teacher)} entradas têm professor atribuído."})
+
+    # 6. Teachers without school assignment
+    teacher_ids = list({e.teacher_id for e in with_teacher})
+    teachers_no_school = []
+    for tid in teacher_ids:
+        has_school = db.query(TeacherSchoolAssignment).filter(
+            TeacherSchoolAssignment.teacher_id == tid,
+            TeacherSchoolAssignment.academic_year_id == academic_year_id
+        ).first()
+        if not has_school:
+            t = db.query(Teacher).filter(Teacher.id == tid).first()
+            if t:
+                teachers_no_school.append(t.name)
+    if teachers_no_school:
+        warnings.append({
+            "message": f"{len(teachers_no_school)} professor(es) sem escola atribuída — podem causar problemas no solver.",
+            "fix": "/teachers",
+            "items": teachers_no_school[:20]
+        })
+
+    can_generate = len(errors) == 0
+    return {"errors": errors, "warnings": warnings, "info": info, "can_generate": can_generate}
 
 
 @router.get("", response_model=List[TimetableResponse])

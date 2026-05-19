@@ -2,6 +2,7 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Horários</div>
+      <q-btn color="orange-8" icon="fact_check" label="Verificar dados" @click="openPreflight" class="q-mr-sm" />
       <q-btn color="primary" icon="add" label="Novo" @click="openCreate" />
     </div>
 
@@ -87,6 +88,82 @@
 
     <GenerateTimetableDialog v-model="showGenerateDialog" :timetable-id="generateTargetId" @started="onGenerationStarted" />
 
+    <!-- Preflight check dialog -->
+    <q-dialog v-model="showPreflight">
+      <q-card style="min-width: 560px; max-width: 780px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6"><q-icon name="fact_check" class="q-mr-sm" color="orange-8" />Verificação antes de gerar</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section v-if="preflightLoading" class="text-center q-py-xl">
+          <q-spinner size="40px" color="primary" />
+          <div class="q-mt-sm text-grey-6">A verificar dados...</div>
+        </q-card-section>
+
+        <q-card-section v-else-if="preflightResult">
+          <!-- Result summary badge -->
+          <q-banner rounded :class="preflightResult.can_generate ? 'bg-positive text-white' : 'bg-negative text-white'" class="q-mb-md">
+            <template #avatar><q-icon :name="preflightResult.can_generate ? 'check_circle' : 'cancel'" /></template>
+            <strong>{{ preflightResult.can_generate ? 'Dados prontos para gerar' : 'Não é possível gerar — corrija os erros abaixo' }}</strong>
+            <span v-if="preflightResult.warnings.length && preflightResult.can_generate">
+              (com {{ preflightResult.warnings.length }} aviso(s))
+            </span>
+          </q-banner>
+
+          <!-- Errors -->
+          <template v-if="preflightResult.errors.length">
+            <div class="text-subtitle2 text-negative q-mb-xs"><q-icon name="error" class="q-mr-xs" />Erros (impedem a geração)</div>
+            <q-list bordered separator class="q-mb-md rounded-borders">
+              <q-item v-for="(e, i) in preflightResult.errors" :key="i">
+                <q-item-section avatar><q-icon name="cancel" color="negative" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ e.message }}</q-item-label>
+                  <q-item-label v-if="e.items?.length" caption>
+                    {{ e.items.slice(0,5).join(' · ') }}{{ e.items.length > 5 ? ` + ${e.items.length - 5} mais` : '' }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="e.fix">
+                  <q-btn flat size="sm" color="negative" icon="open_in_new" label="Corrigir" :to="e.fix" v-close-popup />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </template>
+
+          <!-- Warnings -->
+          <template v-if="preflightResult.warnings.length">
+            <div class="text-subtitle2 text-warning q-mb-xs"><q-icon name="warning" class="q-mr-xs" />Avisos (geração possível mas incompleta)</div>
+            <q-list bordered separator class="q-mb-md rounded-borders">
+              <q-item v-for="(w, i) in preflightResult.warnings" :key="i">
+                <q-item-section avatar><q-icon name="warning" color="warning" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ w.message }}</q-item-label>
+                  <q-item-label v-if="w.items?.length" caption>
+                    {{ w.items.slice(0,5).join(' · ') }}{{ w.items.length > 5 ? ` + ${w.items.length - 5} mais` : '' }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="w.fix">
+                  <q-btn flat size="sm" color="warning" icon="open_in_new" label="Corrigir" :to="w.fix" v-close-popup />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </template>
+
+          <!-- Info -->
+          <template v-if="preflightResult.info.length">
+            <div class="text-subtitle2 text-grey-7 q-mb-xs"><q-icon name="info" class="q-mr-xs" />Informação</div>
+            <q-list bordered separator class="q-mb-md rounded-borders">
+              <q-item v-for="(inf, i) in preflightResult.info" :key="i">
+                <q-item-section avatar><q-icon name="check" color="positive" /></q-item-section>
+                <q-item-section><q-item-label>{{ inf.message }}</q-item-label></q-item-section>
+              </q-item>
+            </q-list>
+          </template>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- Generation log dialog -->
     <q-dialog v-model="showLogDialog" @hide="stopLogPolling">
       <q-card style="min-width: 560px; max-width: 720px">
@@ -112,11 +189,50 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useTimetablesStore } from 'stores/timetables'
 import { useAcademicYearsStore } from 'stores/academicYears'
+import { useClustersStore } from 'stores/clusters'
 import GenerateTimetableDialog from 'components/GenerateTimetableDialog.vue'
+import { api } from 'boot/axios'
 
 const $q = useQuasar()
 const store = useTimetablesStore()
 const yearsStore = useAcademicYearsStore()
+const clustersStore = useClustersStore()
+
+// Preflight check
+type PreflightItem = { message: string; fix?: string; items?: string[] }
+type PreflightResult = { errors: PreflightItem[]; warnings: PreflightItem[]; info: PreflightItem[]; can_generate: boolean }
+const showPreflight = ref(false)
+const preflightLoading = ref(false)
+const preflightResult = ref<PreflightResult | null>(null)
+
+async function openPreflight() {
+  showPreflight.value = true
+  preflightLoading.value = true
+  preflightResult.value = null
+  const activeYear = yearsStore.years.find((y) => y.is_active) ?? yearsStore.years[0]
+  const clusterId = clustersStore.clusters[0]?.id
+  if (!activeYear || !clusterId) {
+    preflightResult.value = {
+      errors: [{ message: 'Sem ano letivo ativo ou agrupamento configurado.' }],
+      warnings: [], info: [], can_generate: false
+    }
+    preflightLoading.value = false
+    return
+  }
+  try {
+    const { data } = await api.get('/timetables/preflight-check', {
+      params: { academic_year_id: activeYear.id, cluster_id: clusterId }
+    })
+    preflightResult.value = data
+  } catch {
+    preflightResult.value = {
+      errors: [{ message: 'Erro ao verificar dados. Tente novamente.' }],
+      warnings: [], info: [], can_generate: false
+    }
+  } finally {
+    preflightLoading.value = false
+  }
+}
 
 const anyGenerating = computed(() => store.timetables.some((t) => t.status === 'generating'))
 
@@ -210,7 +326,7 @@ function statusLabel(s: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([store.fetchAll(), yearsStore.fetchAll()])
+  await Promise.all([store.fetchAll(), yearsStore.fetchAll(), clustersStore.fetchAll()])
   if (anyGenerating.value) startGlobalPolling()
 })
 
