@@ -65,6 +65,35 @@
             <template #prepend><q-icon name="attach_file" /></template>
           </q-file>
 
+          <!-- Parse feedback -->
+          <div v-if="parseStatus === 'parsing'" class="row items-center q-gutter-sm text-grey-6">
+            <q-spinner size="sm" />
+            <span class="text-caption">A analisar ficheiro…</span>
+          </div>
+
+          <q-banner v-if="parseStatus === 'no-turma-col'" rounded dense
+            :class="$q.dark.isActive ? 'bg-red-9' : 'bg-red-1'">
+            <template #avatar><q-icon name="error" color="negative" /></template>
+            <div class="text-weight-medium">Coluna <code>turma</code> não encontrada</div>
+            <div class="text-caption q-mt-xs">
+              Verifique se o ficheiro tem as colunas: <code>ano</code>, <code>turma</code>, <code>disciplina</code>, <code>horas semana</code>, <code>professor</code>, <code>articulado</code>.<br/>
+              O separador deve ser <strong>ponto e vírgula (;)</strong> ou <strong>vírgula (,)</strong>.
+            </div>
+          </q-banner>
+
+          <q-banner v-if="parseStatus === 'no-classes'" rounded dense
+            :class="$q.dark.isActive ? 'bg-orange-9' : 'bg-orange-1'">
+            <template #avatar><q-icon name="warning" color="warning" /></template>
+            Nenhuma turma encontrada no ficheiro. Confirme que o ficheiro tem dados a partir da segunda linha.
+          </q-banner>
+
+          <q-banner v-if="parseStatus === 'ok'" rounded dense
+            :class="$q.dark.isActive ? 'bg-green-9' : 'bg-green-1'">
+            <template #avatar><q-icon name="check_circle" color="positive" /></template>
+            <strong>{{ parsedClasses.length }} turmas</strong> encontradas —
+            selecione quais importar em baixo.
+          </q-banner>
+
           <!-- Class filter — shown after CSV is parsed -->
           <div v-if="parsedClasses.length > 0" class="q-mt-sm">
             <div class="text-subtitle2 q-mb-sm">
@@ -176,13 +205,19 @@
         </div>
       </q-card-section>
 
-      <q-card-actions align="right" class="q-px-md q-pb-md">
+      <q-card-actions class="q-px-md q-pb-md column items-end q-gutter-xs">
+        <div v-if="!loading && validationErrors.length" class="full-width">
+          <div v-for="e in validationErrors" :key="e" class="text-caption text-negative row items-center q-gutter-xs">
+            <q-icon name="cancel" size="xs" />
+            <span>{{ e }}</span>
+          </div>
+        </div>
         <q-btn
           color="primary"
           icon="upload"
           label="Importar"
           :loading="loading"
-          :disable="!selectedFile || !selectedCluster || !selectedYear || selectedClasses.size === 0"
+          :disable="validationErrors.length > 0"
           @click="upload"
         />
       </q-card-actions>
@@ -226,6 +261,7 @@ interface ParsedClass {
 
 const parsedClasses = ref<ParsedClass[]>([])
 const selectedClasses = ref(new Set<string>())
+const parseStatus = ref<'idle' | 'parsing' | 'ok' | 'no-classes' | 'no-turma-col'>('idle')
 
 const clusterOptions = computed(() =>
   clustersStore.clusters.map((c) => ({ label: c.name, value: c.id }))
@@ -362,30 +398,39 @@ function parseCsvLine(line: string, sep: string): string[] {
 async function parseFile(file: File) {
   parsedClasses.value = []
   selectedClasses.value = new Set()
+  parseStatus.value = 'parsing'
 
   const text = await file.text()
-  const lines = text.split(/\r?\n/).filter((l) => l.trim())
-  if (lines.length < 2) return
+  const lines = text.split(/\r?\n/)
+  const nonEmpty = lines.filter((l) => l.replace(/;/g, '').replace(/,/g, '').trim())
+  if (nonEmpty.length < 2) {
+    parseStatus.value = 'no-turma-col'
+    return
+  }
 
-  const firstLine = lines[0]
+  const firstLine = nonEmpty[0]
   const sep = firstLine.split(';').length > firstLine.split(',').length ? ';' : ','
 
   const headers = parseCsvLine(firstLine, sep).map((h) =>
-    h.replace(/^﻿/, '').toLowerCase()
+    h.replace(/^﻿/, '').trim().toLowerCase()
   )
   const turmaIdx = headers.findIndex((h) => h === 'turma')
   const anoIdx = headers.findIndex((h) => h === 'ano')
 
-  if (turmaIdx < 0) return
+  if (turmaIdx < 0) {
+    parseStatus.value = 'no-turma-col'
+    return
+  }
 
   const classMap = new Map<string, ParsedClass>()
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i], sep)
+  for (let i = 1; i < nonEmpty.length; i++) {
+    const cols = parseCsvLine(nonEmpty[i], sep)
     const turma = (cols[turmaIdx] ?? '').trim()
     if (!turma) continue
     if (!classMap.has(turma)) {
       const anoRaw = anoIdx >= 0 ? (cols[anoIdx] ?? '') : ''
-      const yearLevel = parseInt(anoRaw) || 0
+      // "5 Ano" or "5" → parseInt gets leading digits
+      const yearLevel = parseInt(anoRaw.trim()) || 0
       const prefix = extractPrefix(turma)
       classMap.set(turma, { name: turma, yearLevel, prefix })
     }
@@ -396,10 +441,16 @@ async function parseFile(file: File) {
     return a.name.localeCompare(b.name)
   })
 
+  if (classes.length === 0) {
+    parseStatus.value = 'no-classes'
+    return
+  }
+
   parsedClasses.value = classes
   selectedClasses.value = new Set(classes.map((c) => c.name))
+  parseStatus.value = 'ok'
 
-  // Auto-fill school if all classes share a single matched school
+  // Auto-fill school when all classes share a single matched school
   const schools = clusterSchools.value
   const matchedSchoolIds = new Set(
     [...new Set(classes.map((c) => c.prefix))]
@@ -410,7 +461,6 @@ async function parseFile(file: File) {
     const [schoolId] = matchedSchoolIds
     if (!selectedSchool.value) selectedSchool.value = schoolId
   } else if (matchedSchoolIds.size > 1) {
-    // Multiple schools detected — clear any manual selection so backend uses auto-detection
     selectedSchool.value = null
   }
 }
@@ -419,10 +469,23 @@ function onFileSelected(file: File | null) {
   result.value = null
   parsedClasses.value = []
   selectedClasses.value = new Set()
-  if (file && (file.name.endsWith('.csv') || file.name.endsWith('.CSV'))) {
+  parseStatus.value = 'idle'
+  if (file && /\.(csv)$/i.test(file.name)) {
     parseFile(file)
   }
 }
+
+const validationErrors = computed(() => {
+  const errs: string[] = []
+  if (!selectedCluster.value) errs.push('Selecione um agrupamento')
+  if (!selectedYear.value) errs.push('Selecione o ano letivo')
+  if (!selectedFile.value) errs.push('Selecione um ficheiro CSV ou Excel')
+  else if (parseStatus.value === 'no-turma-col') errs.push('Ficheiro sem coluna "turma" — verifique o formato')
+  else if (parseStatus.value === 'no-classes') errs.push('Nenhuma turma encontrada no ficheiro')
+  else if (parseStatus.value === 'parsing') errs.push('A analisar ficheiro…')
+  else if (selectedClasses.value.size === 0) errs.push('Selecione pelo menos uma turma para importar')
+  return errs
+})
 
 const progressLabel = computed(() =>
   progressTotal.value > 0
@@ -435,7 +498,7 @@ const progressStats = computed(() =>
 )
 
 async function upload() {
-  if (!selectedFile.value || !selectedCluster.value || !selectedSchool.value || !selectedYear.value) return
+  if (!selectedFile.value || !selectedCluster.value || !selectedYear.value) return
   loading.value = true
   progress.value = 0
   progressProcessed.value = 0
