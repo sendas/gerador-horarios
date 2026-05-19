@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.8.0</q-badge>
+      <q-badge class="hero__badge">v1.9.0</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,42 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="dashboard_customize" color="deep-purple-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="deep-purple-7" class="version-badge">v1.9.0</q-badge>
+                  Distribuição de Serviço, Log de Geração e Mais
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="assignment_ind" size="xs" color="deep-purple-7" />
+                  Distribuição de Serviço: vista por professor com turmas, horas letivas e não letivas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="terminal" size="xs" color="deep-purple-7" />
+                  Log de geração em tempo real: mostra progresso do solver passo a passo
+                </div>
+                <div class="feature-item">
+                  <q-icon name="work" size="xs" color="deep-purple-7" />
+                  Componente letiva por professor: configurar entre 14 e 22 horas/semana
+                </div>
+                <div class="feature-item">
+                  <q-icon name="download" size="xs" color="deep-purple-7" />
+                  Exportação corrigida: HTML, Excel, CSV e PDF funcionam com autenticação
+                </div>
+                <div class="feature-item">
+                  <q-icon name="lunch_dining" size="xs" color="deep-purple-7" />
+                  Hora de almoço detetada automaticamente dos tempos letivos configurados por escola/ano
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="healing" color="red-7">
               <template #title>

@@ -36,10 +36,22 @@ def generate_timetable(timetable_id: int, options: dict = None):
         db.close()
 
 
+def _log(db, tt, msg: str):
+    ts = datetime.utcnow().strftime("%H:%M:%S")
+    entry = f"[{ts}] {msg}"
+    tt.generation_log = (tt.generation_log + "\n" + entry) if tt.generation_log else entry
+    tt.updated_at = datetime.utcnow()
+    db.commit()
+
+
 def _run_solver(db, timetable_id: int, options: dict = None):
     tt = db.query(Timetable).filter(Timetable.id == timetable_id).first()
     if not tt:
         raise ValueError(f"Timetable {timetable_id} not found")
+
+    tt.generation_log = None
+    db.commit()
+    _log(db, tt, "A carregar dados do ano letivo...")
 
     academic_year_id = tt.academic_year_id
 
@@ -55,17 +67,26 @@ def _run_solver(db, timetable_id: int, options: dict = None):
 
     # ── Load data ────────────────────────────────────────────────────────────
 
-    # Time slots: {(day, slot_number)} available
-    slot_rows = db.query(TimeSlotConfig).filter(
+    # Time slots: load all (including breaks) to detect lunch
+    all_slot_rows = db.query(TimeSlotConfig).filter(
         TimeSlotConfig.academic_year_id == academic_year_id,
-        TimeSlotConfig.is_break == False  # noqa: E712
     ).all()
+    slot_rows = [r for r in all_slot_rows if not r.is_break]
     if not slot_rows:
         tt.status = "error"
         tt.solver_status = "No time slots configured for this academic year"
         tt.updated_at = datetime.utcnow()
         db.commit()
         return
+
+    # Auto-detect lunch slot: the slot immediately before the first break slot (per day)
+    break_slots = {(r.day_of_week, r.slot_number) for r in all_slot_rows if r.is_break}
+    if break_slots:
+        # find the minimum slot_number that is a break, across all days
+        min_break_slot = min(s for (_, s) in break_slots)
+        detected_lunch = min_break_slot - 1
+        if detected_lunch >= 1 and "lunch_after_slot" not in opts:
+            opts["lunch_after_slot"] = detected_lunch
 
     all_slots = sorted({(r.day_of_week, r.slot_number) for r in slot_rows})
     slots_per_day = defaultdict(list)
@@ -111,11 +132,12 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         tt.status = "error"
         prefix = f"{len(diag_errors)} erro(s) detetado(s) — corrigir antes de gerar:\n"
         tt.solver_status = prefix + "\n".join(f"• {e}" for e in diag_errors)
-        tt.updated_at = datetime.utcnow()
-        db.commit()
+        _log(db, tt, f"Erro: {len(diag_errors)} problema(s) nos dados — geração cancelada.")
         logger.error("Timetable %d: %d erros de dados:\n%s",
                      timetable_id, len(diag_errors), "\n".join(diag_errors))
         return  # existing lessons are preserved
+
+    _log(db, tt, f"Dados carregados: {len(entries)} entradas curriculares, {len(entry_teachers)} com professor atribuído.")
 
     # Teacher availability: blocked slots {teacher_id: set of (day, slot)}
     blocked: dict[int, set] = defaultdict(set)
@@ -248,6 +270,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         "Timetable %d: %d turmas, %d professores, %d tempos/dia, %d ocorrências, limite=%ds",
         timetable_id, n_classes, n_teachers, slots_per_day_count, len(occurrences), max_time,
     )
+    _log(db, tt, f"{n_classes} turmas · {n_teachers} professores · {len(occurrences)} ocorrências · {slots_per_day_count} tempos/dia")
 
     # Auto-adjust max_per_day_class when students_start_slot_1 is active and there are
     # more classes than teachers. By pigeonhole, with N classes and T teachers (N>T),
@@ -713,6 +736,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         "Timetable %d: a resolver modelo CP-SAT (%d BoolVars, limite=%ds, workers=4)…",
         timetable_id, n_bool_vars, max_time,
     )
+    _log(db, tt, f"Modelo criado: {n_bool_vars} variáveis booleanas. A resolver... (limite: {max_time}s)")
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(max_time)
@@ -727,6 +751,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         solver.WallTime(),
         solver.ObjectiveValue() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else "n/a",
     )
+    _log(db, tt, f"Solver: {solver.StatusName(status)} em {solver.WallTime():.1f}s")
 
     # ── Persist results ───────────────────────────────────────────────────────
     # Only wipe existing lessons when we have a new valid solution to replace them.
@@ -774,6 +799,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         db.add_all(lessons_to_add)
         tt.status = "generated"
         tt.solver_status = solver.StatusName(status)
+        _log(db, tt, f"Completo: {len(lessons_to_add)} aulas agendadas.")
     else:
         tt.status = "error"
         status_name = solver.StatusName(status)

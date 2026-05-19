@@ -131,16 +131,26 @@ async function loadLessons() {
   }
 }
 
-function exportFile(type: 'html' | 'excel' | 'csv' | 'pdf') {
+async function exportFile(type: 'html' | 'excel' | 'csv' | 'pdf') {
   if (!timetable.value) return
+  const exportType = type === 'pdf' ? 'html' : type
+  const url = `/api/v1/timetables/${timetable.value.id}/export/${exportType}?view=${viewMode.value}${selectedEntity.value ? `&entity_id=${selectedEntity.value}` : ''}`
+  const token = localStorage.getItem('token')
+  const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) return
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
   if (type === 'pdf') {
-    const url = `/api/v1/timetables/${timetable.value.id}/export/html?view=${viewMode.value}${selectedEntity.value ? `&entity_id=${selectedEntity.value}` : ''}`
-    const win = window.open(url, '_blank')
+    const win = window.open(blobUrl, '_blank')
     if (win) win.onload = () => win.print()
-    return
+  } else {
+    const ext = type === 'excel' ? 'xlsx' : type
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = `horario_${timetable.value.id}.${ext}`
+    a.click()
+    URL.revokeObjectURL(blobUrl)
   }
-  const url = `/api/v1/timetables/${timetable.value.id}/export/${type}?view=${viewMode.value}${selectedEntity.value ? `&entity_id=${selectedEntity.value}` : ''}`
-  window.open(url, '_blank')
 }
 
 watch(viewMode, () => {

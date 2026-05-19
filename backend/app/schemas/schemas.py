@@ -238,6 +238,7 @@ class TeacherBase(BaseModel):
     max_end_slot: Optional[int] = None
     preferred_shift: Optional[str] = None
     max_consecutive_lessons: Optional[int] = None
+    teaching_component: Optional[int] = None
 
 class TeacherCreate(TeacherBase):
     pass
@@ -251,6 +252,7 @@ class TeacherUpdate(BaseModel):
     max_end_slot: Optional[int] = None
     preferred_shift: Optional[str] = None
     max_consecutive_lessons: Optional[int] = None
+    teaching_component: Optional[int] = None
 
 class TeacherResponse(TeacherBase):
     model_config = ConfigDict(from_attributes=True)
@@ -315,6 +317,7 @@ class TimetableResponse(TimetableBase):
     id: int
     status: str
     solver_status: Optional[str] = None
+    generation_log: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -362,6 +365,7 @@ class TimetableDetail(BaseModel):
     name: str
     status: str
     solver_status: Optional[str] = None
+    generation_log: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     lessons: List[ScheduledLessonDetail] = []

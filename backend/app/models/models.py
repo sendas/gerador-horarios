@@ -1,7 +1,7 @@
 from datetime import datetime, date, time
 from sqlalchemy import (
     Column, Integer, String, Boolean, Float, Date, Time,
-    DateTime, ForeignKey, UniqueConstraint
+    DateTime, ForeignKey, UniqueConstraint, Text
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -179,10 +179,11 @@ class Teacher(Base):
     email = Column(String, unique=True, nullable=True)
     max_daily_lessons = Column(Integer, default=5)
     preferred_free_day = Column(Integer, nullable=True)  # 0-4 Mon-Fri
-    min_start_slot = Column(Integer, nullable=True)   # earliest slot_number teacher can start
-    max_end_slot = Column(Integer, nullable=True)     # latest slot_number teacher can end
+    min_start_slot = Column(Integer, nullable=True)
+    max_end_slot = Column(Integer, nullable=True)
     preferred_shift = Column(String, nullable=True)   # 'morning' | 'afternoon' | None
-    max_consecutive_lessons = Column(Integer, nullable=True)  # override global rule
+    max_consecutive_lessons = Column(Integer, nullable=True)
+    teaching_component = Column(Integer, nullable=True)  # letivas/semana configuradas (14–22)
 
     cluster = relationship("Cluster", back_populates="teachers")
     school_assignments = relationship("TeacherSchoolAssignment", back_populates="teacher")
@@ -241,6 +242,7 @@ class Timetable(Base):
     name = Column(String, nullable=False)
     status = Column(String, default="draft")  # draft/generating/generated/error
     solver_status = Column(String, nullable=True)
+    generation_log = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

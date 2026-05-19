@@ -120,6 +120,11 @@
           <q-item-section>Horários</q-item-section>
         </q-item>
 
+        <q-item clickable v-ripple :to="'/service-distribution'">
+          <q-item-section avatar><q-icon name="assignment_ind" color="cyan-8" /></q-item-section>
+          <q-item-section>Distribuição de Serviço</q-item-section>
+        </q-item>
+
         <template v-if="auth.isAdmin">
           <q-separator />
           <q-item-label header caption>Administração</q-item-label>

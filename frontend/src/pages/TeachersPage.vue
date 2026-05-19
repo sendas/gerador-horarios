@@ -88,6 +88,17 @@
               clearable
               hint="Deixa vazio para usar a regra global"
             />
+            <q-separator class="q-my-sm" />
+            <div class="text-caption text-grey-6 q-mb-sm">Componente letiva</div>
+            <q-input
+              v-model.number="form.teaching_component"
+              label="Horas letivas/semana"
+              type="number"
+              min="14"
+              max="22"
+              clearable
+              hint="Entre 14 e 22 horas letivas por semana"
+            />
             <div class="row justify-end q-mt-md q-gutter-sm">
               <q-btn flat label="Cancelar" v-close-popup />
               <q-btn type="submit" color="primary" :label="editing ? 'Guardar' : 'Criar'" />
@@ -234,6 +245,7 @@ const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
   { name: 'email', label: 'Email', field: 'email', align: 'left' as const },
+  { name: 'teaching_component', label: 'Comp. Letiva', field: 'teaching_component', align: 'center' as const },
   { name: 'max_daily_lessons', label: 'Máx/dia', field: 'max_daily_lessons', align: 'center' as const },
   { name: 'preferred_free_day', label: 'Dia livre', field: 'preferred_free_day', align: 'center' as const },
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
@@ -256,6 +268,7 @@ const form = ref({
   max_end_slot: null as number | null,
   preferred_shift: null as string | null,
   max_consecutive_lessons: null as number | null,
+  teaching_component: null as number | null,
 })
 
 const clusterOptions = computed(() => clustersStore.clusters.map((c) => ({ label: c.name, value: c.id })))
@@ -319,6 +332,7 @@ function openCreate() {
     max_end_slot: null,
     preferred_shift: null,
     max_consecutive_lessons: null,
+    teaching_component: null,
   }
   dialog.value = true
 }
@@ -335,6 +349,7 @@ function openEdit(row: Teacher) {
     max_end_slot: row.max_end_slot ?? null,
     preferred_shift: row.preferred_shift ?? null,
     max_consecutive_lessons: row.max_consecutive_lessons ?? null,
+    teaching_component: row.teaching_component ?? null,
   }
   dialog.value = true
 }

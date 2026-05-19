@@ -37,6 +37,11 @@
             <q-btn unelevated size="sm" color="primary" icon="table_chart" label="Ver Horário"
               :to="`/timetables/${props.row.id}`"
             />
+            <q-btn
+              v-if="props.row.status === 'generating' || props.row.generation_log"
+              unelevated size="sm" color="indigo-6" icon="terminal" label="Log"
+              @click="openLog(props.row)"
+            />
             <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar"
               @click="confirmDelete(props.row)"
             />
@@ -61,12 +66,30 @@
       </q-card>
     </q-dialog>
 
-    <GenerateTimetableDialog v-model="showGenerateDialog" :timetable-id="generateTargetId" @started="load()" />
+    <GenerateTimetableDialog v-model="showGenerateDialog" :timetable-id="generateTargetId" @started="onGenerationStarted" />
+
+    <!-- Generation log dialog -->
+    <q-dialog v-model="showLogDialog" @hide="stopLogPolling">
+      <q-card style="min-width: 560px; max-width: 720px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            <q-icon name="terminal" class="q-mr-sm" />
+            Log de Geração
+            <q-spinner v-if="logTimetable?.status === 'generating'" size="18px" color="primary" class="q-ml-sm" />
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <pre class="log-output">{{ logContent || '(sem log disponível)' }}</pre>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useTimetablesStore } from 'stores/timetables'
 import { useAcademicYearsStore } from 'stores/academicYears'
@@ -76,8 +99,46 @@ const $q = useQuasar()
 const store = useTimetablesStore()
 const yearsStore = useAcademicYearsStore()
 
+const showLogDialog = ref(false)
+const logTimetable = ref<{ id: number; status: string; generation_log?: string | null } | null>(null)
+const logContent = ref('')
+let logPollInterval: ReturnType<typeof setInterval> | null = null
+
 const showGenerateDialog = ref(false)
 const generateTargetId = ref<number | null>(null)
+
+function openLog(row: { id: number; status: string; generation_log?: string | null }) {
+  logTimetable.value = row
+  logContent.value = row.generation_log || ''
+  showLogDialog.value = true
+  if (row.status === 'generating') {
+    startLogPolling(row.id)
+  }
+}
+
+function startLogPolling(id: number) {
+  stopLogPolling()
+  logPollInterval = setInterval(async () => {
+    await store.fetchAll()
+    const updated = store.timetables.find((t) => t.id === id)
+    if (updated) {
+      logTimetable.value = updated
+      logContent.value = updated.generation_log || ''
+      if (updated.status !== 'generating') {
+        stopLogPolling()
+      }
+    }
+  }, 3000)
+}
+
+function stopLogPolling() {
+  if (logPollInterval) {
+    clearInterval(logPollInterval)
+    logPollInterval = null
+  }
+}
+
+onUnmounted(stopLogPolling)
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
@@ -107,6 +168,14 @@ onMounted(async () => {
 
 async function load() {
   await store.fetchAll()
+}
+
+async function onGenerationStarted() {
+  await load()
+  if (generateTargetId.value) {
+    const target = store.timetables.find((t) => t.id === generateTargetId.value)
+    if (target) openLog(target)
+  }
 }
 
 async function create() {
@@ -142,3 +211,18 @@ function confirmDelete(row: { id: number; name: string }) {
   })
 }
 </script>
+
+<style scoped>
+.log-output {
+  font-family: monospace;
+  font-size: 0.8rem;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  min-height: 120px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+</style>

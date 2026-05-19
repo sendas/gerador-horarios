@@ -8,6 +8,7 @@ export interface Timetable {
   name: string
   status: string
   solver_status?: string
+  generation_log?: string | null
   created_at?: string
   updated_at?: string
 }

@@ -22,6 +22,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'teachers', component: () => import('pages/TeachersPage.vue') },
       { path: 'timetables', component: () => import('pages/TimetablesPage.vue') },
       { path: 'timetables/:id', component: () => import('pages/TimetableDetailPage.vue') },
+      { path: 'service-distribution', component: () => import('pages/ServiceDistributionPage.vue') },
       { path: 'non-teaching', component: () => import('pages/NonTeachingPage.vue') },
       { path: 'scheduling-rules', component: () => import('pages/SchedulingRulesPage.vue') },
       { path: 'users', component: () => import('pages/UsersPage.vue'), meta: { requiresAdmin: true } },

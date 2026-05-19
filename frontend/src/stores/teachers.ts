@@ -13,6 +13,7 @@ export interface Teacher {
   max_end_slot?: number | null
   preferred_shift?: string | null
   max_consecutive_lessons?: number | null
+  teaching_component?: number | null
 }
 
 export interface TeacherSchoolAssignment {
