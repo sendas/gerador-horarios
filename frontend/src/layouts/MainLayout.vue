@@ -125,14 +125,19 @@
         <q-separator />
         <q-item-label header caption>Horários</q-item-label>
 
+        <q-item clickable v-ripple :to="'/service-distribution'">
+          <q-item-section avatar><q-icon name="assignment_ind" color="teal-8" /></q-item-section>
+          <q-item-section>Distribuição de Serviço</q-item-section>
+        </q-item>
+
         <q-item clickable v-ripple :to="'/timetables'">
           <q-item-section avatar><q-icon name="table_chart" color="green-8" /></q-item-section>
           <q-item-section>Horários</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple :to="'/service-distribution'">
-          <q-item-section avatar><q-icon name="assignment_ind" color="cyan-8" /></q-item-section>
-          <q-item-section>Distribuição de Serviço</q-item-section>
+        <q-item clickable v-ripple :to="'/service-distribution-report'">
+          <q-item-section avatar><q-icon name="bar_chart" color="cyan-7" /></q-item-section>
+          <q-item-section>Relatório de Serviço</q-item-section>
         </q-item>
 
         <template v-if="auth.isAdmin">
