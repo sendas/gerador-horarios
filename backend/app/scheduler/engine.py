@@ -873,9 +873,11 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     )
     _log(db, tt, f"Modelo criado: {n_bool_vars} variáveis booleanas. A resolver... (limite: {max_time}s)")
 
+    import os
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(max_time)
     solver.parameters.num_workers = 4
+    solver.parameters.max_memory_in_mb = int(os.environ.get("SOLVER_MAX_MEMORY_MB", 512))
 
     status = solver.Solve(model)
 

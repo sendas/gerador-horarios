@@ -13,8 +13,11 @@ services:
       - SECRET_KEY=${SECRET_KEY:-muda-esta-chave-para-algo-secreto-e-longo}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      - SOLVER_MAX_MEMORY_MB=${SOLVER_MAX_MEMORY_MB:-512}
     expose:
       - "8000"
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    memswap_limit: ${BACKEND_MEM_LIMIT:-1g}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -29,6 +32,8 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_PORT:-61100}:80"
+    mem_limit: ${FRONTEND_MEM_LIMIT:-128m}
+    memswap_limit: ${FRONTEND_MEM_LIMIT:-128m}
     depends_on:
       backend:
         condition: service_healthy
