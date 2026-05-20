@@ -604,8 +604,13 @@ async function doUpdateEntry(entry: CurriculumEntry, teacherId: number | null) {
     await api.put(`/classes/curriculum/${entry.id}`, { teacher_id: teacherId })
     entry.teacher_id = teacherId
     entry.teacher_name = teacherId ? teacherName(teacherId) : null
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao guardar' })
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number; data?: { detail?: unknown } } }
+    const status = err?.response?.status ?? '?'
+    const detail = err?.response?.data?.detail
+    const msg = detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : 'Sem detalhe'
+    console.error('[doUpdateEntry] HTTP', status, detail)
+    $q.notify({ type: 'negative', message: `Erro ${status} ao atualizar entrada`, caption: msg, timeout: 8000 })
   }
 }
 
@@ -613,6 +618,7 @@ async function doCreateEntry(cls: SchoolClass) {
   if (!curriculumSubjectId.value || !selectedTeacher.value) return
   try {
     const { data } = await api.post<{ id: number }>(`/classes/${cls.id}/curriculum`, {
+      class_id: cls.id,
       subject_id: curriculumSubjectId.value,
       hours_per_week: defaultHours.value,
       teacher_id: selectedTeacher.value.id,
@@ -630,8 +636,20 @@ async function doCreateEntry(cls: SchoolClass) {
       teacher_id: selectedTeacher.value.id,
       teacher_name: selectedTeacher.value.name,
     }]
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao criar entrada curricular' })
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number; data?: { detail?: unknown } } }
+    const status = err?.response?.status ?? '?'
+    const detail = err?.response?.data?.detail
+    const msg = detail
+      ? (typeof detail === 'string' ? detail : JSON.stringify(detail))
+      : 'Sem detalhe'
+    console.error('[doCreateEntry] HTTP', status, detail)
+    $q.notify({
+      type: 'negative',
+      message: `Erro ${status} ao criar entrada curricular`,
+      caption: msg,
+      timeout: 8000,
+    })
   }
 }
 

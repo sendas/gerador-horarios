@@ -183,6 +183,7 @@ class CurriculumEntryBase(BaseModel):
     paired_entry_id: Optional[int] = None
 
 class CurriculumEntryCreate(CurriculumEntryBase):
+    class_id: Optional[int] = None  # may be supplied via URL path param instead
     teacher_id: Optional[int] = None
 
 class CurriculumEntryUpdate(BaseModel):
