@@ -28,12 +28,12 @@
               <template #title>
                 <span class="version-title">
                   <q-badge color="blue-9" class="version-badge">v1.10.0</q-badge>
-                  Streaming, Botões com Texto e Correções de Modo Escuro
+                  Atribuição de Turmas, Verificação de Dados e Gestão de Horas
                 </span>
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026, 15:00
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026
                 </span>
               </template>
               <div class="feature-list">
@@ -56,6 +56,34 @@
                 <div class="feature-item">
                   <q-icon name="dark_mode" size="xs" color="blue-9" />
                   Correções de modo escuro: banners, chips, tabelas e fundos em todos os menus
+                </div>
+                <div class="feature-item">
+                  <q-icon name="group" size="xs" color="blue-9" />
+                  Página de Atribuição de Professores por Turma: vista centrada na turma, com disciplinas e professores atribuídos, pesquisa por nome, adição e remoção de disciplinas e professores
+                </div>
+                <div class="feature-item">
+                  <q-icon name="fact_check" size="xs" color="blue-9" />
+                  Verificação de dados antes de gerar: botão "Verificar dados" com relatório de erros, avisos e informações, com ligações diretas para corrigir cada problema
+                </div>
+                <div class="feature-item">
+                  <q-icon name="schedule" size="xs" color="blue-9" />
+                  Visibilidade da geração de horários: banner de progresso, linha pulsante, atualização automática a cada 3 segundos e heartbeat de 60 em 60 segundos no log
+                </div>
+                <div class="feature-item">
+                  <q-icon name="tune" size="xs" color="blue-9" />
+                  Gestão de horas na Distribuição de Serviço: definição de horas por escola, seleção múltipla de professores e aplicação de reduções em bloco
+                </div>
+                <div class="feature-item">
+                  <q-icon name="notifications" size="xs" color="blue-9" />
+                  Notificações Pushbullet quando a geração de horários termina (sucesso ou erro)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="memory" size="xs" color="blue-9" />
+                  Limites de memória Docker e do solver para estabilidade em hardware com recursos limitados
+                </div>
+                <div class="feature-item">
+                  <q-icon name="filter_list" size="xs" color="blue-9" />
+                  Filtro de professores por escola na página de Professores
                 </div>
               </div>
             </q-timeline-entry>
