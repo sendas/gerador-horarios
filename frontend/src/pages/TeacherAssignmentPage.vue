@@ -126,17 +126,20 @@
                     </span>
                     <q-select
                       :model-value="null"
-                      :options="filteredTeacherOpts"
+                      :options="teacherOptsForSubject(entry.subject_id)"
                       emit-value map-options
                       dense outlined
                       use-input input-debounce="0"
-                      @filter="filterTeachersFn"
+                      @filter="(val, update) => filterTeachersForSubject(val, update, entry.subject_id)"
                       :placeholder="entry.teacher_id ? 'Substituir professor...' : 'Atribuir professor...'"
                       style="min-width:220px"
                       clearable
                       @update:model-value="(v) => { if (v) assignTeacher(entry, v) }"
                     >
                       <template #prepend><q-icon name="search" size="xs" /></template>
+                      <template #no-option>
+                        <q-item><q-item-section class="text-grey-6 text-caption">Nenhum professor leciona esta disciplina</q-item-section></q-item>
+                      </template>
                     </q-select>
                   </div>
                 </q-item-section>
@@ -231,6 +234,9 @@ const showAddSubject = ref(false)
 const newSubjectId = ref<number | null>(null)
 const newHours = ref(2)
 const newTeacherId = ref<number | null>(null)
+// Per-subject teacher options cache (updated by the filter function)
+const teacherOptsBySubject = ref<Record<number, { label: string; value: number }[]>>({})
+// Teacher options for the "add discipline" dialog (no subject filter)
 const filteredTeacherOpts = ref<{ label: string; value: number }[]>([])
 const availableSubjectOptions = ref<{ label: string; value: number }[]>([])
 
@@ -306,6 +312,24 @@ function toggleSchool(id: number) {
   else selectedSchoolIds.add(id)
 }
 
+// Used by each subject row — filters to teachers who teach that subject
+function teacherOptsForSubject(subjectId: number) {
+  return teacherOptsBySubject.value[subjectId] ?? teachersStore.teachers
+    .filter((t) => t.subject_ids?.includes(subjectId))
+    .map((t) => ({ label: t.name, value: t.id }))
+}
+
+function filterTeachersForSubject(val: string, update: (fn: () => void) => void, subjectId: number) {
+  update(() => {
+    const txt = val.toLowerCase()
+    const opts = teachersStore.teachers
+      .filter((t) => t.subject_ids?.includes(subjectId) && (!txt || t.name.toLowerCase().includes(txt)))
+      .map((t) => ({ label: t.name, value: t.id }))
+    teacherOptsBySubject.value = { ...teacherOptsBySubject.value, [subjectId]: opts }
+  })
+}
+
+// Used by the "add discipline" dialog — no subject filter
 function filterTeachersFn(val: string, update: (fn: () => void) => void) {
   update(() => {
     const txt = val.toLowerCase()
@@ -348,6 +372,7 @@ async function loadClassEntries(classId: number) {
 async function selectClass(classId: number) {
   selectedClassId.value = classId
   filteredTeacherOpts.value = teachersStore.teachers.map((t) => ({ label: t.name, value: t.id }))
+  teacherOptsBySubject.value = {}
   if (!entriesByClassId.value[classId]) {
     await loadClassEntries(classId)
   }

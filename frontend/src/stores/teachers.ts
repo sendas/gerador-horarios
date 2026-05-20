@@ -15,6 +15,7 @@ export interface Teacher {
   max_consecutive_lessons?: number | null
   teaching_component?: number | null
   subject_names?: string[]
+  subject_ids?: number[]
   school_ids?: number[]
   credit_hours?: number | null
 }

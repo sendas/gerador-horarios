@@ -32,6 +32,7 @@ def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
     for t in teachers:
         r = TeacherResponse.model_validate(t)
         r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
+        r.subject_ids = [ts.subject_id for ts in t.teacher_subjects]
         r.school_ids = list({sa.school_id for sa in t.school_assignments})
         result.append(r)
     return result
