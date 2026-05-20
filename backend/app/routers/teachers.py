@@ -22,20 +22,20 @@ class BulkTeacherUpdate(BaseModel):
     credit_hours: Optional[int] = None
 
 
+def _build_response(t: Teacher) -> TeacherResponse:
+    r = TeacherResponse.model_validate(t)
+    r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
+    r.subject_ids = [ts.subject_id for ts in t.teacher_subjects]
+    r.school_ids = list({sa.school_id for sa in t.school_assignments})
+    return r
+
+
 @router.get("", response_model=List[TeacherResponse])
 def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
     q = db.query(Teacher)
     if cluster_id:
         q = q.filter(Teacher.cluster_id == cluster_id)
-    teachers = q.all()
-    result = []
-    for t in teachers:
-        r = TeacherResponse.model_validate(t)
-        r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
-        r.subject_ids = [ts.subject_id for ts in t.teacher_subjects]
-        r.school_ids = list({sa.school_id for sa in t.school_assignments})
-        result.append(r)
-    return result
+    return [_build_response(t) for t in q.all()]
 
 
 @router.put("/bulk-update")
@@ -60,7 +60,7 @@ def create_teacher(data: TeacherCreate, db: Session = Depends(get_db)):
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return obj
+    return _build_response(obj)
 
 
 @router.get("/{id}", response_model=TeacherResponse)
@@ -68,7 +68,7 @@ def get_teacher(id: int, db: Session = Depends(get_db)):
     obj = db.query(Teacher).filter(Teacher.id == id).first()
     if not obj:
         raise HTTPException(status_code=404, detail="Teacher not found")
-    return obj
+    return _build_response(obj)
 
 
 @router.put("/{id}", response_model=TeacherResponse)
@@ -80,7 +80,7 @@ def update_teacher(id: int, data: TeacherUpdate, db: Session = Depends(get_db)):
         setattr(obj, field, value)
     db.commit()
     db.refresh(obj)
-    return obj
+    return _build_response(obj)
 
 
 @router.delete("/{id}", status_code=204)

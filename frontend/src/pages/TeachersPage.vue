@@ -57,11 +57,14 @@
     <!-- Teacher dialog -->
     <q-dialog v-model="dialog">
       <q-card style="min-width: 450px">
-        <q-card-section><div class="text-h6">{{ editing ? 'Editar' : 'Novo' }} Professor</div></q-card-section>
+        <q-card-section class="row items-center">
+          <div class="text-h6">{{ editing ? 'Editar' : 'Novo' }} Professor</div>
+          <q-space /><q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
         <q-card-section>
-          <q-form @submit="save">
-            <q-select v-model="form.cluster_id" :options="clusterOptions" label="Agrupamento *" emit-value map-options :rules="[v => !!v || 'Obrigatório']" />
-            <q-input v-model="form.name" label="Nome *" :rules="[v => !!v || 'Obrigatório']" />
+          <q-form @submit.prevent="save" greedy>
+            <q-select v-if="!editing" v-model="form.cluster_id" :options="clusterOptions" label="Agrupamento *" emit-value map-options :rules="[v => !!v || 'Obrigatório']" class="q-mb-sm" />
+            <q-input v-model="form.name" label="Nome *" :rules="[v => !!v || 'Obrigatório']" class="q-mb-sm" />
             <q-input v-model="form.email" label="Email" type="email" />
             <q-input v-model.number="form.max_daily_lessons" label="Máx aulas/dia" type="number" min="1" max="10" />
             <q-select
@@ -562,7 +565,7 @@ onMounted(async () => {
 function openCreate() {
   editing.value = null
   form.value = {
-    cluster_id: null,
+    cluster_id: clustersStore.clusters[0]?.id ?? null,
     name: '',
     email: '',
     max_daily_lessons: 5,
@@ -594,19 +597,30 @@ function openEdit(row: Teacher) {
 }
 
 async function save() {
-  if (!form.value.cluster_id) return
   try {
-    const payload = { ...form.value, cluster_id: form.value.cluster_id }
     if (editing.value) {
+      const payload = {
+        name: form.value.name,
+        email: form.value.email || null,
+        max_daily_lessons: form.value.max_daily_lessons,
+        preferred_free_day: form.value.preferred_free_day,
+        min_start_slot: form.value.min_start_slot,
+        max_end_slot: form.value.max_end_slot,
+        preferred_shift: form.value.preferred_shift,
+        max_consecutive_lessons: form.value.max_consecutive_lessons,
+        teaching_component: form.value.teaching_component,
+      }
       await teachersStore.update(editing.value.id, payload)
       $q.notify({ type: 'positive', message: 'Atualizado' })
     } else {
-      await teachersStore.create(payload as Parameters<typeof teachersStore.create>[0])
+      if (!form.value.cluster_id) return
+      await teachersStore.create({ ...form.value, cluster_id: form.value.cluster_id } as Parameters<typeof teachersStore.create>[0])
       $q.notify({ type: 'positive', message: 'Criado' })
     }
     dialog.value = false
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao guardar' })
+  } catch (e: unknown) {
+    const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Erro ao guardar'
+    $q.notify({ type: 'negative', message: String(msg) })
   }
 }
 
