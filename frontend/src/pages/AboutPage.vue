@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.4</q-badge>
+      <q-badge class="hero__badge">v1.10.5</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,38 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="auto_fix_high" color="indigo-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="indigo-7" class="version-badge">v1.10.5</q-badge>
+                  Preenchimento e Limpeza Automática de Professores por Turma
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 13:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="auto_fix_high" size="xs" color="indigo-7" />
+                  Botão "Preencher auto" na Atribuição de Professores por Turma — atribui aleatoriamente um professor qualificado a cada disciplina sem professor
+                </div>
+                <div class="feature-item">
+                  <q-icon name="filter_list" size="xs" color="indigo-7" />
+                  Opções de âmbito: todos visíveis, por ano de escolaridade (seleção por chips), ou apenas turmas selecionadas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="person_remove" size="xs" color="indigo-7" />
+                  Botão "Limpar" para remover todos os professores — de todas as turmas visíveis ou apenas das selecionadas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="checklist" size="xs" color="indigo-7" />
+                  Checkboxes na lista de turmas para multi-seleção, com "Selecionar todos" e "Limpar seleção"
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="checklist" color="teal-7">
               <template #title>
