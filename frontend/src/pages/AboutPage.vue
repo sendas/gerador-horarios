@@ -33,7 +33,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 16:30
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 11:22
                 </span>
               </template>
               <div class="feature-list">
@@ -61,7 +61,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 14:00
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 10:59
                 </span>
               </template>
               <div class="feature-list">
@@ -81,7 +81,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 09:30
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 09:47
                 </span>
               </template>
               <div class="feature-list">
@@ -145,7 +145,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026, 15:00
+                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026, 18:32
                 </span>
               </template>
               <div class="feature-list">
@@ -181,7 +181,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026, 12:00
+                  <q-icon name="event" size="xs" class="q-mr-xs" />19 de maio de 2026, 09:30
                 </span>
               </template>
               <div class="feature-list">
