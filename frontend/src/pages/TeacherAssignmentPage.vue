@@ -1,18 +1,32 @@
 <template>
   <q-page padding>
-    <div class="row items-center q-mb-md">
+    <!-- Header -->
+    <div class="row items-center q-mb-sm q-gutter-sm flex-wrap">
       <div class="text-h5 col">Atribuição de Professores por Turma</div>
       <q-chip v-if="unassignedCount > 0" color="warning" text-color="dark" icon="warning" :label="`${unassignedCount} sem professor`" />
-      <q-chip v-else-if="entries.length > 0" color="positive" text-color="white" icon="check_circle" label="Todos atribuídos" />
+      <q-chip v-else-if="allClasses.length > 0 && Object.keys(entriesByClassId).length > 0" color="positive" text-color="white" icon="check_circle" label="Todos atribuídos" />
       <q-select
         v-model="selectedYearId"
         :options="yearOptions"
         label="Ano Letivo"
         emit-value map-options dense outlined
-        class="q-ml-md"
         style="min-width:180px"
         @update:model-value="load"
       />
+    </div>
+
+    <!-- School filter chips -->
+    <div v-if="clusterSchools.length > 1" class="q-mb-md row q-gutter-xs items-center">
+      <span class="text-caption text-grey-6 q-mr-xs">Escola:</span>
+      <q-chip
+        v-for="s in clusterSchools"
+        :key="s.id"
+        clickable dense
+        :color="selectedSchoolIds.has(s.id) ? 'primary' : 'grey-3'"
+        :text-color="selectedSchoolIds.has(s.id) ? 'white' : 'dark'"
+        @click="toggleSchool(s.id)"
+      >{{ s.name }}</q-chip>
+      <q-btn v-if="selectedSchoolIds.size > 0" flat dense size="xs" icon="clear" color="grey" @click="selectedSchoolIds.clear()" />
     </div>
 
     <div v-if="loading" class="text-center q-pa-xl">
@@ -28,35 +42,44 @@
         </q-input>
 
         <q-list bordered separator style="border-radius:6px;overflow:hidden">
-          <template v-for="school in classesGrouped" :key="school.school_name">
+          <template v-for="group in classesGrouped" :key="group.school_id">
             <q-item-label header class="bg-grey-2 text-grey-8 text-caption text-weight-bold q-py-xs">
-              <q-icon name="school" size="xs" class="q-mr-xs" />{{ school.school_name }}
+              <q-icon name="school" size="xs" class="q-mr-xs" />{{ group.school_name }}
             </q-item-label>
             <q-item
-              v-for="cls in school.classes"
-              :key="cls.class_id"
+              v-for="cls in group.classes"
+              :key="cls.id"
               clickable v-ripple
-              :active="selectedClassId === cls.class_id"
+              :active="selectedClassId === cls.id"
               active-color="primary"
-              @click="selectClass(cls.class_id)"
+              @click="selectClass(cls.id)"
             >
               <q-item-section>
-                <q-item-label>{{ cls.class_name }}</q-item-label>
+                <q-item-label>{{ cls.name }}</q-item-label>
                 <q-item-label caption>{{ cls.year_level }}.º ano</q-item-label>
               </q-item-section>
               <q-item-section side>
-                <q-badge v-if="cls.unassigned > 0" color="warning" text-color="dark" :label="cls.unassigned" />
-                <q-badge v-else color="positive" icon="check" label="" />
+                <q-badge
+                  v-if="entriesByClassId[cls.id] && countUnassigned(cls.id) > 0"
+                  color="warning" text-color="dark"
+                  :label="countUnassigned(cls.id)"
+                />
+                <q-badge
+                  v-else-if="entriesByClassId[cls.id]?.length"
+                  color="positive" icon="check" label=""
+                />
               </q-item-section>
             </q-item>
           </template>
           <q-item v-if="classesGrouped.length === 0">
-            <q-item-section class="text-grey-5 text-caption">Sem turmas</q-item-section>
+            <q-item-section class="text-grey-5 text-caption">
+              {{ allClasses.length === 0 ? 'Sem turmas para este ano letivo' : 'Nenhuma turma corresponde ao filtro' }}
+            </q-item-section>
           </q-item>
         </q-list>
       </div>
 
-      <!-- ── Right: subject + teacher assignment ───────────── -->
+      <!-- ── Right: subject + teacher ──────────────────────── -->
       <div class="col-12 col-md-9">
         <div v-if="!selectedClassId" class="text-center text-grey q-pa-xl">
           <q-icon name="group" size="64px" color="grey-3" />
@@ -67,17 +90,19 @@
           <div class="row items-center q-mb-md">
             <div class="text-h6 col">
               <q-icon name="group" color="primary" class="q-mr-xs" />
-              {{ selectedClassName }}
+              {{ selectedClass?.name }}
               <q-badge color="grey-5" :label="`${selectedEntries.length} disciplinas`" class="q-ml-sm" />
             </div>
-            <!-- Add discipline button -->
             <q-btn color="primary" icon="add" label="Adicionar disciplina" dense unelevated @click="openAddSubject" />
           </div>
 
-          <!-- Subject rows -->
           <q-card flat bordered>
             <q-list separator>
-              <q-item v-if="!selectedEntries.length" class="text-grey-5 text-caption">
+              <q-item v-if="loadingEntries" class="justify-center q-py-md">
+                <q-spinner color="primary" />
+              </q-item>
+
+              <q-item v-else-if="!selectedEntries.length" class="text-grey-5 text-caption">
                 <q-item-section>Sem disciplinas. Adicione disciplinas com o botão acima.</q-item-section>
               </q-item>
 
@@ -87,7 +112,6 @@
                     <span class="text-weight-medium">{{ entry.subject_name }}</span>
                     <q-badge color="blue-2" text-color="dark" :label="`${entry.hours_per_week}h/sem`" />
                   </div>
-                  <!-- Teacher assignment -->
                   <div class="row items-center q-gutter-sm">
                     <q-chip
                       v-if="entry.teacher_id"
@@ -97,8 +121,9 @@
                       :label="entry.teacher_name ?? ''"
                       @remove="assignTeacher(entry, null)"
                     />
-                    <span v-else class="text-caption text-orange-8"><q-icon name="person_off" size="xs" /> Sem professor</span>
-
+                    <span v-else class="text-caption text-orange-8">
+                      <q-icon name="person_off" size="xs" /> Sem professor
+                    </span>
                     <q-select
                       :model-value="null"
                       :options="filteredTeacherOpts"
@@ -116,7 +141,7 @@
                   </div>
                 </q-item-section>
                 <q-item-section side top>
-                  <q-btn flat round dense icon="delete" color="negative" size="sm" @click="deleteEntry(entry)" title="Remover disciplina da turma" />
+                  <q-btn flat round dense icon="delete" color="negative" size="sm" @click="deleteEntry(entry)" />
                 </q-item-section>
               </q-item>
             </q-list>
@@ -162,80 +187,127 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
 import { useClustersStore } from 'stores/clusters'
 import { useAcademicYearsStore } from 'stores/academicYears'
 import { useTeachersStore } from 'stores/teachers'
 import { useSubjectsStore } from 'stores/subjects'
+import { useSchoolsStore } from 'stores/schools'
+import { useClassesStore } from 'stores/classes'
+import type { SchoolClass } from 'stores/classes'
 
 const $q = useQuasar()
 const clustersStore = useClustersStore()
 const yearsStore = useAcademicYearsStore()
 const teachersStore = useTeachersStore()
 const subjectsStore = useSubjectsStore()
+const schoolsStore = useSchoolsStore()
+const classesStore = useClassesStore()
 
 type Entry = {
-  id: number; class_id: number; class_name: string; year_level: number
-  school_id: number | null; school_name: string
-  subject_id: number; subject_name: string
-  hours_per_week: number; teacher_id: number | null; teacher_name: string | null
+  id: number
+  class_id: number
+  subject_id: number
+  subject_name: string
+  hours_per_week: number
+  teacher_id: number | null
+  teacher_name: string | null
 }
 
-const entries = ref<Entry[]>([])
 const loading = ref(false)
+const loadingEntries = ref(false)
 const selectedYearId = ref<number | null>(null)
 const selectedClassId = ref<number | null>(null)
 const classSearch = ref('')
-const teacherFilterText = ref('')
-const subjectFilterText = ref('')
+const selectedSchoolIds = reactive(new Set<number>())
+
+// Curriculum entries keyed by class_id — populated on demand when a class is selected
+const entriesByClassId = ref<Record<number, Entry[]>>({})
 
 // Add subject dialog
 const showAddSubject = ref(false)
 const newSubjectId = ref<number | null>(null)
 const newHours = ref(2)
 const newTeacherId = ref<number | null>(null)
+const filteredTeacherOpts = ref<{ label: string; value: number }[]>([])
+const availableSubjectOptions = ref<{ label: string; value: number }[]>([])
 
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))
 const clusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
 
-const unassignedCount = computed(() => entries.value.filter((e) => !e.teacher_id).length)
+const clusterSchools = computed(() =>
+  schoolsStore.schools.filter((s) => s.cluster_id === clusterId.value)
+)
 
-// Group classes by school with unassigned count
-const classesGrouped = computed(() => {
-  const classMap = new Map<number, { class_id: number; class_name: string; year_level: number; school_name: string; unassigned: number }>()
-  for (const e of entries.value) {
-    if (!classMap.has(e.class_id)) {
-      classMap.set(e.class_id, { class_id: e.class_id, class_name: e.class_name, year_level: e.year_level, school_name: e.school_name || '—', unassigned: 0 })
-    }
-    if (!e.teacher_id) classMap.get(e.class_id)!.unassigned++
-  }
-  const txt = classSearch.value.toLowerCase()
-  const classes = [...classMap.values()].filter((c) => !txt || c.class_name.toLowerCase().includes(txt))
-
-  const schools = new Map<string, typeof classes>()
-  for (const c of classes) {
-    if (!schools.has(c.school_name)) schools.set(c.school_name, [])
-    schools.get(c.school_name)!.push(c)
-  }
-  return [...schools.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([school_name, classes]) => ({ school_name, classes: classes.sort((a, b) => a.year_level - b.year_level || a.class_name.localeCompare(b.class_name)) }))
+// All classes belonging to this cluster and the selected year
+const allClasses = computed<SchoolClass[]>(() => {
+  const schoolIds = new Set(clusterSchools.value.map((s) => s.id))
+  return classesStore.classes.filter(
+    (c) => c.academic_year_id === selectedYearId.value && schoolIds.has(c.school_id)
+  )
 })
 
-const selectedEntries = computed(() =>
-  entries.value.filter((e) => e.class_id === selectedClassId.value)
+function schoolName(schoolId: number) {
+  return schoolsStore.schools.find((s) => s.id === schoolId)?.name ?? '—'
+}
+
+// Classes grouped by school, filtered by school chips and search
+const classesGrouped = computed(() => {
+  const txt = classSearch.value.toLowerCase()
+  const filterSchool = selectedSchoolIds.size > 0
+
+  const filtered = allClasses.value.filter((c) => {
+    if (filterSchool && !selectedSchoolIds.has(c.school_id)) return false
+    if (txt && !c.name.toLowerCase().includes(txt) && !String(c.year_level).includes(txt)) return false
+    return true
+  })
+
+  const bySchool = new Map<number, SchoolClass[]>()
+  for (const c of filtered) {
+    if (!bySchool.has(c.school_id)) bySchool.set(c.school_id, [])
+    bySchool.get(c.school_id)!.push(c)
+  }
+
+  return [...bySchool.entries()]
+    .map(([schoolId, classes]) => ({
+      school_id: schoolId,
+      school_name: schoolName(schoolId),
+      classes: classes.sort((a, b) => a.year_level - b.year_level || a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => a.school_name.localeCompare(b.school_name))
+})
+
+const selectedClass = computed<SchoolClass | null>(
+  () => allClasses.value.find((c) => c.id === selectedClassId.value) ?? null
+)
+
+const selectedEntries = computed<Entry[]>(() =>
+  (entriesByClassId.value[selectedClassId.value ?? -1] ?? [])
+    .slice()
     .sort((a, b) => a.subject_name.localeCompare(b.subject_name))
 )
 
-const selectedClassName = computed(() => selectedEntries.value[0]?.class_name ?? '')
+// Counts for badges
+const unassignedCount = computed(() =>
+  Object.values(entriesByClassId.value).reduce(
+    (sum, list) => sum + list.filter((e) => !e.teacher_id).length,
+    0
+  )
+)
 
-// Teacher options with filtering
-const filteredTeacherOpts = ref(teachersStore.teachers.map((t) => ({ label: t.name, value: t.id })))
+function countUnassigned(classId: number) {
+  return (entriesByClassId.value[classId] ?? []).filter((e) => !e.teacher_id).length
+}
+
+function toggleSchool(id: number) {
+  if (selectedSchoolIds.has(id)) selectedSchoolIds.delete(id)
+  else selectedSchoolIds.add(id)
+}
+
 function filterTeachersFn(val: string, update: (fn: () => void) => void) {
   update(() => {
-    teacherFilterText.value = val
     const txt = val.toLowerCase()
     filteredTeacherOpts.value = teachersStore.teachers
       .filter((t) => !txt || t.name.toLowerCase().includes(txt))
@@ -243,8 +315,6 @@ function filterTeachersFn(val: string, update: (fn: () => void) => void) {
   })
 }
 
-// Subject options for add dialog (exclude already assigned)
-const availableSubjectOptions = ref(subjectsStore.subjects.map((s) => ({ label: s.name, value: s.id })))
 function filterSubjectsFn(val: string, update: (fn: () => void) => void) {
   update(() => {
     const txt = val.toLowerCase()
@@ -255,21 +325,41 @@ function filterSubjectsFn(val: string, update: (fn: () => void) => void) {
   })
 }
 
-function selectClass(classId: number) {
+async function loadClassEntries(classId: number) {
+  loadingEntries.value = true
+  try {
+    type RawEntry = { id: number; class_id: number; subject_id: number; hours_per_week: number; teacher_id: number | null; teacher_name: string | null }
+    const { data } = await api.get<RawEntry[]>(`/classes/${classId}/curriculum`)
+    const mapped: Entry[] = data.map((e) => ({
+      id: e.id,
+      class_id: classId,
+      subject_id: e.subject_id,
+      subject_name: subjectsStore.subjects.find((s) => s.id === e.subject_id)?.name ?? `ID:${e.subject_id}`,
+      hours_per_week: e.hours_per_week,
+      teacher_id: e.teacher_id ?? null,
+      teacher_name: e.teacher_name ?? null,
+    }))
+    entriesByClassId.value = { ...entriesByClassId.value, [classId]: mapped }
+  } finally {
+    loadingEntries.value = false
+  }
+}
+
+async function selectClass(classId: number) {
   selectedClassId.value = classId
-  // Reset teacher filter
   filteredTeacherOpts.value = teachersStore.teachers.map((t) => ({ label: t.name, value: t.id }))
+  if (!entriesByClassId.value[classId]) {
+    await loadClassEntries(classId)
+  }
 }
 
 async function load() {
-  if (!clusterId.value || !selectedYearId.value) return
+  if (!selectedYearId.value) return
   loading.value = true
   selectedClassId.value = null
+  entriesByClassId.value = {}
   try {
-    const { data } = await api.get<Entry[]>('/classes/curriculum-overview', {
-      params: { cluster_id: clusterId.value, academic_year_id: selectedYearId.value },
-    })
-    entries.value = data
+    await classesStore.fetchAll({ academic_year_id: selectedYearId.value })
   } finally {
     loading.value = false
   }
@@ -289,13 +379,17 @@ async function assignTeacher(entry: Entry, teacherId: number | null) {
 async function deleteEntry(entry: Entry) {
   $q.dialog({
     title: 'Remover disciplina',
-    message: `Remover "${entry.subject_name}" da turma "${entry.class_name}"?`,
+    message: `Remover "${entry.subject_name}" da turma?`,
     ok: { label: 'Remover', color: 'negative' },
     cancel: true,
   }).onOk(async () => {
     try {
       await api.delete(`/classes/curriculum/${entry.id}`)
-      entries.value = entries.value.filter((e) => e.id !== entry.id)
+      const list = entriesByClassId.value[entry.class_id] ?? []
+      entriesByClassId.value = {
+        ...entriesByClassId.value,
+        [entry.class_id]: list.filter((e) => e.id !== entry.id),
+      }
       $q.notify({ type: 'positive', message: 'Disciplina removida' })
     } catch {
       $q.notify({ type: 'negative', message: 'Erro ao remover' })
@@ -317,27 +411,27 @@ function openAddSubject() {
 async function addSubject() {
   if (!selectedClassId.value || !newSubjectId.value || !newHours.value) return
   try {
-    const { data } = await api.post(`/classes/${selectedClassId.value}/curriculum`, {
+    const { data } = await api.post<{ id: number }>(`/classes/${selectedClassId.value}/curriculum`, {
       subject_id: newSubjectId.value,
       hours_per_week: newHours.value,
       teacher_id: newTeacherId.value ?? null,
     })
     const subj = subjectsStore.subjects.find((s) => s.id === newSubjectId.value)
     const teacher = teachersStore.teachers.find((t) => t.id === newTeacherId.value)
-    const classEntry = selectedEntries.value[0]
-    entries.value.push({
-      id: data.id,
-      class_id: selectedClassId.value,
-      class_name: classEntry?.class_name ?? '',
-      year_level: classEntry?.year_level ?? 0,
-      school_id: classEntry?.school_id ?? null,
-      school_name: classEntry?.school_name ?? '',
-      subject_id: newSubjectId.value,
-      subject_name: subj?.name ?? '',
-      hours_per_week: newHours.value,
-      teacher_id: newTeacherId.value ?? null,
-      teacher_name: teacher?.name ?? null,
-    })
+    const classId = selectedClassId.value
+    const list = entriesByClassId.value[classId] ?? []
+    entriesByClassId.value = {
+      ...entriesByClassId.value,
+      [classId]: [...list, {
+        id: data.id,
+        class_id: classId,
+        subject_id: newSubjectId.value,
+        subject_name: subj?.name ?? '',
+        hours_per_week: newHours.value,
+        teacher_id: newTeacherId.value ?? null,
+        teacher_name: teacher?.name ?? null,
+      }],
+    }
     showAddSubject.value = false
     $q.notify({ type: 'positive', message: 'Disciplina adicionada' })
   } catch {
@@ -346,7 +440,13 @@ async function addSubject() {
 }
 
 onMounted(async () => {
-  await Promise.all([clustersStore.fetchAll(), yearsStore.fetchAll(), teachersStore.fetchAll(), subjectsStore.fetchAll()])
+  await Promise.all([
+    clustersStore.fetchAll(),
+    yearsStore.fetchAll(),
+    teachersStore.fetchAll(),
+    subjectsStore.fetchAll(),
+    schoolsStore.fetchAll(),
+  ])
   filteredTeacherOpts.value = teachersStore.teachers.map((t) => ({ label: t.name, value: t.id }))
   selectedYearId.value = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null
   if (selectedYearId.value) await load()
