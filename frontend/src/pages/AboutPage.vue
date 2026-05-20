@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.6</q-badge>
+      <q-badge class="hero__badge">v1.10.7</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -24,6 +24,34 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="build" color="red-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="red-8" class="version-badge">v1.10.7</q-badge>
+                  Correção do Motor de Geração — Tempos Letivos por Escola
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 18:30
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="schedule" size="xs" color="red-8" />
+                  O motor de geração agora usa os tempos letivos específicos de cada escola (se configurados), em vez de misturar todas as escolas — elimina o erro "INFEASIBLE" causado por configurações de tempos conflituantes
+                </div>
+                <div class="feature-item">
+                  <q-icon name="warning" size="xs" color="red-8" />
+                  Validação prévia da configuração de tempos: erro claro e descritivo quando os tempos são insuficientes (em vez de INFEASIBLE do solver)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="info" size="xs" color="red-8" />
+                  Log de geração mostra agora quais tempos letivos foram usados por escola e distribuição por dia
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="tune" color="deep-purple-8">
               <template #title>
                 <span class="version-title">
@@ -33,7 +61,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 14:00
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 18:00
                 </span>
               </template>
               <div class="feature-list">

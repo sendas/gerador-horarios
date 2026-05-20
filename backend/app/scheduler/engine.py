@@ -76,14 +76,65 @@ def _run_solver(db, timetable_id: int, options: dict = None):
 
     # ── Load data ────────────────────────────────────────────────────────────
 
-    # Time slots: load all (including breaks) to detect lunch
-    all_slot_rows = db.query(TimeSlotConfig).filter(
+    # Determine which schools are in scope so we can pick their time-slot config.
+    # class_ids_filter (most specific) → look up parent schools from DB.
+    # school_ids_filter → use directly.
+    # Neither → all schools (generate everything).
+    if class_ids_filter:
+        scope_classes = db.query(Class).filter(Class.id.in_(class_ids_filter)).all()
+        schools_in_scope: set[int] | None = {c.school_id for c in scope_classes if c.school_id}
+    elif school_ids_filter:
+        schools_in_scope = set(school_ids_filter)
+    else:
+        schools_in_scope = None
+
+    # Time slots: load all rows for the academic year, then select per-school.
+    # If a school has its own specific rows (school_id = that school's id), use those.
+    # Otherwise fall back to global rows (school_id IS NULL).
+    # This prevents school A's slot config from corrupting school B's generation.
+    _all_slot_rows = db.query(TimeSlotConfig).filter(
         TimeSlotConfig.academic_year_id == academic_year_id,
     ).all()
+
+    _global_rows: list = [r for r in _all_slot_rows if r.school_id is None]
+    _by_school: dict = defaultdict(list)
+    for r in _all_slot_rows:
+        if r.school_id is not None:
+            _by_school[r.school_id].append(r)
+
+    if schools_in_scope:
+        selected_rows: list = []
+        slot_source_desc: list[str] = []
+        for sid in sorted(schools_in_scope):
+            specific = _by_school.get(sid)
+            if specific:
+                selected_rows.extend(specific)
+                n_teaching = len([r for r in specific if not r.is_break])
+                logger.info("Timetable %d: escola %d → %d tempos específicos", timetable_id, sid, n_teaching)
+                school_obj = db.query(School).filter(School.id == sid).first()
+                sname = school_obj.name if school_obj else str(sid)
+                slot_source_desc.append(f"{sname}: {n_teaching} tempos específicos")
+            else:
+                selected_rows.extend(_global_rows)
+                n_teaching = len([r for r in _global_rows if not r.is_break])
+                logger.info("Timetable %d: escola %d → %d tempos globais", timetable_id, sid, n_teaching)
+                school_obj = db.query(School).filter(School.id == sid).first()
+                sname = school_obj.name if school_obj else str(sid)
+                slot_source_desc.append(f"{sname}: {n_teaching} tempos globais")
+        all_slot_rows = selected_rows
+        _log(db, tt, "Tempos letivos: " + " | ".join(slot_source_desc))
+    else:
+        all_slot_rows = _all_slot_rows
+
     slot_rows = [r for r in all_slot_rows if not r.is_break]
     if not slot_rows:
+        msg = (
+            "Sem tempos letivos configurados para este ano letivo"
+            + (f" (escolas: {sorted(schools_in_scope)})" if schools_in_scope else "")
+            + ". Configure os tempos em /time-slots."
+        )
         tt.status = "error"
-        tt.solver_status = "No time slots configured for this academic year"
+        tt.solver_status = msg
         tt.updated_at = datetime.utcnow()
         db.commit()
         return
@@ -91,7 +142,6 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     # Auto-detect lunch slot: the slot immediately before the first break slot (per day)
     break_slots = {(r.day_of_week, r.slot_number) for r in all_slot_rows if r.is_break}
     if break_slots:
-        # find the minimum slot_number that is a break, across all days
         min_break_slot = min(s for (_, s) in break_slots)
         detected_lunch = min_break_slot - 1
         if detected_lunch >= 1 and "lunch_after_slot" not in opts:
@@ -101,6 +151,26 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     slots_per_day = defaultdict(list)
     for d, s in all_slots:
         slots_per_day[d].append(s)
+
+    # Validate slot distribution: flag suspiciously low per-day counts early.
+    n_active_days = len(slots_per_day)
+    _max_slots_day = max((len(v) for v in slots_per_day.values()), default=0)
+    if n_active_days < 3 or _max_slots_day < 2:
+        school_hint = f" (escola(s) {sorted(schools_in_scope)})" if schools_in_scope else ""
+        per_day_detail = ", ".join(
+            f"dia {d}: {len(slots_per_day[d])}" for d in sorted(slots_per_day)
+        ) or "nenhum"
+        msg = (
+            f"Configuração de tempos letivos insuficiente{school_hint}: "
+            f"{n_active_days} dia(s) com tempos [{per_day_detail}]. "
+            "Configure pelo menos 3 dias com 2+ tempos letivos em /time-slots."
+        )
+        tt.status = "error"
+        tt.solver_status = msg
+        tt.updated_at = datetime.utcnow()
+        db.commit()
+        _log(db, tt, f"Erro: {msg}")
+        return
 
     # Curriculum entries
     entries = (
@@ -362,13 +432,16 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     # ── Pre-solve sanity checks + auto-adjust ────────────────────────────────
     n_classes = len(entry_by_class)
     n_teachers = len(teachers)
-    n_days_count = len(DAYS)
-    slots_per_day_count = len(all_slots) // n_days_count if n_days_count else 0
+    n_days_count = len(slots_per_day)  # number of distinct days with at least one slot
+    slots_per_day_min = min(len(v) for v in slots_per_day.values()) if slots_per_day else 0
+    slots_per_day_max = max(len(v) for v in slots_per_day.values()) if slots_per_day else 0
+    slots_per_day_count = slots_per_day_min  # conservative: worst-case day
+    day_counts_str = ",".join(str(len(slots_per_day[d])) for d in sorted(slots_per_day))
     logger.info(
-        "Timetable %d: %d turmas, %d professores, %d tempos/dia, %d ocorrências, limite=%ds",
-        timetable_id, n_classes, n_teachers, slots_per_day_count, len(occurrences), max_time,
+        "Timetable %d: %d turmas, %d professores, tempos/dia=[%s], %d ocorrências, limite=%ds",
+        timetable_id, n_classes, n_teachers, day_counts_str, len(occurrences), max_time,
     )
-    _log(db, tt, f"{n_classes} turmas · {n_teachers} professores · {len(occurrences)} ocorrências · {slots_per_day_count} tempos/dia")
+    _log(db, tt, f"{n_classes} turmas · {n_teachers} professores · {len(occurrences)} ocorrências · {slots_per_day_count}–{slots_per_day_max} tempos/dia")
 
     # Auto-adjust max_per_day_class when students_start_slot_1 is active and there are
     # more classes than teachers. By pigeonhole, with N classes and T teachers (N>T),
