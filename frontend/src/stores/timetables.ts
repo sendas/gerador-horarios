@@ -97,9 +97,18 @@ export const useTimetablesStore = defineStore('timetables', () => {
     return data
   }
 
+  async function cancelGeneration(id: number) {
+    const { data } = await api.put<Timetable>(`/timetables/${id}`, {
+      status: 'error',
+      solver_status: 'Geração cancelada manualmente.',
+    })
+    const idx = timetables.value.findIndex((t) => t.id === id)
+    if (idx !== -1) timetables.value[idx] = { ...timetables.value[idx], ...data }
+  }
+
   return {
     timetables, current, loading, generating,
-    fetchAll, fetchDetail, create, generate, remove,
+    fetchAll, fetchDetail, create, generate, remove, cancelGeneration,
     fetchByTeacher, fetchByClass, fetchByRoom,
   }
 })

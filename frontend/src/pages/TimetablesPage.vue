@@ -7,13 +7,31 @@
     </div>
 
     <!-- Active generation banner -->
-    <q-banner v-if="anyGenerating" rounded class="bg-warning text-dark q-mb-md">
-      <template #avatar>
-        <q-spinner size="22px" color="dark" />
-      </template>
-      <strong>Geração em curso</strong> — o horário está a ser calculado em segundo plano.
-      Pode fechar esta página; a lista atualiza automaticamente de 3 em 3 segundos.
-    </q-banner>
+    <template v-if="anyGenerating">
+      <!-- Stale: process appears to have died -->
+      <q-banner v-if="staleGenerating.length" rounded class="bg-negative text-white q-mb-md">
+        <template #avatar><q-icon name="error" size="28px" /></template>
+        <div>
+          <strong>O processo de geração parece ter parado.</strong>
+          O servidor não atualizou o estado há mais de 3 minutos. O serviço pode ter sido interrompido (reinício, falta de memória, etc.).
+        </div>
+        <template #action>
+          <q-btn
+            v-for="t in staleGenerating" :key="t.id"
+            flat color="white" icon="cancel"
+            :label="`Cancelar '${t.name}'`"
+            class="q-ml-sm"
+            @click="cancelGeneration(t)"
+          />
+        </template>
+      </q-banner>
+      <!-- Normal: still running -->
+      <q-banner v-else rounded class="bg-warning text-dark q-mb-md">
+        <template #avatar><q-spinner size="22px" color="dark" /></template>
+        <strong>Geração em curso</strong> — o horário está a ser calculado em segundo plano.
+        Pode fechar esta página; a lista atualiza automaticamente de 3 em 3 segundos.
+      </q-banner>
+    </template>
 
     <q-table :rows="store.timetables" :columns="columns" row-key="id" :loading="store.loading"
       :row-class="(row) => row.status === 'generating' ? 'row-generating' : ''"
@@ -236,6 +254,28 @@ async function openPreflight() {
 
 const anyGenerating = computed(() => store.timetables.some((t) => t.status === 'generating'))
 
+// Generating timetables whose updated_at hasn't moved for >3 min (heartbeat is every 60s)
+const STALE_MS = 3 * 60 * 1000
+const now = ref(Date.now())
+
+const staleGenerating = computed(() =>
+  store.timetables.filter((t) => {
+    if (t.status !== 'generating' || !t.updated_at) return false
+    const ts = t.updated_at.endsWith('Z') ? t.updated_at : t.updated_at + 'Z'
+    return now.value - new Date(ts).getTime() > STALE_MS
+  })
+)
+
+async function cancelGeneration(t: { id: number; name: string }) {
+  try {
+    await store.cancelGeneration(t.id)
+    stopGlobalPolling()
+    $q.notify({ type: 'warning', message: `Geração de "${t.name}" cancelada` })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao cancelar' })
+  }
+}
+
 const showLogDialog = ref(false)
 const logTimetable = ref<{ id: number; status: string; generation_log?: string | null } | null>(null)
 const logContent = ref('')
@@ -291,7 +331,8 @@ function stopLogPolling() {
   }
 }
 
-onUnmounted(() => { stopLogPolling(); stopGlobalPolling() })
+const nowInterval = setInterval(() => { now.value = Date.now() }, 15_000)
+onUnmounted(() => { stopLogPolling(); stopGlobalPolling(); clearInterval(nowInterval) })
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },

@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.1</q-badge>
+      <q-badge class="hero__badge">v1.10.2</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,34 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="warning" color="orange-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="orange-8" class="version-badge">v1.10.2</q-badge>
+                  Deteção de Geração Interrompida
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 16:30
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="error" size="xs" color="orange-8" />
+                  Banner de aviso vermelho quando a geração para sem terminar — detectado por ausência de heartbeat durante mais de 3 minutos
+                </div>
+                <div class="feature-item">
+                  <q-icon name="cancel" size="xs" color="orange-8" />
+                  Botão "Cancelar" para marcar manualmente uma geração presa como falhada
+                </div>
+                <div class="feature-item">
+                  <q-icon name="restart_alt" size="xs" color="orange-8" />
+                  Ao arrancar, o servidor marca automaticamente como erro qualquer horário que ficou preso em "a gerar" (ex: após reinício do Docker)
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="bug_report" color="teal-8">
               <template #title>

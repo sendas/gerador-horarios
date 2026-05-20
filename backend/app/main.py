@@ -442,6 +442,23 @@ def start_scheduler():
         db.close()
 
 
+@app.on_event("startup")
+def cleanup_stuck_generating():
+    """Mark any timetable left in 'generating' as 'error' — they were interrupted by a restart."""
+    from app.models.models import Timetable
+    db = SessionLocal()
+    try:
+        stuck = db.query(Timetable).filter(Timetable.status == "generating").all()
+        for t in stuck:
+            t.status = "error"
+            t.solver_status = "Processo interrompido — o servidor foi reiniciado durante a geração."
+            logger.warning(f"Timetable {t.id} estava preso em 'generating' — marcado como erro.")
+        if stuck:
+            db.commit()
+    finally:
+        db.close()
+
+
 @app.on_event("shutdown")
 def stop_scheduler():
     scheduler_instance.stop_scheduler()
