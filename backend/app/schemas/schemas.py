@@ -279,7 +279,7 @@ class TeacherSchoolAssignmentBase(BaseModel):
     travel_time_minutes: int = 0
 
 class TeacherSchoolAssignmentCreate(TeacherSchoolAssignmentBase):
-    pass
+    teacher_id: Optional[int] = None  # supplied via URL path param
 
 class TeacherSchoolAssignmentUpdate(BaseModel):
     travel_time_minutes: Optional[int] = None

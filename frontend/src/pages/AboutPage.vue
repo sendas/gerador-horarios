@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.2</q-badge>
+      <q-badge class="hero__badge">v1.10.3</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,30 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="bug_report" color="pink-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="pink-8" class="version-badge">v1.10.3</q-badge>
+                  Correção: Atribuição de Escola ao Professor
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 11:35
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="school" size="xs" color="pink-8" />
+                  Corrigido erro que impedia guardar a escola de um professor — o schema de criação passou a aceitar teacher_id como opcional (vinha no URL, não no body)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="notifications" size="xs" color="pink-8" />
+                  Notificações de sucesso e erro ao adicionar/remover escola de um professor
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="warning" color="orange-8">
               <template #title>

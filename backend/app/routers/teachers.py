@@ -120,7 +120,7 @@ def list_school_assignments(id: int, db: Session = Depends(get_db)):
 
 @router.post("/{id}/school-assignments", response_model=TeacherSchoolAssignmentResponse, status_code=201)
 def add_school_assignment(id: int, data: TeacherSchoolAssignmentCreate, db: Session = Depends(get_db)):
-    obj = TeacherSchoolAssignment(**{**data.model_dump(), "teacher_id": id})
+    obj = TeacherSchoolAssignment(**{**data.model_dump(exclude={"teacher_id"}), "teacher_id": id})
     db.add(obj)
     db.commit()
     db.refresh(obj)

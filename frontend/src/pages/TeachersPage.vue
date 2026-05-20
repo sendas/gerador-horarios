@@ -791,17 +791,30 @@ async function openSchools(teacher: Teacher) {
 
 async function addSchoolAssignment() {
   if (!selectedTeacher.value || !newAssignment.value.school_id || !newAssignment.value.academic_year_id) return
-  const data = await teachersStore.addSchoolAssignment(selectedTeacher.value.id, {
-    school_id: newAssignment.value.school_id,
-    academic_year_id: newAssignment.value.academic_year_id,
-    travel_time_minutes: newAssignment.value.travel_time_minutes,
-  })
-  schoolAssignments.value.push(data)
+  try {
+    const data = await teachersStore.addSchoolAssignment(selectedTeacher.value.id, {
+      school_id: newAssignment.value.school_id,
+      academic_year_id: newAssignment.value.academic_year_id,
+      travel_time_minutes: newAssignment.value.travel_time_minutes,
+    })
+    schoolAssignments.value.push(data)
+    newAssignment.value = { school_id: null, academic_year_id: null, travel_time_minutes: 0 }
+    $q.notify({ type: 'positive', message: 'Escola adicionada' })
+  } catch (e: unknown) {
+    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+    const msg = detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : 'Erro ao adicionar escola'
+    $q.notify({ type: 'negative', message: String(msg) })
+  }
 }
 
 async function removeSchoolAssignment(id: number) {
-  await teachersStore.removeSchoolAssignment(id)
-  schoolAssignments.value = schoolAssignments.value.filter((a) => a.id !== id)
+  try {
+    await teachersStore.removeSchoolAssignment(id)
+    schoolAssignments.value = schoolAssignments.value.filter((a) => a.id !== id)
+    $q.notify({ type: 'positive', message: 'Removido' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao remover' })
+  }
 }
 
 async function openSubjects(teacher: Teacher) {
