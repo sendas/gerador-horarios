@@ -209,9 +209,24 @@
     <q-dialog v-model="curriculumDialog" full-width>
       <q-card style="max-width:960px;width:100%">
         <q-card-section class="row items-center q-pb-sm">
-          <div class="text-h6">
-            <q-icon name="groups" color="teal" class="q-mr-xs" />
-            Turmas de {{ selectedTeacher?.name }}
+          <div class="text-h6 row items-center q-gutter-sm">
+            <span>
+              <q-icon name="groups" color="teal" class="q-mr-xs" />
+              Turmas de {{ selectedTeacher?.name }}
+            </span>
+            <q-chip
+              v-if="teachingComponent"
+              dense square
+              :color="assignedHours > teachingComponent ? 'negative' : assignedHours === teachingComponent ? 'positive' : 'blue-grey-6'"
+              text-color="white"
+              icon="schedule"
+            >
+              {{ assignedHours }}h / {{ teachingComponent }}h
+              <q-tooltip>Horas letivas atribuídas / componente letiva total</q-tooltip>
+            </q-chip>
+            <q-chip v-else-if="assignedHours > 0" dense square color="blue-grey-6" text-color="white" icon="schedule">
+              {{ assignedHours }}h atribuídas
+            </q-chip>
           </div>
           <q-space />
           <q-select
@@ -542,6 +557,16 @@ const curriculumClassGroups = computed(() => {
 const assignedClassCount = computed(() =>
   curriculumAllClasses.value.filter((c) => isClassAssigned(c.id)).length
 )
+
+// Total hours assigned to this teacher across all subjects this year
+const assignedHours = computed(() => {
+  if (!selectedTeacher.value) return 0
+  return allClusterEntries.value
+    .filter((e) => e.teacher_id === selectedTeacher.value!.id)
+    .reduce((sum, e) => sum + (e.hours_per_week ?? 0), 0)
+})
+
+const teachingComponent = computed(() => selectedTeacher.value?.teaching_component ?? null)
 
 function teacherName(id: number | null) {
   if (!id) return ''
