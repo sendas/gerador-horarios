@@ -58,6 +58,7 @@ for _sql in [
     "CREATE TABLE IF NOT EXISTS backup_history (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME, status TEXT, destination TEXT DEFAULT 'download', size_bytes INTEGER, message TEXT, filename TEXT)",
     "CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)",
     "ALTER TABLE teachers ADD COLUMN credit_hours INTEGER DEFAULT 0",
+    "ALTER TABLE teachers ADD COLUMN birth_date DATE",
 ]:
     try:
         with engine.connect() as _conn:

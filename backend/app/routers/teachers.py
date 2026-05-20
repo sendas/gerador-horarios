@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -20,6 +21,13 @@ class BulkTeacherUpdate(BaseModel):
     id: int
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = None
+    birth_date: Optional[date_type] = None
+
+
+class BulkComponentRequest(BaseModel):
+    cluster_id: int
+    base_component: int = 22
+    apply_art79: bool = False
 
 
 def _build_response(t: Teacher) -> TeacherResponse:
@@ -28,14 +36,6 @@ def _build_response(t: Teacher) -> TeacherResponse:
     r.subject_ids = [ts.subject_id for ts in t.teacher_subjects]
     r.school_ids = list({sa.school_id for sa in t.school_assignments})
     return r
-
-
-@router.get("", response_model=List[TeacherResponse])
-def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
-    q = db.query(Teacher)
-    if cluster_id:
-        q = q.filter(Teacher.cluster_id == cluster_id)
-    return [_build_response(t) for t in q.all()]
 
 
 @router.put("/bulk-update")
@@ -49,9 +49,42 @@ def bulk_update_teachers(items: List[BulkTeacherUpdate], db: Session = Depends(g
             t.teaching_component = item.teaching_component
         if item.credit_hours is not None:
             t.credit_hours = item.credit_hours
+        if item.birth_date is not None:
+            t.birth_date = item.birth_date
         updated.append(t.id)
     db.commit()
     return {"updated": updated}
+
+
+@router.put("/bulk-component")
+def bulk_set_component(data: BulkComponentRequest, db: Session = Depends(get_db)):
+    """Set teaching_component for all teachers in a cluster.
+    If apply_art79=True, applies Art. 79° ECD age-based reductions on top of base_component."""
+    teachers_list = db.query(Teacher).filter(Teacher.cluster_id == data.cluster_id).all()
+    today = date_type.today()
+    updated = 0
+    for t in teachers_list:
+        component = data.base_component
+        if data.apply_art79 and t.birth_date:
+            age = (today - t.birth_date).days // 365
+            if age >= 60:
+                component -= 3
+            elif age >= 55:
+                component -= 2
+            elif age >= 50:
+                component -= 1
+        t.teaching_component = component
+        updated += 1
+    db.commit()
+    return {"updated": updated}
+
+
+@router.get("", response_model=List[TeacherResponse])
+def list_teachers(cluster_id: int = None, db: Session = Depends(get_db)):
+    q = db.query(Teacher)
+    if cluster_id:
+        q = q.filter(Teacher.cluster_id == cluster_id)
+    return [_build_response(t) for t in q.all()]
 
 
 @router.post("", response_model=TeacherResponse, status_code=201)

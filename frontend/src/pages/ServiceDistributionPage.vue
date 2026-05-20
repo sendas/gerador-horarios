@@ -31,22 +31,9 @@
         />
       </div>
       <div class="col-12 col-sm-4 row items-center q-gutter-sm">
-        <q-btn
-          color="primary"
-          icon="download"
-          label="Exportar CSV"
-          dense
-          :disable="teachers.length === 0"
-          @click="exportCsv"
-        />
-        <q-btn
-          color="secondary"
-          icon="upload"
-          label="Importar Comp. Letiva"
-          dense
-          :disable="!selectedYearId"
-          @click="showImport = true"
-        />
+        <q-btn color="primary" icon="download" label="Exportar CSV" dense :disable="teachers.length === 0" @click="exportCsv" />
+        <q-btn color="secondary" icon="upload" label="Importar Comp. Letiva" dense :disable="!selectedYearId" @click="showImport = true" />
+        <q-btn color="teal-7" icon="tune" label="Componentes" dense :disable="!selectedYearId" @click="openComponentDialog" />
       </div>
     </div>
 
@@ -256,6 +243,83 @@
         </q-tr>
       </template>
     </q-table>
+
+    <!-- Component management dialog -->
+    <q-dialog v-model="showComponents" persistent style="max-width:900px">
+      <q-card style="min-width:min(96vw,860px)">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6"><q-icon name="tune" class="q-mr-sm" />Gerir Componentes Letivas</div>
+          <q-space /><q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <!-- Bulk actions bar -->
+          <div class="row q-gutter-sm q-mb-md items-center">
+            <q-btn color="teal-7" icon="playlist_add_check" label="Definir 22h a todos" unelevated @click="setAllBase(22)" :loading="bulkLoading" />
+            <q-btn color="indigo-6" icon="elderly" label="Aplicar Art. 79° a todos" unelevated @click="applyArt79All" :loading="bulkLoading"
+              :disable="compRows.every(r => !r.birth_date)" />
+            <q-chip dense icon="info" color="blue-2" text-color="dark">
+              Art. 79° ECD: 50–54a → −1h · 55–59a → −2h · ≥60a → −3h
+            </q-chip>
+          </div>
+
+          <!-- Per-teacher table -->
+          <q-table
+            :rows="compRows"
+            :columns="compColumns"
+            row-key="id"
+            flat dense
+            :pagination="{ rowsPerPage: 0 }"
+            hide-bottom
+            style="max-height:60vh;overflow-y:auto"
+            virtual-scroll
+            :virtual-scroll-item-size="48"
+          >
+            <template #body-cell-birth_date="props">
+              <q-td :props="props">
+                <q-input
+                  v-model="props.row.birth_date"
+                  type="date"
+                  dense outlined
+                  style="min-width:140px"
+                  @update:model-value="recalcRow(props.row)"
+                />
+              </q-td>
+            </template>
+            <template #body-cell-age="props">
+              <q-td :props="props" class="text-center">
+                <span v-if="props.row.birth_date">{{ calcAge(props.row.birth_date) }}</span>
+                <span v-else class="text-grey-5">—</span>
+              </q-td>
+            </template>
+            <template #body-cell-art79="props">
+              <q-td :props="props" class="text-center">
+                <q-chip v-if="props.row.birth_date && calcArt79(props.row.birth_date) > 0"
+                  dense color="indigo-6" text-color="white" size="sm">
+                  −{{ calcArt79(props.row.birth_date) }}h
+                </q-chip>
+                <span v-else class="text-grey-5">—</span>
+              </q-td>
+            </template>
+            <template #body-cell-component="props">
+              <q-td :props="props" class="text-center">
+                <q-input
+                  v-model.number="props.row.teaching_component"
+                  type="number" min="0" max="30"
+                  dense outlined
+                  style="width:70px"
+                />
+              </q-td>
+            </template>
+          </q-table>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Cancelar" v-close-popup />
+          <q-btn color="teal-7" icon="save" label="Guardar" :loading="bulkLoading" @click="saveComponents" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -286,6 +350,13 @@ interface TeacherDistribution {
   classes_taught: ClassTaught[]
 }
 
+interface CompRow {
+  id: number
+  name: string
+  birth_date: string | null  // 'YYYY-MM-DD' or null
+  teaching_component: number | null
+}
+
 interface TimetableOption {
   id: number
   name: string
@@ -304,6 +375,19 @@ const showImport = ref(false)
 const importFile = ref<File | null>(null)
 const importLoading = ref(false)
 const importResult = ref<{ updated: number; not_found: number; errors: string[] } | null>(null)
+
+// Component management dialog
+const showComponents = ref(false)
+const compRows = ref<CompRow[]>([])
+const bulkLoading = ref(false)
+
+const compColumns = [
+  { name: 'name', label: 'Professor', field: 'name', align: 'left' as const, sortable: true },
+  { name: 'birth_date', label: 'Data de Nascimento', field: 'birth_date', align: 'center' as const },
+  { name: 'age', label: 'Idade', field: 'birth_date', align: 'center' as const },
+  { name: 'art79', label: 'Red. Art. 79°', field: 'birth_date', align: 'center' as const },
+  { name: 'component', label: 'Comp. Letiva (h)', field: 'teaching_component', align: 'center' as const },
+]
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 
@@ -441,6 +525,79 @@ function exportCsv() {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+// ── Component management ──────────────────────────────────────────────────────
+
+function calcAge(birthDateStr: string): number {
+  const today = new Date()
+  const bd = new Date(birthDateStr)
+  let age = today.getFullYear() - bd.getFullYear()
+  if (today.getMonth() < bd.getMonth() || (today.getMonth() === bd.getMonth() && today.getDate() < bd.getDate())) age--
+  return age
+}
+
+function calcArt79(birthDateStr: string): number {
+  const age = calcAge(birthDateStr)
+  if (age >= 60) return 3
+  if (age >= 55) return 2
+  if (age >= 50) return 1
+  return 0
+}
+
+function recalcRow(row: CompRow) {
+  if (row.birth_date) {
+    const base = 22
+    row.teaching_component = base - calcArt79(row.birth_date)
+  }
+}
+
+async function openComponentDialog() {
+  if (!selectedClusterId.value) return
+  bulkLoading.value = true
+  try {
+    const { data } = await api.get('/teachers', { params: { cluster_id: selectedClusterId.value } })
+    compRows.value = (data as { id: number; name: string; birth_date: string | null; teaching_component: number | null }[])
+      .map(t => ({ id: t.id, name: t.name, birth_date: t.birth_date ?? null, teaching_component: t.teaching_component ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  } finally {
+    bulkLoading.value = false
+  }
+  showComponents.value = true
+}
+
+function setAllBase(base: number) {
+  compRows.value.forEach(r => {
+    r.teaching_component = base - (r.birth_date ? calcArt79(r.birth_date) : 0)
+  })
+}
+
+function applyArt79All() {
+  compRows.value.forEach(r => {
+    if (r.birth_date) {
+      const base = r.teaching_component !== null ? (r.teaching_component + calcArt79(r.birth_date)) : 22
+      r.teaching_component = base - calcArt79(r.birth_date)
+    }
+  })
+}
+
+async function saveComponents() {
+  bulkLoading.value = true
+  try {
+    const payload = compRows.value.map(r => ({
+      id: r.id,
+      teaching_component: r.teaching_component,
+      birth_date: r.birth_date || null,
+    }))
+    await api.put('/teachers/bulk-update', payload)
+    $q.notify({ type: 'positive', message: `${payload.length} professores atualizados` })
+    showComponents.value = false
+    await loadData()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao guardar componentes' })
+  } finally {
+    bulkLoading.value = false
+  }
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

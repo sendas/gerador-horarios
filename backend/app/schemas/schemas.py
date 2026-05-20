@@ -246,6 +246,7 @@ class TeacherBase(BaseModel):
     max_consecutive_lessons: Optional[int] = None
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = 0
+    birth_date: Optional[date] = None
 
 class TeacherCreate(TeacherBase):
     pass
@@ -261,6 +262,7 @@ class TeacherUpdate(BaseModel):
     max_consecutive_lessons: Optional[int] = None
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = None
+    birth_date: Optional[date] = None
 
 class TeacherResponse(TeacherBase):
     model_config = ConfigDict(from_attributes=True)
