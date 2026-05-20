@@ -101,7 +101,7 @@ def preflight_check(academic_year_id: int, cluster_id: int, db: Session = Depend
     if not with_teacher:
         errors.append({
             "message": "Nenhuma entrada tem professor atribuído — impossível gerar horários.",
-            "fix": "/service-distribution",
+            "fix": "/teacher-assignment",
             "items": [f"{e.class_.name} · {e.subject.name if e.subject else '?'}" for e in no_teacher[:20]]
         })
     elif no_teacher:
