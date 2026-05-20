@@ -65,6 +65,8 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     # ── Extract generation options ────────────────────────────────────────────
     opts = options or {}
     year_levels_filter = opts.get("year_levels")  # None or list of ints
+    school_ids_filter  = opts.get("school_ids")   # None or list of ints
+    class_ids_filter   = opts.get("class_ids")    # None or list of ints (most specific — overrides others)
     opt_no_student_gaps = opts.get("no_student_gaps", True)
     opt_minimize_teacher_gaps = opts.get("minimize_teacher_gaps", True)
     opt_teacher_gap_weight = opts.get("teacher_gap_weight", 10)
@@ -114,9 +116,14 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         db.commit()
         return
 
-    # Filter entries by year_level if specified
-    if year_levels_filter:
-        entries = [e for e in entries if e.class_.year_level in year_levels_filter]
+    # Filter entries: class_ids is most specific (explicit list wins); otherwise combine year + school
+    if class_ids_filter:
+        entries = [e for e in entries if e.class_id in class_ids_filter]
+    else:
+        if year_levels_filter:
+            entries = [e for e in entries if e.class_.year_level in year_levels_filter]
+        if school_ids_filter:
+            entries = [e for e in entries if e.class_.school_id in school_ids_filter]
 
     # Teachers eligible for each entry.
     # If entry.teacher_id is set, that teacher is the only option (hard assignment).

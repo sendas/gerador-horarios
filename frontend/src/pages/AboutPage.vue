@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.5</q-badge>
+      <q-badge class="hero__badge">v1.10.6</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,38 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="tune" color="deep-purple-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="deep-purple-8" class="version-badge">v1.10.6</q-badge>
+                  Geração por Escola, Ano e Turmas Individuais
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 14:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="school" size="xs" color="deep-purple-8" />
+                  Seleção de escolas no diálogo de geração — gera apenas as turmas das escolas selecionadas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="filter_list" size="xs" color="deep-purple-8" />
+                  Filtro por ano de escolaridade com chips dinâmicos (baseados nas turmas existentes)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="group" size="xs" color="deep-purple-8" />
+                  Seleção de turmas individuais (expandível) — combina com os filtros de escola e ano
+                </div>
+                <div class="feature-item">
+                  <q-icon name="info" size="xs" color="deep-purple-8" />
+                  Resumo em tempo real das turmas incluídas na geração
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="auto_fix_high" color="indigo-7">
               <template #title>

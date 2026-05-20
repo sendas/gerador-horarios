@@ -22,6 +22,8 @@ class MoveLessonRequest(BaseModel):
 
 class GenerationOptions(BaseModel):
     year_levels: Optional[List[int]] = None  # None=all, [5,6]=2nd cycle, [7,8,9]=3rd cycle
+    school_ids: Optional[List[int]] = None   # None=all schools
+    class_ids: Optional[List[int]] = None    # None=all classes (overrides year_levels/school_ids if set)
     no_student_gaps: bool = True
     minimize_teacher_gaps: bool = True
     teacher_gap_weight: int = 10
