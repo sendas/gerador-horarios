@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.7</q-badge>
+      <q-badge class="hero__badge">v1.10.8</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,34 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="analytics" color="orange-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="orange-8" class="version-badge">v1.10.8</q-badge>
+                  Diagnósticos de Geração e Melhorias nos Tempos Letivos
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 19:30
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="bug_report" size="xs" color="orange-8" />
+                  Log de geração mostra carga por turma, avisos de sobrecarga e professores com disponibilidade insuficiente — antes de chamar o solver
+                </div>
+                <div class="feature-item">
+                  <q-icon name="content_copy" size="xs" color="orange-8" />
+                  Tempos letivos: botão "Replicar para outros dias" — copia os tempos de um dia para os restantes dias da semana de uma vez
+                </div>
+                <div class="feature-item">
+                  <q-icon name="content_copy" size="xs" color="orange-8" />
+                  Tempos letivos: "Copiar de..." agora disponível para os tempos globais (sem escola) — permite copiar tempos de uma escola para o reserva global
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="build" color="red-8">
               <template #title>
