@@ -183,7 +183,7 @@ class CurriculumEntryBase(BaseModel):
     paired_entry_id: Optional[int] = None
 
 class CurriculumEntryCreate(CurriculumEntryBase):
-    pass
+    teacher_id: Optional[int] = None
 
 class CurriculumEntryUpdate(BaseModel):
     hours_per_week: Optional[float] = None

@@ -78,7 +78,7 @@ def add_curriculum_entry(id: int, data: CurriculumEntryCreate, db: Session = Dep
     cls = db.query(Class).filter(Class.id == id).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
-    obj = CurriculumEntry(**{**data.model_dump(), "class_id": id})
+    obj = CurriculumEntry(**{**data.model_dump(exclude={"class_id"}), "class_id": id})
     db.add(obj)
     db.commit()
     db.refresh(obj)
