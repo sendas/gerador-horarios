@@ -444,6 +444,22 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     _log(db, tt, f"{n_classes} turmas · {n_teachers} professores · {len(occurrences)} ocorrências · {slots_per_day_count}–{slots_per_day_max} tempos/dia")
 
     # ── Detect obvious impossibilities before handing to solver ─────────────────
+
+    # Log per-class load summary for diagnostics
+    total_slots = len(all_slots)
+    load_lines: list[str] = []
+    for class_id, eids in entry_by_class.items():
+        class_occ = sum(
+            (e.split_count if e.is_split else max(1, round(e.hours_per_week)))
+            for e in entries if e.id in eids
+        )
+        cls = next((e.class_ for e in entries if e.class_id == class_id), None)
+        cls_name = cls.name if cls else f"id={class_id}"
+        daily_avg = class_occ / n_days_count if n_days_count else 0
+        flag = " ⚠" if class_occ > max_per_day_class * n_days_count else ""
+        load_lines.append(f"  {cls_name}: {class_occ} aulas ({daily_avg:.1f}/dia){flag}")
+    _log(db, tt, "Carga por turma (máx. " + str(max_per_day_class) + "/dia × " + str(n_days_count) + " dias = " + str(max_per_day_class * n_days_count) + " slots):\n" + "\n".join(load_lines))
+
     early_errors: list[str] = []
 
     # A. "Máx. 1 por dia" + entry with more occurrences than school days → impossible
@@ -477,8 +493,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         _log(db, tt, "Erro: " + msg.split("\n")[0])
         return
 
-    # B. Per-class overload: total occurrences > available slots
-    total_slots = len(all_slots)
+    # B. Per-class overload: total occurrences exceed capacity
     overloaded_classes: list[str] = []
     for class_id, eids in entry_by_class.items():
         class_occ = sum(
@@ -488,31 +503,47 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         cls = next((e.class_ for e in entries if e.class_id == class_id), None)
         cls_name = cls.name if cls else f"id={class_id}"
         if class_occ > total_slots:
-            overloaded_classes.append(f"  • {cls_name}: {class_occ} aulas para {total_slots} slots")
+            overloaded_classes.append(f"  • {cls_name}: {class_occ} aulas > {total_slots} slots disponíveis")
         elif class_occ > max_per_day_class * n_days_count:
             overloaded_classes.append(
-                f"  • {cls_name}: {class_occ} aulas excede o máximo configurado "
-                f"({max_per_day_class} aulas/dia × {n_days_count} dias = {max_per_day_class * n_days_count})"
+                f"  • {cls_name}: {class_occ} aulas > máximo {max_per_day_class}/dia × {n_days_count} dias = {max_per_day_class * n_days_count}"
             )
 
     if overloaded_classes:
         msg = (
-            f"Carga horária excessiva em {len(overloaded_classes)} turma(s):\n"
+            f"Aviso: carga horária excede o máximo permitido em {len(overloaded_classes)} turma(s) — "
+            "provável causa de INFEASIBLE:\n"
             + "\n".join(overloaded_classes)
-            + "\n\nVerifique as horas/semana no currículo ou aumente o máximo de aulas por dia nas Regras de Horário."
+            + "\n\nSolução: aumente o máximo de aulas/dia nas Regras de Horário, "
+            "ou reduza as horas/semana no currículo."
         )
-        _log(db, tt, "Aviso: " + msg.split("\n")[0])
+        _log(db, tt, msg)
         logger.warning("Timetable %d: carga excessiva: %s", timetable_id, overloaded_classes)
 
-    # C. Teacher overload warning (informational)
+    # C. Teacher overload: more occurrences than their weekly capacity
+    teacher_overload: list[str] = []
     for tid, teacher in teachers.items():
         occ_for_teacher = sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, []))
-        max_weekly = teacher.max_daily_lessons * n_days_count
-        if occ_for_teacher > max_weekly:
-            logger.warning(
-                "Timetable %d: Professor %s tem %d ocorrências mas máx semanal é %d.",
-                timetable_id, teacher.name, occ_for_teacher, max_weekly,
+        blocked_count = len(blocked.get(tid, set()))
+        available_slots = total_slots - blocked_count
+        if occ_for_teacher > available_slots:
+            teacher_overload.append(
+                f"  • {teacher.name}: {occ_for_teacher} aulas mas só {available_slots} slots disponíveis "
+                f"({blocked_count} bloqueados)"
             )
+        elif occ_for_teacher > teacher.max_daily_lessons * n_days_count:
+            teacher_overload.append(
+                f"  • {teacher.name}: {occ_for_teacher} aulas > máximo {teacher.max_daily_lessons}/dia × {n_days_count} dias"
+            )
+
+    if teacher_overload:
+        msg = (
+            f"Aviso: {len(teacher_overload)} professor(es) com carga excessiva ou disponibilidade insuficiente:\n"
+            + "\n".join(teacher_overload[:10])
+            + ("\n  (e mais…)" if len(teacher_overload) > 10 else "")
+        )
+        _log(db, tt, msg)
+        logger.warning("Timetable %d: professores sobrecarregados: %d", timetable_id, len(teacher_overload))
 
     # Auto-adjust max_per_day_class when students_start_slot_1 is active and there are
     # more classes than teachers. By pigeonhole, with N classes and T teachers (N>T),
