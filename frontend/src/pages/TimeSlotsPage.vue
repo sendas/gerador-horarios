@@ -65,7 +65,15 @@
           </template>
         </q-table>
 
-        <q-btn class="q-mt-sm" color="primary" icon="add" label="Adicionar tempo" @click="openAdd(dayIdx)" />
+        <div class="row q-gutter-sm q-mt-sm">
+          <q-btn color="primary" icon="add" label="Adicionar tempo" @click="openAdd(dayIdx)" />
+          <q-btn
+            v-if="slotsForDay(dayIdx).length > 0"
+            color="indigo-6" icon="content_copy" label="Replicar para outros dias"
+            outline
+            @click="openReplicateDialog(dayIdx)"
+          />
+        </div>
       </q-tab-panel>
     </q-tab-panels>
 
@@ -127,6 +135,53 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Replicate dialog -->
+    <q-dialog v-model="replicateDialog" persistent>
+      <q-card style="min-width: 380px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6"><q-icon name="content_copy" class="q-mr-sm" />Replicar para outros dias</div>
+          <q-space /><q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <p class="text-body2 q-mb-xs">
+            Copia os {{ slotsForDay(replicateSourceDay).length }} tempos da
+            <strong>{{ DAYS[replicateSourceDay] }}-feira</strong> para:
+          </p>
+          <div class="row q-gutter-sm q-mb-md">
+            <q-btn flat dense size="sm" label="Todos" color="indigo-6"
+              @click="replicateTargetDays = DAYS.map((_, i) => i).filter(i => i !== replicateSourceDay)" />
+            <q-btn flat dense size="sm" label="Nenhum" color="grey-6"
+              @click="replicateTargetDays = []" />
+          </div>
+          <div class="column q-gutter-xs">
+            <q-checkbox
+              v-for="(day, i) in DAYS" :key="i"
+              v-if="i !== replicateSourceDay"
+              :model-value="replicateTargetDays.includes(i)"
+              :label="day + (slotsForDay(i).length ? ` (${slotsForDay(i).length} tempos existentes)` : '')"
+              @update:model-value="(v) => { if (v) replicateTargetDays.push(i); else replicateTargetDays = replicateTargetDays.filter(d => d !== i) }"
+            />
+          </div>
+          <q-checkbox
+            v-if="replicateTargetDays.some(d => slotsForDay(d).length > 0)"
+            v-model="replicateReplace"
+            class="q-mt-md"
+            label="Substituir tempos existentes nos dias selecionados"
+            color="negative"
+          />
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Cancelar" v-close-popup />
+          <q-btn
+            color="indigo-6" icon="content_copy" label="Replicar"
+            :loading="replicating"
+            :disable="replicateTargetDays.length === 0"
+            @click="executeReplicate"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -159,6 +214,13 @@ const copyPreview = ref<SlotRow[]>([])
 const copyReplace = ref(true)
 const copying = ref(false)
 const globalSlotCount = ref(0)
+
+// Replicate dialog state
+const replicateDialog = ref(false)
+const replicateSourceDay = ref(0)
+const replicateTargetDays = ref<number[]>([])
+const replicateReplace = ref(true)
+const replicating = ref(false)
 
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))
 const schoolOptions = computed(() => schoolsStore.schools.map((s) => ({ label: s.name, value: s.id })))
@@ -294,6 +356,54 @@ async function executeCopy() {
     $q.notify({ type: 'negative', message: 'Erro ao copiar tempos' })
   } finally {
     copying.value = false
+  }
+}
+
+function openReplicateDialog(sourceDay: number) {
+  replicateSourceDay.value = sourceDay
+  // Pre-select all other days that don't yet have slots
+  const empty = DAYS.map((_, i) => i).filter(i => i !== sourceDay && slotsForDay(i).length === 0)
+  replicateTargetDays.value = empty.length > 0 ? empty : DAYS.map((_, i) => i).filter(i => i !== sourceDay)
+  replicateReplace.value = true
+  replicateDialog.value = true
+}
+
+async function executeReplicate() {
+  if (!selectedYear.value || replicateTargetDays.value.length === 0) return
+  replicating.value = true
+  try {
+    const sourceSlots = slotsForDay(replicateSourceDay.value)
+
+    // Delete existing slots on target days if requested
+    if (replicateReplace.value) {
+      const toDelete = slots.value.filter(s => replicateTargetDays.value.includes(s.day_of_week))
+      if (toDelete.length > 0) {
+        await Promise.all(toDelete.map(s => api.delete(`/time-slots/${s.id}`)))
+        slots.value = slots.value.filter(s => !replicateTargetDays.value.includes(s.day_of_week))
+      }
+    }
+
+    // Bulk-create slots for all target days
+    const payload = replicateTargetDays.value.flatMap(targetDay =>
+      sourceSlots.map(src => ({
+        academic_year_id: selectedYear.value,
+        school_id: selectedSchool.value ?? null,
+        day_of_week: targetDay,
+        slot_number: src.slot_number,
+        start_time: src.start_time,
+        end_time: src.end_time,
+        is_break: src.is_break,
+      }))
+    )
+    const { data: created } = await api.post('/time-slots/bulk', payload)
+    slots.value = [...slots.value, ...(created as SlotRow[])]
+    replicateDialog.value = false
+    const daysLabel = replicateTargetDays.value.map(d => DAYS[d]).join(', ')
+    $q.notify({ type: 'positive', message: `${(created as SlotRow[]).length} tempos criados para ${daysLabel}` })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao replicar tempos' })
+  } finally {
+    replicating.value = false
   }
 }
 
