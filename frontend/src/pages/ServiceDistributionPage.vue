@@ -292,13 +292,29 @@
                 <span v-else class="text-grey-5">—</span>
               </q-td>
             </template>
-            <template #body-cell-art79="props">
+            <template #body-cell-reduction="props">
               <q-td :props="props" class="text-center">
-                <q-chip v-if="props.row.birth_date && calcArt79(props.row.birth_date) > 0"
-                  dense color="indigo-6" text-color="white" size="sm">
-                  −{{ calcArt79(props.row.birth_date) }}h
-                </q-chip>
-                <span v-else class="text-grey-5">—</span>
+                <div class="row no-wrap items-center justify-center q-gutter-xs">
+                  <q-input
+                    v-model.number="props.row.reduction"
+                    type="number" min="0" max="20"
+                    dense outlined
+                    style="width:60px"
+                    @update:model-value="onReductionChange(props.row)"
+                  />
+                  <q-icon
+                    v-if="props.row.reduction_manual"
+                    name="edit" size="xs" color="orange-6"
+                  >
+                    <q-tooltip>Redução manual</q-tooltip>
+                  </q-icon>
+                  <q-icon
+                    v-else-if="props.row.birth_date && props.row.reduction > 0"
+                    name="auto_awesome" size="xs" color="indigo-4"
+                  >
+                    <q-tooltip>Calculado pelo Art. 79°</q-tooltip>
+                  </q-icon>
+                </div>
               </q-td>
             </template>
             <template #body-cell-component="props">
@@ -308,6 +324,7 @@
                   type="number" min="0" max="30"
                   dense outlined
                   style="width:70px"
+                  @update:model-value="onComponentChange(props.row)"
                 />
               </q-td>
             </template>
@@ -353,7 +370,10 @@ interface TeacherDistribution {
 interface CompRow {
   id: number
   name: string
-  birth_date: string | null  // 'YYYY-MM-DD' or null
+  birth_date: string | null
+  base: number               // implicit base (usually 22); teaching_component + reduction = base
+  reduction: number          // hours of reduction (Art.79° auto or manual)
+  reduction_manual: boolean  // true = user typed reduction directly
   teaching_component: number | null
 }
 
@@ -383,9 +403,9 @@ const bulkLoading = ref(false)
 
 const compColumns = [
   { name: 'name', label: 'Professor', field: 'name', align: 'left' as const, sortable: true },
-  { name: 'birth_date', label: 'Data de Nascimento', field: 'birth_date', align: 'center' as const },
+  { name: 'birth_date', label: 'Data de Nasc.', field: 'birth_date', align: 'center' as const },
   { name: 'age', label: 'Idade', field: 'birth_date', align: 'center' as const },
-  { name: 'art79', label: 'Red. Art. 79°', field: 'birth_date', align: 'center' as const },
+  { name: 'reduction', label: 'Redução (h)', field: 'reduction', align: 'center' as const },
   { name: 'component', label: 'Comp. Letiva (h)', field: 'teaching_component', align: 'center' as const },
 ]
 
@@ -546,10 +566,20 @@ function calcArt79(birthDateStr: string): number {
 }
 
 function recalcRow(row: CompRow) {
-  if (row.birth_date) {
-    const base = 22
-    row.teaching_component = base - calcArt79(row.birth_date)
+  if (row.birth_date && !row.reduction_manual) {
+    row.reduction = calcArt79(row.birth_date)
+    row.teaching_component = row.base - row.reduction
   }
+}
+
+function onReductionChange(row: CompRow) {
+  row.reduction_manual = true
+  row.teaching_component = row.base - row.reduction
+}
+
+function onComponentChange(row: CompRow) {
+  // Keep base in sync so future reduction changes are relative to the new value
+  row.base = (row.teaching_component ?? 0) + row.reduction
 }
 
 async function openComponentDialog() {
@@ -557,8 +587,14 @@ async function openComponentDialog() {
   bulkLoading.value = true
   try {
     const { data } = await api.get('/teachers', { params: { cluster_id: selectedClusterId.value } })
-    compRows.value = (data as { id: number; name: string; birth_date: string | null; teaching_component: number | null }[])
-      .map(t => ({ id: t.id, name: t.name, birth_date: t.birth_date ?? null, teaching_component: t.teaching_component ?? null }))
+    compRows.value = (data as { id: number; name: string; birth_date: string | null; teaching_component: number | null; credit_hours: number | null }[])
+      .map(t => {
+        const autoReduction = t.birth_date ? calcArt79(t.birth_date) : 0
+        const reduction = t.credit_hours ?? autoReduction
+        const reduction_manual = t.credit_hours !== null
+        const base = t.teaching_component !== null ? t.teaching_component + reduction : 22
+        return { id: t.id, name: t.name, birth_date: t.birth_date ?? null, base, reduction, reduction_manual, teaching_component: t.teaching_component ?? null }
+      })
       .sort((a, b) => a.name.localeCompare(b.name))
   } finally {
     bulkLoading.value = false
@@ -568,15 +604,17 @@ async function openComponentDialog() {
 
 function setAllBase(base: number) {
   compRows.value.forEach(r => {
-    r.teaching_component = base - (r.birth_date ? calcArt79(r.birth_date) : 0)
+    r.base = base
+    r.teaching_component = base - r.reduction
   })
 }
 
 function applyArt79All() {
   compRows.value.forEach(r => {
     if (r.birth_date) {
-      const base = r.teaching_component !== null ? (r.teaching_component + calcArt79(r.birth_date)) : 22
-      r.teaching_component = base - calcArt79(r.birth_date)
+      r.reduction = calcArt79(r.birth_date)
+      r.reduction_manual = false
+      r.teaching_component = r.base - r.reduction
     }
   })
 }
@@ -588,6 +626,7 @@ async function saveComponents() {
       id: r.id,
       teaching_component: r.teaching_component,
       birth_date: r.birth_date || null,
+      credit_hours: r.reduction,
     }))
     await api.put('/teachers/bulk-update', payload)
     $q.notify({ type: 'positive', message: `${payload.length} professores atualizados` })
