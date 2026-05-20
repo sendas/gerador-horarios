@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.3</q-badge>
+      <q-badge class="hero__badge">v1.10.4</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,34 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="checklist" color="teal-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="teal-7" class="version-badge">v1.10.4</q-badge>
+                  Seleção de Anos para Geração na Verificação de Dados
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />20 de maio de 2026, 12:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="fact_check" size="xs" color="teal-7" />
+                  A verificação antes de gerar mostra agora o estado de cada ano de escolaridade (viável/não viável) com contagem de entradas com e sem professor
+                </div>
+                <div class="feature-item">
+                  <q-icon name="checklist" size="xs" color="teal-7" />
+                  Permite selecionar individualmente quais os anos de escolaridade a incluir na geração — pré-seleciona automaticamente os viáveis
+                </div>
+                <div class="feature-item">
+                  <q-icon name="play_arrow" size="xs" color="teal-7" />
+                  Botão "Gerar selecionados" diretamente na janela de verificação, com seletor do horário a usar
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="bug_report" color="pink-8">
               <template #title>

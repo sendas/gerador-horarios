@@ -133,7 +133,32 @@ def preflight_check(academic_year_id: int, cluster_id: int, db: Session = Depend
         })
 
     can_generate = len(errors) == 0
-    return {"errors": errors, "warnings": warnings, "info": info, "can_generate": can_generate}
+
+    # Per-year-level viability summary
+    from collections import defaultdict
+    yl_data: dict = defaultdict(lambda: {"total_classes": 0, "total_entries": 0, "entries_with_teacher": 0})
+    class_by_id = {c.id: c for c in classes}
+    for c in classes:
+        yl_data[c.year_level]["total_classes"] += 1
+    for entry in all_entries:
+        cls = class_by_id.get(entry.class_id)
+        if cls:
+            yl_data[cls.year_level]["total_entries"] += 1
+            if entry.teacher_id:
+                yl_data[cls.year_level]["entries_with_teacher"] += 1
+
+    year_level_summary = [
+        {
+            "year_level": yl,
+            "total_classes": d["total_classes"],
+            "total_entries": d["total_entries"],
+            "entries_with_teacher": d["entries_with_teacher"],
+            "viable": d["entries_with_teacher"] > 0,
+        }
+        for yl, d in sorted(yl_data.items())
+    ]
+
+    return {"errors": errors, "warnings": warnings, "info": info, "can_generate": can_generate, "year_level_summary": year_level_summary}
 
 
 @router.get("", response_model=List[TimetableResponse])

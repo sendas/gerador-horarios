@@ -66,10 +66,10 @@ export const useTimetablesStore = defineStore('timetables', () => {
     return data
   }
 
-  async function generate(id: number) {
+  async function generate(id: number, options?: Record<string, unknown>) {
     generating.value = true
     try {
-      await api.post(`/timetables/${id}/generate`)
+      await api.post(`/timetables/${id}/generate`, options ?? {})
       const idx = timetables.value.findIndex((t) => t.id === id)
       if (idx !== -1) timetables.value[idx].status = 'generating'
     } finally {

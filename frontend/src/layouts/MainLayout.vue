@@ -6,7 +6,7 @@
         <q-toolbar-title>
           <q-icon name="hub" class="q-mr-sm" />
           Sinaptik
-          <span style="font-size:0.65em;opacity:0.75;margin-left:6px;font-weight:400">v1.10.3</span>
+          <span style="font-size:0.65em;opacity:0.75;margin-left:6px;font-weight:400">v1.10.4</span>
         </q-toolbar-title>
 
         <!-- Demo badge -->

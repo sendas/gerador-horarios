@@ -178,6 +178,58 @@
               </q-item>
             </q-list>
           </template>
+
+          <!-- Year level selection + direct generation -->
+          <template v-if="preflightResult.can_generate && preflightResult.year_level_summary?.length">
+            <q-separator class="q-my-md" />
+            <div class="text-subtitle2 q-mb-sm">
+              <q-icon name="checklist" color="teal" class="q-mr-xs" />Selecionar anos de escolaridade a gerar
+            </div>
+            <div class="row q-gutter-sm q-mb-md flex-wrap">
+              <q-chip
+                v-for="yl in preflightResult.year_level_summary"
+                :key="yl.year_level"
+                clickable dense square
+                :color="selectedYearLevels.has(yl.year_level)
+                  ? (yl.viable ? 'teal' : 'grey-6')
+                  : (yl.viable ? 'grey-3' : 'grey-2')"
+                :text-color="selectedYearLevels.has(yl.year_level) ? 'white' : 'dark'"
+                :icon="yl.viable ? (selectedYearLevels.has(yl.year_level) ? 'check_circle' : 'radio_button_unchecked') : 'block'"
+                @click="yl.viable && toggleYearLevel(yl.year_level)"
+              >
+                {{ yl.year_level }}.º ano
+                <q-badge
+                  :color="yl.entries_with_teacher === yl.total_entries ? 'positive' : 'warning'"
+                  floating>
+                  {{ yl.entries_with_teacher }}/{{ yl.total_entries }}
+                </q-badge>
+                <q-tooltip>
+                  {{ yl.total_classes }} turma(s) · {{ yl.entries_with_teacher }} de {{ yl.total_entries }} entradas com professor
+                  <span v-if="!yl.viable"> — não viável</span>
+                </q-tooltip>
+              </q-chip>
+            </div>
+
+            <div class="row q-col-gutter-md items-end">
+              <div class="col">
+                <q-select
+                  v-model="preflightTimetableId"
+                  :options="store.timetables.filter(t => t.status !== 'generating').map(t => ({ label: t.name, value: t.id }))"
+                  label="Horário a usar"
+                  emit-value map-options dense outlined
+                />
+              </div>
+              <div class="col-auto">
+                <q-btn
+                  color="positive" icon="play_arrow" label="Gerar selecionados"
+                  unelevated
+                  :disable="selectedYearLevels.size === 0 || !preflightTimetableId"
+                  :loading="generatingFromPreflight"
+                  @click="generateFromPreflight"
+                />
+              </div>
+            </div>
+          </template>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -218,10 +270,14 @@ const clustersStore = useClustersStore()
 
 // Preflight check
 type PreflightItem = { message: string; fix?: string; items?: string[] }
-type PreflightResult = { errors: PreflightItem[]; warnings: PreflightItem[]; info: PreflightItem[]; can_generate: boolean }
+type YearLevelSummary = { year_level: number; total_classes: number; total_entries: number; entries_with_teacher: number; viable: boolean }
+type PreflightResult = { errors: PreflightItem[]; warnings: PreflightItem[]; info: PreflightItem[]; can_generate: boolean; year_level_summary: YearLevelSummary[] }
 const showPreflight = ref(false)
 const preflightLoading = ref(false)
 const preflightResult = ref<PreflightResult | null>(null)
+const selectedYearLevels = ref<Set<number>>(new Set())
+const preflightTimetableId = ref<number | null>(null)
+const generatingFromPreflight = ref(false)
 
 async function openPreflight() {
   showPreflight.value = true
@@ -232,7 +288,7 @@ async function openPreflight() {
   if (!activeYear || !clusterId) {
     preflightResult.value = {
       errors: [{ message: 'Sem ano letivo ativo ou agrupamento configurado.' }],
-      warnings: [], info: [], can_generate: false
+      warnings: [], info: [], can_generate: false, year_level_summary: []
     }
     preflightLoading.value = false
     return
@@ -242,13 +298,46 @@ async function openPreflight() {
       params: { academic_year_id: activeYear.id, cluster_id: clusterId }
     })
     preflightResult.value = data
+    // Pre-select all viable year levels
+    selectedYearLevels.value = new Set(
+      (data.year_level_summary as YearLevelSummary[]).filter((y) => y.viable).map((y) => y.year_level)
+    )
+    // Pre-select most recent timetable for this year
+    const match = store.timetables.find((t) => t.academic_year_id === activeYear.id && t.status !== 'generating')
+    preflightTimetableId.value = match?.id ?? store.timetables[0]?.id ?? null
   } catch {
     preflightResult.value = {
       errors: [{ message: 'Erro ao verificar dados. Tente novamente.' }],
-      warnings: [], info: [], can_generate: false
+      warnings: [], info: [], can_generate: false, year_level_summary: []
     }
   } finally {
     preflightLoading.value = false
+  }
+}
+
+function toggleYearLevel(yl: number) {
+  if (selectedYearLevels.value.has(yl)) selectedYearLevels.value.delete(yl)
+  else selectedYearLevels.value.add(yl)
+}
+
+async function generateFromPreflight() {
+  if (!preflightTimetableId.value) return
+  generatingFromPreflight.value = true
+  try {
+    const yls = [...selectedYearLevels.value].sort((a, b) => a - b)
+    await store.generate(preflightTimetableId.value, {
+      year_levels: yls.length > 0 ? yls : null,
+    })
+    $q.notify({ type: 'positive', message: 'Geração iniciada em segundo plano' })
+    showPreflight.value = false
+    startGlobalPolling()
+    const target = store.timetables.find((t) => t.id === preflightTimetableId.value)
+    if (target) openLog(target)
+  } catch (e: unknown) {
+    const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Erro ao iniciar geração'
+    $q.notify({ type: 'negative', message: msg })
+  } finally {
+    generatingFromPreflight.value = false
   }
 }
 
