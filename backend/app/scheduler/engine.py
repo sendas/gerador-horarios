@@ -443,6 +443,77 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     )
     _log(db, tt, f"{n_classes} turmas · {n_teachers} professores · {len(occurrences)} ocorrências · {slots_per_day_count}–{slots_per_day_max} tempos/dia")
 
+    # ── Detect obvious impossibilities before handing to solver ─────────────────
+    early_errors: list[str] = []
+
+    # A. "Máx. 1 por dia" + entry with more occurrences than school days → impossible
+    if opt_no_same_subject_twice:
+        for entry in entries:
+            n_occ = entry.split_count if entry.is_split else max(1, round(entry.hours_per_week))
+            cp = getattr(entry, 'consecutive_pairs', 0) or 0
+            max_per_day_entry = 2 if cp > 0 else 1
+            min_days_needed = -(-n_occ // max_per_day_entry)  # ceil(n_occ / max_per_day)
+            if min_days_needed > n_days_count:
+                cls_name = entry.class_.name if entry.class_ else f"id={entry.class_id}"
+                subj_name = entry.subject.name if entry.subject else f"id={entry.subject_id}"
+                early_errors.append(
+                    f"  • {cls_name} · {subj_name}: {n_occ} aulas/semana com máx. {max_per_day_entry}/dia "
+                    f"precisaria de {min_days_needed} dias (só existem {n_days_count})"
+                )
+
+    if early_errors:
+        msg = (
+            f"INFEASIBLE antecipado — {len(early_errors)} disciplina(s) impossíveis de distribuir "
+            f"com a restrição 'Máximo 1 tempo por disciplina por dia':\n"
+            + "\n".join(early_errors[:20])
+            + ("\n  (e mais…)" if len(early_errors) > 20 else "")
+            + "\n\nSoluções: aumentar o nº de dias letivos, reduzir as horas/semana dessas "
+            "disciplinas, ou desativar 'Máximo 1 tempo por disciplina por dia' no diálogo de geração."
+        )
+        tt.status = "error"
+        tt.solver_status = msg
+        tt.updated_at = datetime.utcnow()
+        db.commit()
+        _log(db, tt, "Erro: " + msg.split("\n")[0])
+        return
+
+    # B. Per-class overload: total occurrences > available slots
+    total_slots = len(all_slots)
+    overloaded_classes: list[str] = []
+    for class_id, eids in entry_by_class.items():
+        class_occ = sum(
+            (e.split_count if e.is_split else max(1, round(e.hours_per_week)))
+            for e in entries if e.id in eids
+        )
+        cls = next((e.class_ for e in entries if e.class_id == class_id), None)
+        cls_name = cls.name if cls else f"id={class_id}"
+        if class_occ > total_slots:
+            overloaded_classes.append(f"  • {cls_name}: {class_occ} aulas para {total_slots} slots")
+        elif class_occ > max_per_day_class * n_days_count:
+            overloaded_classes.append(
+                f"  • {cls_name}: {class_occ} aulas excede o máximo configurado "
+                f"({max_per_day_class} aulas/dia × {n_days_count} dias = {max_per_day_class * n_days_count})"
+            )
+
+    if overloaded_classes:
+        msg = (
+            f"Carga horária excessiva em {len(overloaded_classes)} turma(s):\n"
+            + "\n".join(overloaded_classes)
+            + "\n\nVerifique as horas/semana no currículo ou aumente o máximo de aulas por dia nas Regras de Horário."
+        )
+        _log(db, tt, "Aviso: " + msg.split("\n")[0])
+        logger.warning("Timetable %d: carga excessiva: %s", timetable_id, overloaded_classes)
+
+    # C. Teacher overload warning (informational)
+    for tid, teacher in teachers.items():
+        occ_for_teacher = sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, []))
+        max_weekly = teacher.max_daily_lessons * n_days_count
+        if occ_for_teacher > max_weekly:
+            logger.warning(
+                "Timetable %d: Professor %s tem %d ocorrências mas máx semanal é %d.",
+                timetable_id, teacher.name, occ_for_teacher, max_weekly,
+            )
+
     # Auto-adjust max_per_day_class when students_start_slot_1 is active and there are
     # more classes than teachers. By pigeonhole, with N classes and T teachers (N>T),
     # some day will always have N classes needing slot-1 simultaneously — impossible with
@@ -463,15 +534,6 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                     class_occ, n_classes, n_teachers,
                 )
                 max_per_day_class = needed
-
-    for tid, teacher in teachers.items():
-        occ_for_teacher = sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, []))
-        max_weekly = teacher.max_daily_lessons * n_days_count
-        if occ_for_teacher > max_weekly:
-            logger.warning(
-                "Timetable %d: Professor %s tem %d ocorrências mas máx semanal é %d.",
-                timetable_id, teacher.name, occ_for_teacher, max_weekly,
-            )
 
     # Build semestral pairs map: entry_id -> paired_entry_id
     semestral_pairs: dict[int, int] = {}
@@ -1058,9 +1120,13 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             )
         elif status == cp_model.INFEASIBLE:
             hint = (
-                "INFEASIBLE — modelo sem solução possível. Verifique: "
-                "disponibilidade dos professores, 'Alunos entram no 1.º tempo' com muitas turmas, "
-                "disciplinas sem professor atribuído."
+                f"INFEASIBLE — modelo sem solução em {solver.WallTime():.1f}s. "
+                "Causas mais comuns:\n"
+                "  1. Disciplina com ≥6 h/semana + 'Máx. 1 tempo/dia' ativado — desative essa opção\n"
+                "  2. 'Alunos entram no 1.º tempo' demasiado restrito — experimente desativar\n"
+                "  3. 'Sem furos nos alunos' com carga horária elevada — experimente desativar\n"
+                "  4. Professor com disponibilidade muito limitada\n"
+                "Tente gerar com menos restrições ativas e adicione-as progressivamente."
             )
         else:
             hint = status_name
