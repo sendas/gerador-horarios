@@ -204,46 +204,84 @@
 
     <!-- Curriculum / class assignment dialog -->
     <q-dialog v-model="curriculumDialog" full-width>
-      <q-card>
-        <q-card-section class="row items-center">
-          <div class="text-h6">Turmas: {{ selectedTeacher?.name }}</div>
+      <q-card style="max-width:900px;width:100%">
+        <q-card-section class="row items-center q-pb-sm">
+          <div class="text-h6">
+            <q-icon name="groups" color="teal" class="q-mr-xs" />
+            Turmas de {{ selectedTeacher?.name }}
+          </div>
           <q-space />
+          <q-select
+            v-model="curriculumYear"
+            :options="yearOptions"
+            label="Ano Letivo"
+            emit-value map-options dense outlined
+            style="min-width:160px"
+            @update:model-value="loadCurriculum"
+            class="q-mr-md"
+          />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-card-section>
-          <q-select v-model="curriculumYear" :options="yearOptions" label="Ano Letivo" emit-value map-options class="q-mb-md" style="max-width:220px" @update:model-value="loadCurriculum" />
-          <div v-if="curriculumYear">
-            <div class="text-subtitle2 q-mb-sm">Disciplinas e turmas atribuídas</div>
-            <q-list bordered separator class="q-mb-md" style="max-height:320px;overflow-y:auto">
-              <q-item v-if="!teacherCurriculum.length"><q-item-section class="text-grey-5">Sem atribuições</q-item-section></q-item>
-              <q-item v-for="e in teacherCurriculum" :key="e.id">
+
+        <q-card-section v-if="curriculumLoading" class="text-center q-py-xl">
+          <q-spinner color="teal" size="40px" /><div class="q-mt-sm text-grey">A carregar...</div>
+        </q-card-section>
+
+        <q-card-section v-else-if="!curriculumYear" class="text-grey text-center q-py-xl">
+          Selecione um ano letivo
+        </q-card-section>
+
+        <q-card-section v-else>
+          <!-- Summary chips -->
+          <div class="row q-gutter-xs q-mb-md">
+            <q-chip icon="check_circle" color="positive" text-color="white" :label="`${totalAssigned} turmas atribuídas`" dense />
+            <q-chip icon="book" color="blue-2" text-color="dark" :label="`${entriesBySubject.length} disciplinas`" dense />
+          </div>
+
+          <div v-if="entriesBySubject.length === 0" class="text-grey-6 text-caption text-center q-py-xl">
+            Não há entradas curriculares para as disciplinas deste professor neste ano.<br/>
+            Defina primeiro as disciplinas do professor e adicione-as ao currículo das turmas.
+          </div>
+
+          <!-- Grouped by subject -->
+          <div v-for="group in entriesBySubject" :key="group.subject_id" class="q-mb-lg">
+            <div class="row items-center q-mb-xs">
+              <q-icon name="book" color="teal" size="sm" class="q-mr-xs" />
+              <span class="text-subtitle2">{{ group.subject_name }}</span>
+              <q-badge
+                :color="group.assigned === group.entries.length ? 'positive' : group.assigned > 0 ? 'warning' : 'grey-4'"
+                :text-color="group.assigned === group.entries.length ? 'white' : 'dark'"
+                :label="`${group.assigned} / ${group.entries.length} turmas`"
+                class="q-ml-sm"
+              />
+              <q-space />
+              <!-- Assign all / clear all for this subject -->
+              <q-btn flat dense size="xs" color="teal" label="Atribuir todas" @click="assignAll(group)" :disable="group.assigned === group.entries.length" />
+              <q-btn flat dense size="xs" color="grey" label="Remover todas" @click="removeAll(group)" :disable="group.assigned === 0" class="q-ml-xs" />
+            </div>
+
+            <q-list bordered separator dense style="border-radius:6px;overflow:hidden">
+              <q-item v-for="e in group.entries" :key="e.id" dense clickable @click="toggleEntry(e)">
+                <q-item-section avatar style="min-width:36px">
+                  <q-checkbox
+                    :model-value="e.teacher_id === selectedTeacher?.id"
+                    color="teal"
+                    dense
+                    @click.stop
+                    @update:model-value="(v) => toggleEntry(e, v)"
+                  />
+                </q-item-section>
                 <q-item-section>
-                  <q-item-label>{{ e.class_name }} — <strong>{{ e.subject_name }}</strong></q-item-label>
-                  <q-item-label caption>{{ e.hours_per_week }}h/semana · {{ e.year_level }}.º ano</q-item-label>
+                  <q-item-label>{{ e.class_name }}</q-item-label>
+                  <q-item-label caption>{{ e.year_level }}.º ano · {{ e.hours_per_week }}h/sem</q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-btn flat round dense icon="link_off" color="negative" @click="unassignEntry(e.id)" title="Remover atribuição" />
+                  <q-badge v-if="e.teacher_id === selectedTeacher?.id" color="teal" text-color="white" label="Este professor" />
+                  <q-badge v-else-if="e.teacher_id" color="orange-2" text-color="dark" :label="teacherName(e.teacher_id)" />
+                  <span v-else class="text-caption text-grey-5">Sem professor</span>
                 </q-item-section>
               </q-item>
             </q-list>
-            <q-separator class="q-mb-md" />
-            <div class="text-subtitle2 q-mb-sm">Adicionar atribuição</div>
-            <div class="row q-col-gutter-sm items-end">
-              <div class="col-grow">
-                <q-select
-                  v-model="newCurriculumEntryId"
-                  :options="unassignedEntryOptions"
-                  label="Turma / Disciplina disponível"
-                  emit-value map-options dense clearable
-                  use-input
-                  input-debounce="0"
-                  @filter="filterEntries"
-                />
-              </div>
-              <div class="col-auto">
-                <q-btn round color="teal" icon="add" dense @click="assignEntry" :disable="!newCurriculumEntryId" />
-              </div>
-            </div>
           </div>
         </q-card-section>
       </q-card>
@@ -393,29 +431,42 @@ type CurriculumEntry = {
   teacher_name: string | null
 }
 
+type SubjectGroup = {
+  subject_id: number
+  subject_name: string
+  entries: CurriculumEntry[]
+  assigned: number
+}
+
 const curriculumDialog = ref(false)
+const curriculumLoading = ref(false)
 const curriculumYear = ref<number | null>(null)
-const teacherCurriculum = ref<CurriculumEntry[]>([])
 const allClusterEntries = ref<CurriculumEntry[]>([])
-const newCurriculumEntryId = ref<number | null>(null)
-const entryFilterText = ref('')
 
 const clusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
 
-const unassignedEntryOptions = computed(() => {
-  const assignedIds = new Set(teacherCurriculum.value.map((e) => e.id))
-  return allClusterEntries.value
-    .filter((e) => !assignedIds.has(e.id) && (e.teacher_id === null || e.teacher_id === undefined || e.teacher_id === selectedTeacher.value?.id))
-    .filter((e) => {
-      if (!entryFilterText.value) return true
-      const txt = entryFilterText.value.toLowerCase()
-      return e.class_name.toLowerCase().includes(txt) || e.subject_name.toLowerCase().includes(txt)
-    })
-    .map((e) => ({ label: `${e.class_name} — ${e.subject_name} (${e.hours_per_week}h)`, value: e.id }))
+// Group all cluster entries by subject, restricted to teacher's subjects
+const entriesBySubject = computed<SubjectGroup[]>(() => {
+  if (!selectedTeacher.value) return []
+  const teacherSubjectIds = new Set(selectedTeacher.value.subject_ids ?? [])
+  const groups = new Map<number, SubjectGroup>()
+  for (const e of allClusterEntries.value) {
+    if (!teacherSubjectIds.has(e.subject_id)) continue
+    if (!groups.has(e.subject_id)) {
+      groups.set(e.subject_id, { subject_id: e.subject_id, subject_name: e.subject_name, entries: [], assigned: 0 })
+    }
+    const g = groups.get(e.subject_id)!
+    g.entries.push(e)
+    if (e.teacher_id === selectedTeacher.value.id) g.assigned++
+  }
+  return [...groups.values()].sort((a, b) => a.subject_name.localeCompare(b.subject_name))
 })
 
-function filterEntries(val: string, update: (fn: () => void) => void) {
-  update(() => { entryFilterText.value = val })
+const totalAssigned = computed(() => entriesBySubject.value.reduce((s, g) => s + g.assigned, 0))
+
+function teacherName(id: number | null) {
+  if (!id) return ''
+  return teachersStore.teachers.find((t) => t.id === id)?.name ?? '?'
 }
 
 async function openCurriculum(teacher: Teacher) {
@@ -426,27 +477,61 @@ async function openCurriculum(teacher: Teacher) {
 }
 
 async function loadCurriculum() {
-  if (!selectedTeacher.value || !curriculumYear.value) return
-  const [curr, all] = await Promise.all([
-    api.get(`/teachers/${selectedTeacher.value.id}/curriculum`, { params: { academic_year_id: curriculumYear.value } }),
-    clusterId.value ? api.get('/classes/curriculum-overview', { params: { cluster_id: clusterId.value, academic_year_id: curriculumYear.value } }) : Promise.resolve({ data: [] }),
-  ])
-  teacherCurriculum.value = curr.data
-  allClusterEntries.value = all.data
-  newCurriculumEntryId.value = null
+  if (!clusterId.value || !curriculumYear.value) return
+  curriculumLoading.value = true
+  try {
+    const { data } = await api.get<CurriculumEntry[]>('/classes/curriculum-overview', {
+      params: { cluster_id: clusterId.value, academic_year_id: curriculumYear.value },
+    })
+    allClusterEntries.value = data
+  } finally {
+    curriculumLoading.value = false
+  }
 }
 
-async function unassignEntry(entryId: number) {
-  await api.put(`/classes/curriculum/${entryId}`, { teacher_id: null })
-  await loadCurriculum()
-  await teachersStore.fetchAll()
+async function toggleEntry(entry: CurriculumEntry, assign?: boolean) {
+  const isCurrentlyAssigned = entry.teacher_id === selectedTeacher.value?.id
+  const shouldAssign = assign !== undefined ? assign : !isCurrentlyAssigned
+  const newTeacherId = shouldAssign ? (selectedTeacher.value?.id ?? null) : null
+
+  if (entry.teacher_id && entry.teacher_id !== selectedTeacher.value?.id && shouldAssign) {
+    // Entry belongs to another teacher — confirm override
+    $q.dialog({
+      title: 'Substituir professor',
+      message: `Esta turma está atribuída a ${teacherName(entry.teacher_id)}. Substituir por ${selectedTeacher.value?.name}?`,
+      ok: { label: 'Substituir', color: 'warning' },
+      cancel: true,
+    }).onOk(() => doToggle(entry, newTeacherId))
+    return
+  }
+  await doToggle(entry, newTeacherId)
 }
 
-async function assignEntry() {
-  if (!selectedTeacher.value || !newCurriculumEntryId.value) return
-  await api.put(`/classes/curriculum/${newCurriculumEntryId.value}`, { teacher_id: selectedTeacher.value.id })
-  await loadCurriculum()
-  await teachersStore.fetchAll()
+async function doToggle(entry: CurriculumEntry, teacherId: number | null) {
+  try {
+    await api.put(`/classes/curriculum/${entry.id}`, { teacher_id: teacherId })
+    entry.teacher_id = teacherId
+    entry.teacher_name = teacherId ? teacherName(teacherId) : null
+    // Recompute group assigned counts via reactivity (entriesBySubject is computed)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao guardar' })
+  }
+}
+
+async function assignAll(group: SubjectGroup) {
+  for (const e of group.entries) {
+    if (e.teacher_id !== selectedTeacher.value?.id) {
+      await doToggle(e, selectedTeacher.value?.id ?? null)
+    }
+  }
+}
+
+async function removeAll(group: SubjectGroup) {
+  for (const e of group.entries) {
+    if (e.teacher_id === selectedTeacher.value?.id) {
+      await doToggle(e, null)
+    }
+  }
 }
 
 // Availability
