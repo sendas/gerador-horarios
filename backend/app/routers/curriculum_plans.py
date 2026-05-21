@@ -56,6 +56,14 @@ class CopyRequest(BaseModel):
     overwrite: bool = True  # if True, replace existing plans in target year
 
 
+class CopyYearLevelRequest(BaseModel):
+    cluster_id: int
+    academic_year_id: int
+    from_year_level: int
+    to_year_level: int
+    overwrite: bool = True
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _parse_structure(ws: str):
@@ -274,6 +282,62 @@ def copy_plan(req: CopyRequest, db: Session = Depends(get_db)):
             f"{copied} entrada(s) copiada(s) de '{from_year.name if from_year else req.from_academic_year_id}' "
             f"para '{to_year.name if to_year else req.to_academic_year_id}'. "
             + (f"{skipped} já existiam (ignoradas)." if skipped else "")
+        ),
+    }
+
+
+@router.post("/copy-year-level")
+def copy_year_level(req: CopyYearLevelRequest, db: Session = Depends(get_db)):
+    """Copy curriculum plans from one year level to another within the same academic year."""
+    if req.from_year_level == req.to_year_level:
+        raise HTTPException(status_code=400, detail="Anos de escolaridade de origem e destino são iguais.")
+
+    source_plans = db.query(CurriculumPlan).filter(
+        CurriculumPlan.cluster_id == req.cluster_id,
+        CurriculumPlan.academic_year_id == req.academic_year_id,
+        CurriculumPlan.year_level == req.from_year_level,
+    ).all()
+
+    if not source_plans:
+        return {"copied": 0, "skipped": 0, "message": f"Nenhuma disciplina no {req.from_year_level}.º ano."}
+
+    if req.overwrite:
+        db.query(CurriculumPlan).filter(
+            CurriculumPlan.cluster_id == req.cluster_id,
+            CurriculumPlan.academic_year_id == req.academic_year_id,
+            CurriculumPlan.year_level == req.to_year_level,
+        ).delete(synchronize_session=False)
+
+    copied = skipped = 0
+    for src in source_plans:
+        if not req.overwrite:
+            exists = db.query(CurriculumPlan).filter(
+                CurriculumPlan.cluster_id == req.cluster_id,
+                CurriculumPlan.academic_year_id == req.academic_year_id,
+                CurriculumPlan.year_level == req.to_year_level,
+                CurriculumPlan.subject_id == src.subject_id,
+            ).first()
+            if exists:
+                skipped += 1
+                continue
+        db.add(CurriculumPlan(
+            cluster_id=req.cluster_id,
+            academic_year_id=req.academic_year_id,
+            year_level=req.to_year_level,
+            subject_id=src.subject_id,
+            hours_per_week=src.hours_per_week,
+            weekly_structure=src.weekly_structure,
+        ))
+        copied += 1
+
+    db.commit()
+    return {
+        "copied": copied,
+        "skipped": skipped,
+        "message": (
+            f"{copied} disciplina(s) copiada(s) do {req.from_year_level}.º ano "
+            f"para o {req.to_year_level}.º ano."
+            + (f" {skipped} já existiam (ignoradas)." if skipped else "")
         ),
     }
 

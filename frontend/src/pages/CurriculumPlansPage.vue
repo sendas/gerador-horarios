@@ -97,6 +97,18 @@
               </div>
               <q-space />
               <q-btn
+                icon="content_copy"
+                label="Copiar ano"
+                color="deep-purple-4"
+                size="sm"
+                outline
+                class="q-mr-sm"
+                :disable="!plansByYL[yl]?.length"
+                @click="openCopyYLDialog(yl)"
+              >
+                <q-tooltip>Copiar disciplinas deste ano para outro ano de escolaridade</q-tooltip>
+              </q-btn>
+              <q-btn
                 icon="playlist_add"
                 label="Adicionar disciplina"
                 color="deep-purple-6"
@@ -255,6 +267,38 @@
       </q-card>
     </q-dialog>
 
+    <!-- Copy year level dialog -->
+    <q-dialog v-model="copyYLDialog" persistent>
+      <q-card style="min-width:380px">
+        <q-card-section class="bg-deep-purple-7 text-white">
+          <div class="text-h6">Copiar disciplinas do {{ copyYLFrom }}.º ano</div>
+          <div class="text-caption">Para outro ano de escolaridade (mesmo ano letivo)</div>
+        </q-card-section>
+        <q-card-section class="q-gutter-sm">
+          <q-select
+            v-model="copyYLTarget"
+            :options="copyYLTargetOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            label="Ano de escolaridade de destino *"
+          />
+          <q-toggle v-model="copyYLOverwrite" label="Substituir disciplinas já existentes no destino" />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" @click="copyYLDialog = false" />
+          <q-btn
+            label="Copiar"
+            color="deep-purple-7"
+            :disable="!copyYLTarget"
+            :loading="copyingYL"
+            @click="executeCopyYL"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Apply result dialog -->
     <q-dialog v-model="applyResultDialog">
       <q-card style="min-width:340px">
@@ -302,6 +346,12 @@ const copyTarget = ref<number | null>(null)
 const copyOverwrite = ref(true)
 const copying = ref(false)
 
+const copyYLDialog = ref(false)
+const copyYLFrom = ref<number>(5)
+const copyYLTarget = ref<number | null>(null)
+const copyYLOverwrite = ref(true)
+const copyingYL = ref(false)
+
 const applyResultDialog = ref(false)
 const applyResultMsg = ref('')
 
@@ -340,6 +390,15 @@ const plansByYL = computed(() => {
 const allYearLevels = computed(() => Object.keys(plansByYL.value).map(Number).sort((a, b) => a - b))
 
 const selectedYearName = computed(() => academicYears.value.find(y => y.id === selectedYear.value)?.name || '')
+
+const copyYLTargetOptions = computed(() =>
+  Array.from({ length: 12 }, (_, i) => i + 1)
+    .filter(yl => yl !== copyYLFrom.value)
+    .map(yl => ({
+      value: yl,
+      label: allYearLevels.value.includes(yl) ? `${yl}.º ano (já tem plano)` : `${yl}.º ano`,
+    }))
+)
 
 const subjectOptions = computed(() => subjects.value)
 
@@ -477,6 +536,35 @@ function openCopyDialog() {
   copyTarget.value = null
   copyOverwrite.value = true
   copyDialog.value = true
+}
+
+function openCopyYLDialog(yl: number) {
+  copyYLFrom.value = yl
+  copyYLTarget.value = null
+  copyYLOverwrite.value = true
+  copyYLDialog.value = true
+}
+
+async function executeCopyYL() {
+  if (!copyYLTarget.value) return
+  copyingYL.value = true
+  try {
+    const res = await axios.post(`${API}/curriculum-plans/copy-year-level`, {
+      cluster_id: selectedCluster.value,
+      academic_year_id: selectedYear.value,
+      from_year_level: copyYLFrom.value,
+      to_year_level: copyYLTarget.value,
+      overwrite: copyYLOverwrite.value,
+    }, { headers: headers() })
+    copyYLDialog.value = false
+    activeTab.value = String(copyYLTarget.value)
+    await loadPlans()
+    $q.notify({ type: 'positive', message: res.data.message })
+  } catch (e: any) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Erro ao copiar.' })
+  } finally {
+    copyingYL.value = false
+  }
 }
 
 async function executeCopy() {
