@@ -406,9 +406,9 @@ _TOOLS = [
         "name": "atribuir_professores_por_disciplina",
         "description": (
             "Atribui automaticamente professores às entradas curriculares sem professor, "
-            "com base nas especialidades configuradas (TeacherSubject) e equilibrando a carga horária. "
-            "Por defeito não sobrescreve atribuições existentes. "
-            "Retorna quantas entradas foram atribuídas e quais ficaram por atribuir."
+            "equilibrando a carga horária. Usa especialidades (TeacherSubject) se existirem; "
+            "com usar_qualquer_professor=true atribui a qualquer professor do cluster quando "
+            "não há especialista. Por defeito não sobrescreve atribuições já existentes."
         ),
         "input_schema": {
             "type": "object",
@@ -421,6 +421,10 @@ _TOOLS = [
                 "subject_id": {
                     "type": "integer",
                     "description": "Limitar a uma disciplina específica (opcional)",
+                },
+                "usar_qualquer_professor": {
+                    "type": "boolean",
+                    "description": "Se true, quando não há especialista usa qualquer professor do cluster (padrão: false)",
                 },
             },
             "required": ["academic_year_id"],
@@ -1067,8 +1071,13 @@ def _tool_ver_curriculo_turma(db: Session, class_id: int) -> str:
 
 
 def _tool_atribuir_professores_por_disciplina(
-    db: Session, academic_year_id: int, sobrescrever: bool = False, subject_id: int = None
+    db: Session, academic_year_id: int, sobrescrever: bool = False,
+    subject_id: int = None, usar_qualquer_professor: bool = False,
 ) -> str:
+    # Get the cluster for fallback
+    year = db.query(AcademicYear).filter(AcademicYear.id == academic_year_id).first()
+    cluster_id = year.cluster_id if year else None
+
     q = (
         db.query(CurriculumEntry)
         .join(CurriculumEntry.class_)
@@ -1080,55 +1089,77 @@ def _tool_atribuir_professores_por_disciplina(
         q = q.filter(CurriculumEntry.teacher_id.is_(None))
     entries = q.all()
 
-    # Build load map: teacher_id → total hours assigned so far
+    # Build load map: teacher_id → total hours already assigned this year
     load: dict = {}
-    all_entries = (
+    for e in (
         db.query(CurriculumEntry)
         .join(CurriculumEntry.class_)
         .filter(Class.academic_year_id == academic_year_id, CurriculumEntry.teacher_id.isnot(None))
         .all()
-    )
-    for e in all_entries:
+    ):
         load[e.teacher_id] = load.get(e.teacher_id, 0) + e.hours_per_week
+
+    # Cache teachers by subject specialty
+    specialty_cache: dict = {}
+
+    def get_candidates(sid: int):
+        if sid not in specialty_cache:
+            rows = db.query(TeacherSubject).filter(TeacherSubject.subject_id == sid).all()
+            specialty_cache[sid] = [r.teacher_id for r in rows]
+        return specialty_cache[sid]
+
+    # All teachers in cluster for fallback
+    all_teacher_ids = [
+        t.id for t in db.query(Teacher).filter(Teacher.cluster_id == cluster_id).all()
+    ] if cluster_id else []
 
     atribuidas = []
     sem_professor = []
+    por_especialidade = 0
+    por_fallback = 0
 
     for entry in entries:
-        # Find teachers qualified for this subject
-        qualified = (
-            db.query(TeacherSubject)
-            .filter(TeacherSubject.subject_id == entry.subject_id)
-            .all()
-        )
-        if not qualified:
-            subj = db.query(Subject).filter(Subject.id == entry.subject_id).first()
-            cls = db.query(Class).filter(Class.id == entry.class_id).first()
-            sem_professor.append({
-                "turma": cls.name if cls else entry.class_id,
-                "disciplina": subj.name if subj else entry.subject_id,
-                "motivo": "Nenhum professor com esta especialidade",
-            })
-            continue
+        candidates = get_candidates(entry.subject_id)
+        via_fallback = False
 
-        # Pick teacher with lowest load
-        best_tid = min(qualified, key=lambda ts: load.get(ts.teacher_id, 0)).teacher_id
+        if not candidates:
+            if not usar_qualquer_professor or not all_teacher_ids:
+                subj = db.query(Subject).filter(Subject.id == entry.subject_id).first()
+                cls = db.query(Class).filter(Class.id == entry.class_id).first()
+                sem_professor.append({
+                    "turma": cls.name if cls else entry.class_id,
+                    "disciplina": subj.name if subj else entry.subject_id,
+                })
+                continue
+            candidates = all_teacher_ids
+            via_fallback = True
+
+        best_tid = min(candidates, key=lambda tid: load.get(tid, 0))
         teacher = db.query(Teacher).filter(Teacher.id == best_tid).first()
         subj = db.query(Subject).filter(Subject.id == entry.subject_id).first()
         cls = db.query(Class).filter(Class.id == entry.class_id).first()
 
         entry.teacher_id = best_tid
         load[best_tid] = load.get(best_tid, 0) + entry.hours_per_week
+
+        if via_fallback:
+            por_fallback += 1
+        else:
+            por_especialidade += 1
+
         atribuidas.append({
             "turma": cls.name if cls else entry.class_id,
             "disciplina": subj.name if subj else entry.subject_id,
             "professor": teacher.name if teacher else best_tid,
             "horas": entry.hours_per_week,
+            "via": "fallback" if via_fallback else "especialidade",
         })
 
     db.commit()
     return _j({
         "atribuidas": len(atribuidas),
+        "por_especialidade": por_especialidade,
+        "por_fallback_sem_especialidade": por_fallback,
         "sem_professor_disponivel": len(sem_professor),
         "detalhes_atribuidas": atribuidas,
         "detalhes_sem_professor": sem_professor,
