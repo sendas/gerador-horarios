@@ -884,7 +884,7 @@ def chat(
             # Each tool event is sent immediately → Cloudflare stays alive
             for _ in range(5):
                 response = client.chat.completions.create(
-                    model="gemini-2.0-flash-lite",
+                    model="gemini-2.5-flash",
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
