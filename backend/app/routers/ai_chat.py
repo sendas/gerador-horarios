@@ -878,7 +878,7 @@ def chat(
     try:
         for _ in range(10):
             response = client.chat.completions.create(
-                model="gemini-2.0-flash",
+                model="gemini-1.5-flash",
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
