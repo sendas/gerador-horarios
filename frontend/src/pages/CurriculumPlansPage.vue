@@ -534,10 +534,11 @@ function openEditEntry(row: any) {
 function onSubjectSelected(subjectId: number) {
   const subj = subjects.value.find((s: any) => s.id === subjectId)
   if (!subj) return
+  if (subj.weekly_structure) entryForm.value.weekly_structure = subj.weekly_structure
   if (subj.regime === 'semestral') {
     entryForm.value.is_semestral = true
     if (subj.default_semester) entryForm.value.semester = subj.default_semester
-    if (subj.weekly_structure) entryForm.value.weekly_structure = subj.weekly_structure
+    if (subj.paired_subject_id) entryForm.value.paired_subject_id = subj.paired_subject_id
   }
 }
 

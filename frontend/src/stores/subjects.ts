@@ -11,6 +11,8 @@ export interface Subject {
   weekly_structure: string  // '1' | '1+1' | '2' | '2+1' | '1+1+1'
   regime: string            // 'annual' | 'semestral'
   default_semester?: number | null
+  paired_subject_id?: number | null
+  paired_subject_name?: string | null
   is_physical_education: boolean
   can_exempt_articulado: boolean
 }

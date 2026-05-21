@@ -124,6 +124,7 @@ class SubjectBase(BaseModel):
     weekly_structure: str = "1+1"
     regime: str = "annual"
     default_semester: Optional[int] = None
+    paired_subject_id: Optional[int] = None
     is_physical_education: bool = False
     can_exempt_articulado: bool = False
 
@@ -137,12 +138,14 @@ class SubjectUpdate(BaseModel):
     weekly_structure: Optional[str] = None
     regime: Optional[str] = None
     default_semester: Optional[int] = None
+    paired_subject_id: Optional[int] = None
     is_physical_education: bool = False
     can_exempt_articulado: bool = False
 
 class SubjectResponse(SubjectBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    paired_subject_name: Optional[str] = None
 
 
 # ── Class ─────────────────────────────────────────────────────────────────────

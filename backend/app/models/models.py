@@ -104,10 +104,12 @@ class Subject(Base):
     # Regime: 'annual' | 'semestral'
     regime = Column(String, default="annual")
     default_semester = Column(Integer, nullable=True)  # 1 or 2 if semestral
+    paired_subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     is_physical_education = Column(Boolean, default=False)   # triggers no-PE-after-lunch
     can_exempt_articulado = Column(Boolean, default=False)   # students can have dispensation
 
     cluster = relationship("Cluster", back_populates="subjects")
+    paired_subject = relationship("Subject", foreign_keys="[Subject.paired_subject_id]", remote_side="Subject.id", uselist=False)
     curriculum_entries = relationship("CurriculumEntry", back_populates="subject", cascade="all, delete-orphan")
     teacher_subjects = relationship("TeacherSubject", back_populates="subject", cascade="all, delete-orphan")
 

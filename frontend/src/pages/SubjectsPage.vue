@@ -19,6 +19,9 @@
       <template #body-cell-regime="{ row }">
         <q-td>
           <q-badge :color="row.regime === 'semestral' ? 'orange-7' : 'teal-7'" :label="row.regime === 'semestral' ? 'Semestral' : 'Anual'" />
+          <span v-if="row.paired_subject_name" class="text-caption text-grey-6 q-ml-xs">
+            ↔ {{ row.paired_subject_name }}
+          </span>
         </q-td>
       </template>
       <template #body-cell-flags="{ row }">
@@ -37,11 +40,11 @@
 
     <!-- Create / Edit dialog -->
     <q-dialog v-model="dialog" persistent>
-      <q-card style="min-width: 460px; max-width: 560px; width: 100%">
+      <q-card style="min-width:340px;max-width:560px;width:100%;max-height:92vh;display:flex;flex-direction:column">
         <q-card-section class="bg-primary text-white">
           <div class="text-h6">{{ editing ? 'Editar' : 'Nova' }} Disciplina</div>
         </q-card-section>
-        <q-card-section class="q-gutter-sm">
+        <q-card-section class="q-gutter-sm" style="overflow-y:auto;flex:1">
           <q-form @submit="save">
             <q-select
               v-model="form.cluster_id" :options="clusterOptions"
@@ -106,11 +109,23 @@
               ]"
               color="primary" outline dense
             />
-            <div v-if="form.regime === 'semestral'" class="q-mt-sm">
+            <div v-if="form.regime === 'semestral'" class="q-gutter-sm q-mt-sm">
               <q-select
                 v-model="form.default_semester"
                 :options="[{ label: '1.º Semestre', value: 1 }, { label: '2.º Semestre', value: 2 }]"
                 label="Semestre padrão" emit-value map-options dense clearable
+              />
+              <q-select
+                v-model="form.paired_subject_id"
+                :options="pairedOptions"
+                option-value="id"
+                option-label="name"
+                emit-value
+                map-options
+                dense
+                clearable
+                label="Disciplina par (ocupa o mesmo horário no semestre oposto)"
+                hint="Ex: TIC no 1.º Sem ↔ EV no 2.º Sem — partilham os mesmos tempos no horário da turma"
               />
             </div>
 
@@ -133,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useSubjectsStore, type Subject } from 'stores/subjects'
 import { useClustersStore } from 'stores/clusters'
@@ -178,11 +193,29 @@ const form = ref({
   weekly_structure: '1+1',
   regime: 'annual',
   default_semester: null as number | null,
+  paired_subject_id: null as number | null,
   is_physical_education: false,
   can_exempt_articulado: false,
 })
 
 const clusterOptions = computed(() => clustersStore.clusters.map((c) => ({ label: c.name, value: c.id })))
+
+// subjects in same cluster that are semestral and not the current one
+const pairedOptions = computed(() =>
+  subjectsStore.subjects.filter((s) =>
+    s.cluster_id === form.value.cluster_id &&
+    s.regime === 'semestral' &&
+    s.id !== editing.value?.id
+  )
+)
+
+// Clear paired when switching to annual
+watch(() => form.value.regime, (val) => {
+  if (val !== 'semestral') {
+    form.value.paired_subject_id = null
+    form.value.default_semester = null
+  }
+})
 
 onMounted(async () => {
   await Promise.all([subjectsStore.fetchAll(), clustersStore.fetchAll()])
@@ -190,7 +223,7 @@ onMounted(async () => {
 
 function openCreate() {
   editing.value = null
-  form.value = { cluster_id: null, name: '', code: '', color: '#3498db', weekly_structure: '1+1', regime: 'annual', default_semester: null, is_physical_education: false, can_exempt_articulado: false }
+  form.value = { cluster_id: null, name: '', code: '', color: '#3498db', weekly_structure: '1+1', regime: 'annual', default_semester: null, paired_subject_id: null, is_physical_education: false, can_exempt_articulado: false }
   dialog.value = true
 }
 
@@ -200,6 +233,7 @@ function openEdit(row: Subject) {
     cluster_id: row.cluster_id, name: row.name, code: row.code || '',
     color: row.color, weekly_structure: row.weekly_structure || '1+1',
     regime: row.regime || 'annual', default_semester: row.default_semester ?? null,
+    paired_subject_id: row.paired_subject_id ?? null,
     is_physical_education: row.is_physical_education || false,
     can_exempt_articulado: row.can_exempt_articulado || false,
   }
