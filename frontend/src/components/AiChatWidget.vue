@@ -218,6 +218,7 @@ const TOOL_LABELS: Record<string, string> = {
   ver_atribuicao_professores: 'atribuições',
   ver_disponibilidade_professor: 'disponibilidade',
   listar_anos_letivos: 'anos letivos',
+  verificar_duplicados_curriculo: 'verificar duplicados',
 }
 
 function toolLabel(name: string): string {

@@ -371,6 +371,21 @@ _TOOLS = [
     },
     # ── Regras ────────────────────────────────────────────────────────────────
     {
+        "name": "verificar_duplicados_curriculo",
+        "description": (
+            "Verifica se há disciplinas duplicadas no currículo das turmas de um ano letivo — "
+            "mesma disciplina atribuída mais de uma vez à mesma turma. "
+            "Retorna lista de problemas encontrados e resumo por turma."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo a verificar"},
+            },
+            "required": ["academic_year_id"],
+        },
+    },
+    {
         "name": "ver_regras_horario",
         "description": (
             "Mostra as regras de horário configuradas para um agrupamento: "
@@ -1024,6 +1039,37 @@ def _tool_ver_disponibilidade_professor(db: Session, teacher_id: int, academic_y
     })
 
 
+def _tool_verificar_duplicados_curriculo(db: Session, academic_year_id: int) -> str:
+    classes = db.query(Class).filter(Class.academic_year_id == academic_year_id).all()
+    problemas = []
+    resumo = []
+    for cls in classes:
+        entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id == cls.id).all()
+        contagem: dict = {}
+        for e in entries:
+            contagem.setdefault(e.subject_id, []).append(e.id)
+        dups = {sid: ids for sid, ids in contagem.items() if len(ids) > 1}
+        turma_ok = len(dups) == 0
+        resumo.append({"turma": cls.name, "ok": turma_ok, "duplicados": len(dups)})
+        for sid, ids in dups.items():
+            subj = db.query(Subject).filter(Subject.id == sid).first()
+            problemas.append({
+                "turma": cls.name,
+                "turma_id": cls.id,
+                "disciplina": subj.name if subj else f"id={sid}",
+                "disciplina_id": sid,
+                "entradas_duplicadas": len(ids),
+                "entry_ids": ids,
+            })
+    return _j({
+        "total_turmas": len(classes),
+        "turmas_com_duplicados": len([r for r in resumo if not r["ok"]]),
+        "total_problemas": len(problemas),
+        "problemas": problemas,
+        "resumo_por_turma": resumo,
+    })
+
+
 def _tool_listar_anos_letivos(db: Session, cluster_id: int) -> str:
     years = (
         db.query(AcademicYear)
@@ -1068,6 +1114,7 @@ def _execute_tool(name: str, inp: dict, db: Session) -> str:
             "ver_atribuicao_professores": lambda: _tool_ver_atribuicao_professores(db, **inp),
             "ver_disponibilidade_professor": lambda: _tool_ver_disponibilidade_professor(db, **inp),
             "listar_anos_letivos":       lambda: _tool_listar_anos_letivos(db, **inp),
+            "verificar_duplicados_curriculo": lambda: _tool_verificar_duplicados_curriculo(db, **inp),
         }
         fn = dispatch.get(name)
         if fn is None:
