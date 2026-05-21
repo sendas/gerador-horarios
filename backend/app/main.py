@@ -393,11 +393,9 @@ def seed_demo_data():
             db.commit()
             logger.info("Dados de demonstração criados com sucesso.")
 
-        # Always rebuild demo timetable lessons so slot-1 enforcement is current
+        # Only touch the demo timetable (identified by name) — never wipe user timetables
         year = db.query(AcademicYear).filter(AcademicYear.cluster_id == cluster.id).first()
         if year:
-            # Fix scheduling rules for existing DBs: max_periods_per_day_class must be
-            # >= 6 so that with 7 classes and 6 teachers the slot-1 constraint is feasible.
             rules = db.query(SchedulingRules).filter(
                 SchedulingRules.cluster_id == cluster.id
             ).first()
@@ -406,22 +404,39 @@ def seed_demo_data():
                 db.commit()
                 logger.info("Demo: max_periods_per_day_class corrigido para 6 (era %d).", 5)
 
-            timetable = db.query(Timetable).filter(Timetable.academic_year_id == year.id).first()
-            if timetable:
-                classes_list = db.query(Class).filter(
-                    Class.academic_year_id == year.id
+            demo_timetable = db.query(Timetable).filter(
+                Timetable.academic_year_id == year.id,
+                Timetable.name == "Horário Demo 2025/2026",
+            ).first()
+            if demo_timetable:
+                demo_classes = db.query(Class).filter(
+                    Class.school_id.in_(
+                        [s.id for s in db.query(School).filter(School.cluster_id == cluster.id).all()]
+                    ),
+                    Class.academic_year_id == year.id,
                 ).order_by(Class.id).all()
+                demo_class_ids = {c.id for c in demo_classes}
+                # Build teacher map restricted to demo subjects/teachers
                 teacher_by_subject: dict = {}
-                for ts in db.query(TeacherSubject).all():
+                demo_teacher_ids = {
+                    a.teacher_id for a in db.query(TeacherSchoolAssignment).filter(
+                        TeacherSchoolAssignment.academic_year_id == year.id
+                    ).all()
+                }
+                for ts in db.query(TeacherSubject).filter(
+                    TeacherSubject.teacher_id.in_(list(demo_teacher_ids))
+                ).all():
                     if ts.subject_id not in teacher_by_subject:
                         teacher_by_subject[ts.subject_id] = ts.teacher_id
-                db.query(ScheduledLesson).filter(
-                    ScheduledLesson.timetable_id == timetable.id
-                ).delete()
-                _build_demo_timetable(db, timetable.id, classes_list, teacher_by_subject)
-                timetable.updated_at = dt.datetime.utcnow()
-                db.commit()
-                logger.info("Horário demo reconstruído com regras de slot-1.")
+                # Only rebuild if timetable has no lessons yet (first boot) or is the auto-seeded one
+                lesson_count = db.query(ScheduledLesson).filter(
+                    ScheduledLesson.timetable_id == demo_timetable.id
+                ).count()
+                if lesson_count == 0:
+                    _build_demo_timetable(db, demo_timetable.id, demo_classes, teacher_by_subject)
+                    demo_timetable.updated_at = dt.datetime.utcnow()
+                    db.commit()
+                    logger.info("Horário demo construído.")
     except Exception as e:
         logger.error(f"Erro ao criar dados demo: {e}", exc_info=True)
         db.rollback()
