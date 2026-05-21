@@ -1061,7 +1061,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     solver1.parameters.max_time_in_seconds = float(phase1_time)
     solver1.parameters.num_workers = n_workers
     solver1.parameters.max_memory_in_mb = max_mem
-    solver1.parameters.search_branching = cp_model.PORTFOLIO_WITH_QUICK_RESTART
+    solver1.parameters.search_branching = 6  # PORTFOLIO_WITH_QUICK_RESTART
 
     # Temporarily remove objective to find feasibility fast
     has_objective = bool(penalty_terms)
