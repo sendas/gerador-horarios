@@ -14,6 +14,7 @@ from app.models.models import (
     Cluster, School, AcademicYear, Timetable, Teacher, Class,
     ScheduledLesson, CurriculumEntry, NonTeachingAssignment, NonTeachingType,
     SchedulingRules, TimeSlotConfig, Subject, TeacherSchoolAssignment,
+    Room, TeacherSubject, TeacherAvailability,
 )
 from app.auth import get_current_user
 
@@ -276,6 +277,96 @@ _TOOLS = [
                 "teacher_id": {"type": "integer", "description": "Filtrar por professor (opcional)"},
             },
             "required": ["academic_year_id"],
+        },
+    },
+    # ── Disciplinas ───────────────────────────────────────────────────────────
+    {
+        "name": "listar_disciplinas",
+        "description": (
+            "Lista todas as disciplinas de um agrupamento com código, estrutura semanal, "
+            "regime (anual/semestral) e quantas turmas a têm no currículo."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cluster_id": {"type": "integer", "description": "ID do agrupamento"},
+                "academic_year_id": {"type": "integer", "description": "Contar turmas neste ano letivo (opcional)"},
+            },
+            "required": ["cluster_id"],
+        },
+    },
+    {
+        "name": "ver_curriculo_turma",
+        "description": (
+            "Mostra o currículo completo de uma turma: disciplinas, horas/semana, "
+            "professor atribuído e estrutura de aulas. Usa listar_turmas para obter o ID."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "class_id": {"type": "integer", "description": "ID da turma"},
+            },
+            "required": ["class_id"],
+        },
+    },
+    # ── Salas ─────────────────────────────────────────────────────────────────
+    {
+        "name": "listar_salas",
+        "description": "Lista salas disponíveis numa escola ou agrupamento com capacidade e tipo.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cluster_id": {"type": "integer", "description": "ID do agrupamento"},
+                "school_id": {"type": "integer", "description": "Filtrar por escola (opcional)"},
+            },
+            "required": ["cluster_id"],
+        },
+    },
+    # ── Atribuição ────────────────────────────────────────────────────────────
+    {
+        "name": "ver_atribuicao_professores",
+        "description": (
+            "Mostra as atribuições de professores a turmas/disciplinas num ano letivo: "
+            "quais professores dão quais disciplinas a que turmas e com quantas horas."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo"},
+                "teacher_id": {"type": "integer", "description": "Filtrar por professor (opcional)"},
+                "subject_id": {"type": "integer", "description": "Filtrar por disciplina (opcional)"},
+            },
+            "required": ["academic_year_id"],
+        },
+    },
+    {
+        "name": "ver_disponibilidade_professor",
+        "description": (
+            "Mostra os slots de indisponibilidade de um professor num ano letivo "
+            "(slots onde NÃO pode ter aulas). Útil para diagnosticar conflitos."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "teacher_id": {"type": "integer", "description": "ID do professor"},
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo"},
+            },
+            "required": ["teacher_id", "academic_year_id"],
+        },
+    },
+    # ── Anos letivos ──────────────────────────────────────────────────────────
+    {
+        "name": "listar_anos_letivos",
+        "description": (
+            "Lista todos os anos letivos de um agrupamento com estado ativo/inativo "
+            "e número de turmas e horários."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cluster_id": {"type": "integer", "description": "ID do agrupamento"},
+            },
+            "required": ["cluster_id"],
         },
     },
     # ── Regras ────────────────────────────────────────────────────────────────
@@ -798,6 +889,159 @@ def _tool_ver_regras(db: Session, cluster_id: int, academic_year_id: int = None)
     return _j({"regras": result})
 
 
+def _tool_listar_disciplinas(db: Session, cluster_id: int, academic_year_id: int = None) -> str:
+    subjects = db.query(Subject).filter(Subject.cluster_id == cluster_id).order_by(Subject.name).all()
+    rows = []
+    for s in subjects:
+        count = 0
+        if academic_year_id:
+            count = (
+                db.query(CurriculumEntry)
+                .join(CurriculumEntry.class_)
+                .filter(Class.academic_year_id == academic_year_id, CurriculumEntry.subject_id == s.id)
+                .count()
+            )
+        rows.append({
+            "id": s.id, "nome": s.name, "codigo": s.code,
+            "estrutura_semanal": s.weekly_structure, "regime": s.regime,
+            "educacao_fisica": s.is_physical_education,
+            "turmas_com_esta_disciplina": count if academic_year_id else "n/a",
+        })
+    return _j({"total": len(rows), "disciplinas": rows})
+
+
+def _tool_ver_curriculo_turma(db: Session, class_id: int) -> str:
+    class_ = db.query(Class).filter(Class.id == class_id).first()
+    if not class_:
+        return _j({"erro": f"Turma {class_id} não encontrada"})
+    entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id == class_id).all()
+    rows = []
+    total_hours = 0.0
+    for e in entries:
+        subj = db.query(Subject).filter(Subject.id == e.subject_id).first()
+        teacher = db.query(Teacher).filter(Teacher.id == e.teacher_id).first() if e.teacher_id else None
+        rows.append({
+            "id": e.id,
+            "disciplina": subj.name if subj else "?",
+            "codigo": subj.code if subj else None,
+            "horas_semana": e.hours_per_week,
+            "blocos": e.split_count,
+            "pares_consecutivos": e.consecutive_pairs,
+            "semestral": e.is_semestral,
+            "semestre": e.semester,
+            "professor": teacher.name if teacher else "Não atribuído",
+        })
+        total_hours += e.hours_per_week
+    return _j({
+        "turma": class_.name,
+        "ano_escolaridade": class_.year_level,
+        "total_horas_semana": total_hours,
+        "total_entradas": len(rows),
+        "curriculo": rows,
+    })
+
+
+def _tool_listar_salas(db: Session, cluster_id: int, school_id: int = None) -> str:
+    schools = db.query(School).filter(School.cluster_id == cluster_id).all()
+    school_ids = [s.id for s in schools]
+    q = db.query(Room).filter(Room.school_id.in_(school_ids))
+    if school_id:
+        q = q.filter(Room.school_id == school_id)
+    rooms = q.order_by(Room.name).all()
+    school_map = {s.id: s.name for s in schools}
+    rows = [
+        {"id": r.id, "nome": r.name, "escola": school_map.get(r.school_id, "?"),
+         "capacidade": r.capacity, "tipo": r.room_type}
+        for r in rooms
+    ]
+    return _j({"total": len(rows), "salas": rows})
+
+
+def _tool_ver_atribuicao_professores(
+    db: Session, academic_year_id: int, teacher_id: int = None, subject_id: int = None
+) -> str:
+    q = (
+        db.query(CurriculumEntry)
+        .join(CurriculumEntry.class_)
+        .filter(Class.academic_year_id == academic_year_id)
+        .filter(CurriculumEntry.teacher_id.isnot(None))
+    )
+    if teacher_id:
+        q = q.filter(CurriculumEntry.teacher_id == teacher_id)
+    if subject_id:
+        q = q.filter(CurriculumEntry.subject_id == subject_id)
+    entries = q.all()
+    rows = []
+    for e in entries:
+        teacher = db.query(Teacher).filter(Teacher.id == e.teacher_id).first()
+        subj = db.query(Subject).filter(Subject.id == e.subject_id).first()
+        class_ = db.query(Class).filter(Class.id == e.class_id).first()
+        rows.append({
+            "professor_id": e.teacher_id,
+            "professor": teacher.name if teacher else "?",
+            "disciplina_id": e.subject_id,
+            "disciplina": subj.name if subj else "?",
+            "turma_id": e.class_id,
+            "turma": class_.name if class_ else "?",
+            "horas_semana": e.hours_per_week,
+        })
+    sem_atribuicao = (
+        db.query(CurriculumEntry)
+        .join(CurriculumEntry.class_)
+        .filter(Class.academic_year_id == academic_year_id, CurriculumEntry.teacher_id.is_(None))
+        .count()
+    )
+    return _j({
+        "total_atribuicoes": len(rows),
+        "entradas_sem_professor": sem_atribuicao,
+        "atribuicoes": rows,
+    })
+
+
+def _tool_ver_disponibilidade_professor(db: Session, teacher_id: int, academic_year_id: int) -> str:
+    teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not teacher:
+        return _j({"erro": f"Professor {teacher_id} não encontrado"})
+    unavailable = (
+        db.query(TeacherAvailability)
+        .filter(
+            TeacherAvailability.teacher_id == teacher_id,
+            TeacherAvailability.academic_year_id == academic_year_id,
+            TeacherAvailability.is_available.is_(False),
+        )
+        .order_by(TeacherAvailability.day_of_week, TeacherAvailability.slot_number)
+        .all()
+    )
+    slots = [
+        {"dia": _day_name(a.day_of_week), "slot": a.slot_number}
+        for a in unavailable
+    ]
+    return _j({
+        "professor": teacher.name,
+        "total_indisponibilidades": len(slots),
+        "slots_indisponiveis": slots,
+        "nota": "Slots não listados são disponíveis",
+    })
+
+
+def _tool_listar_anos_letivos(db: Session, cluster_id: int) -> str:
+    years = (
+        db.query(AcademicYear)
+        .filter(AcademicYear.cluster_id == cluster_id)
+        .order_by(AcademicYear.name.desc())
+        .all()
+    )
+    rows = []
+    for y in years:
+        num_classes = db.query(Class).filter(Class.academic_year_id == y.id).count()
+        num_timetables = db.query(Timetable).filter(Timetable.academic_year_id == y.id).count()
+        rows.append({
+            "id": y.id, "nome": y.name, "ativo": y.is_active,
+            "num_turmas": num_classes, "num_horarios": num_timetables,
+        })
+    return _j({"anos_letivos": rows})
+
+
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 def _execute_tool(name: str, inp: dict, db: Session) -> str:
@@ -818,6 +1062,12 @@ def _execute_tool(name: str, inp: dict, db: Session) -> str:
             "definir_componentes_letivos": lambda: _tool_definir_componentes(db, **inp),
             "listar_servico_nao_letivo": lambda: _tool_listar_servico_nao_letivo(db, **inp),
             "ver_regras_horario":        lambda: _tool_ver_regras(db, **inp),
+            "listar_disciplinas":        lambda: _tool_listar_disciplinas(db, **inp),
+            "ver_curriculo_turma":       lambda: _tool_ver_curriculo_turma(db, **inp),
+            "listar_salas":              lambda: _tool_listar_salas(db, **inp),
+            "ver_atribuicao_professores": lambda: _tool_ver_atribuicao_professores(db, **inp),
+            "ver_disponibilidade_professor": lambda: _tool_ver_disponibilidade_professor(db, **inp),
+            "listar_anos_letivos":       lambda: _tool_listar_anos_letivos(db, **inp),
         }
         fn = dispatch.get(name)
         if fn is None:

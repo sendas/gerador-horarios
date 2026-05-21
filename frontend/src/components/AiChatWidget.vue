@@ -212,6 +212,12 @@ const TOOL_LABELS: Record<string, string> = {
   definir_componentes_letivos: 'componentes',
   listar_servico_nao_letivo: 'serv. não letivo',
   ver_regras_horario: 'regras',
+  listar_disciplinas: 'disciplinas',
+  ver_curriculo_turma: 'currículo turma',
+  listar_salas: 'salas',
+  ver_atribuicao_professores: 'atribuições',
+  ver_disponibilidade_professor: 'disponibilidade',
+  listar_anos_letivos: 'anos letivos',
 }
 
 function toolLabel(name: string): string {
