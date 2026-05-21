@@ -273,6 +273,8 @@ class TeacherResponse(TeacherBase):
     subject_names: List[str] = []
     subject_ids: List[int] = []
     school_ids: List[int] = []
+    primary_school_id: Optional[int] = None
+    primary_school_name: Optional[str] = None
 
 
 # ── TeacherSchoolAssignment ───────────────────────────────────────────────────
@@ -282,16 +284,19 @@ class TeacherSchoolAssignmentBase(BaseModel):
     school_id: int
     academic_year_id: int
     travel_time_minutes: int = 0
+    is_primary: bool = False
 
 class TeacherSchoolAssignmentCreate(TeacherSchoolAssignmentBase):
     teacher_id: Optional[int] = None  # supplied via URL path param
 
 class TeacherSchoolAssignmentUpdate(BaseModel):
     travel_time_minutes: Optional[int] = None
+    is_primary: Optional[bool] = None
 
 class TeacherSchoolAssignmentResponse(TeacherSchoolAssignmentBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    school_name: Optional[str] = None
 
 
 # ── TeacherAvailability ───────────────────────────────────────────────────────

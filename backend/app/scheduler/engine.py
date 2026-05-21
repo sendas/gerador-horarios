@@ -202,18 +202,42 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         if school_ids_filter:
             entries = [e for e in entries if e.class_.school_id in school_ids_filter]
 
+    # Pre-compute teacher → allowed schools (from school assignments for this year).
+    # Teachers with NO assignments are unrestricted (legacy / backward compat).
+    _sa_pre = db.query(TeacherSchoolAssignment).filter(
+        TeacherSchoolAssignment.academic_year_id == academic_year_id
+    ).all()
+    teacher_allowed_schools: dict[int, set[int]] = {}
+    for _sa in _sa_pre:
+        teacher_allowed_schools.setdefault(_sa.teacher_id, set()).add(_sa.school_id)
+
+    # Pre-compute class → school
+    class_school_pre: dict[int, int] = {
+        e.class_id: e.class_.school_id for e in entries if e.class_
+    }
+
     # Teachers eligible for each entry.
-    # If entry.teacher_id is set, that teacher is the only option (hard assignment).
-    # Otherwise fall back to TeacherSubject links.
+    # Hard assignment (entry.teacher_id) takes priority.
+    # Otherwise: TeacherSubject candidates filtered to teachers who are
+    # assigned to the class's school (or unrestricted if no assignments).
     entry_teachers: dict[int, list[int]] = {}
     for entry in entries:
+        class_school_id = class_school_pre.get(entry.class_id)
         if entry.teacher_id:
             entry_teachers[entry.id] = [entry.teacher_id]
         else:
             ts = db.query(TeacherSubject).filter(
                 TeacherSubject.subject_id == entry.subject_id
             ).all()
-            entry_teachers[entry.id] = [t.teacher_id for t in ts]
+            eligible = []
+            for t in ts:
+                allowed = teacher_allowed_schools.get(t.teacher_id)
+                if allowed is None:
+                    # No school assignments → unrestricted
+                    eligible.append(t.teacher_id)
+                elif class_school_id and class_school_id in allowed:
+                    eligible.append(t.teacher_id)
+            entry_teachers[entry.id] = eligible
 
     # ── Entries without eligible teacher: skip (warn but continue generation) ──
     no_teacher: list[str] = []

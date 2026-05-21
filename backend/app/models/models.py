@@ -208,6 +208,7 @@ class TeacherSchoolAssignment(Base):
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
     academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
     travel_time_minutes = Column(Integer, default=0)
+    is_primary = Column(Boolean, default=False)  # escola base do professor
 
     teacher = relationship("Teacher", back_populates="school_assignments")
     school = relationship("School", back_populates="teacher_assignments")

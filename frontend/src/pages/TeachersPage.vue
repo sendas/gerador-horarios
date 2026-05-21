@@ -33,6 +33,19 @@
     </div>
 
     <q-table :rows="filteredTeachers" :columns="columns" row-key="id" :loading="teachersStore.loading">
+      <template #body-cell-primary_school="props">
+        <q-td :props="props">
+          <span v-if="props.row.primary_school_name">
+            <q-icon name="star" color="amber-7" size="xs" class="q-mr-xs" />{{ props.row.primary_school_name }}
+          </span>
+          <span v-else-if="props.row.school_ids?.length" class="text-caption text-grey-6">
+            {{ props.row.school_ids.length }} escola(s) — sem base
+          </span>
+          <span v-else class="text-caption text-orange-7">
+            <q-icon name="warning" size="xs" /> sem escola
+          </span>
+        </q-td>
+      </template>
       <template #body-cell-subject_names="props">
         <q-td :props="props">
           <q-chip v-for="s in props.row.subject_names" :key="s" size="sm" :label="s" color="blue-2" text-color="dark" class="q-mr-xs" />
@@ -137,19 +150,40 @@
 
     <!-- Schools dialog -->
     <q-dialog v-model="schoolsDialog">
-      <q-card style="min-width: 500px">
+      <q-card style="min-width: 520px">
         <q-card-section class="row items-center">
           <div class="text-h6">Escolas: {{ selectedTeacher?.name }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
-          <q-list>
+          <q-banner v-if="!schoolAssignments.length" class="bg-orange-1 text-orange-9" rounded dense>
+            <template #avatar><q-icon name="warning" /></template>
+            Sem escola atribuída — este professor pode ser alocado a qualquer escola.
+            Adicione pelo menos a escola base para restringir a atribuição.
+          </q-banner>
+          <q-list v-else bordered separator class="rounded-borders">
             <q-item v-for="a in schoolAssignments" :key="a.id">
-              <q-item-section>{{ schoolName(a.school_id) }} (Ano: {{ yearName(a.academic_year_id) }})</q-item-section>
-              <q-item-section side>{{ a.travel_time_minutes }} min viagem</q-item-section>
+              <q-item-section avatar>
+                <q-btn
+                  flat round
+                  :icon="a.is_primary ? 'star' : 'star_border'"
+                  :color="a.is_primary ? 'amber-7' : 'grey-5'"
+                  size="sm"
+                  @click="setPrimarySchool(a.id)"
+                >
+                  <q-tooltip>{{ a.is_primary ? 'Escola base (principal)' : 'Definir como escola base' }}</q-tooltip>
+                </q-btn>
+              </q-item-section>
+              <q-item-section>
+                <q-item-label>
+                  {{ a.school_name || schoolName(a.school_id) }}
+                  <q-badge v-if="a.is_primary" color="amber-7" label="Principal" class="q-ml-xs" />
+                </q-item-label>
+                <q-item-label caption>{{ yearName(a.academic_year_id) }} · {{ a.travel_time_minutes }} min viagem</q-item-label>
+              </q-item-section>
               <q-item-section side>
-                <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="removeSchoolAssignment(a.id)" />
+                <q-btn flat round icon="delete" size="sm" color="negative" @click="removeSchoolAssignment(a.id)" />
               </q-item-section>
             </q-item>
           </q-list>
@@ -159,15 +193,22 @@
             <div class="col-4">
               <q-select v-model="newAssignment.school_id" :options="schoolOptions" label="Escola" emit-value map-options dense />
             </div>
-            <div class="col-4">
+            <div class="col-3">
               <q-select v-model="newAssignment.academic_year_id" :options="yearOptions" label="Ano Letivo" emit-value map-options dense />
             </div>
-            <div class="col-3">
+            <div class="col-2">
               <q-input v-model.number="newAssignment.travel_time_minutes" label="Viagem (min)" type="number" dense />
             </div>
-            <div class="col-1">
+            <div class="col-auto">
+              <q-toggle v-model="newAssignment.is_primary" label="Principal" color="amber-7" dense />
+            </div>
+            <div class="col-auto">
               <q-btn round color="primary" icon="add" dense @click="addSchoolAssignment" />
             </div>
+          </div>
+          <div class="text-caption text-grey-6 q-mt-xs">
+            <q-icon name="info" size="xs" /> Professores sem escola atribuída podem ser colocados em qualquer escola.
+            Professores com escolas definidas só serão alocados nessas escolas.
           </div>
         </q-card-section>
       </q-card>
@@ -414,7 +455,7 @@ const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },
-  { name: 'email', label: 'Email', field: 'email', align: 'left' as const },
+  { name: 'primary_school', label: 'Escola Base', field: 'primary_school_name', align: 'left' as const, sortable: true },
   { name: 'subject_names', label: 'Disciplinas', field: 'subject_names', align: 'left' as const },
   { name: 'teaching_component', label: 'Comp. Letiva', field: 'teaching_component', align: 'center' as const },
   { name: 'max_daily_lessons', label: 'Máx/dia', field: 'max_daily_lessons', align: 'center' as const },
@@ -462,8 +503,8 @@ const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name,
 // Schools
 const schoolsDialog = ref(false)
 const selectedTeacher = ref<Teacher | null>(null)
-const schoolAssignments = ref<{ id: number; school_id: number; academic_year_id: number; travel_time_minutes: number }[]>([])
-const newAssignment = ref({ school_id: null as number | null, academic_year_id: null as number | null, travel_time_minutes: 0 })
+const schoolAssignments = ref<{ id: number; school_id: number; school_name?: string | null; academic_year_id: number; travel_time_minutes: number; is_primary: boolean }[]>([])
+const newAssignment = ref({ school_id: null as number | null, academic_year_id: null as number | null, travel_time_minutes: 0, is_primary: false })
 
 function schoolName(id: number) { return schoolsStore.schools.find((s) => s.id === id)?.name ?? '—' }
 function yearName(id: number) { return yearsStore.years.find((y) => y.id === id)?.name ?? '—' }
@@ -796,14 +837,28 @@ async function addSchoolAssignment() {
       school_id: newAssignment.value.school_id,
       academic_year_id: newAssignment.value.academic_year_id,
       travel_time_minutes: newAssignment.value.travel_time_minutes,
+      is_primary: newAssignment.value.is_primary,
     })
+    if (newAssignment.value.is_primary) {
+      schoolAssignments.value.forEach((a) => { a.is_primary = false })
+    }
     schoolAssignments.value.push(data)
-    newAssignment.value = { school_id: null, academic_year_id: null, travel_time_minutes: 0 }
+    newAssignment.value = { school_id: null, academic_year_id: null, travel_time_minutes: 0, is_primary: false }
     $q.notify({ type: 'positive', message: 'Escola adicionada' })
   } catch (e: unknown) {
     const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
     const msg = detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : 'Erro ao adicionar escola'
     $q.notify({ type: 'negative', message: String(msg) })
+  }
+}
+
+async function setPrimarySchool(assignmentId: number) {
+  try {
+    await teachersStore.setPrimarySchool(assignmentId)
+    schoolAssignments.value.forEach((a) => { a.is_primary = a.id === assignmentId })
+    $q.notify({ type: 'positive', message: 'Escola base definida' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao definir escola base' })
   }
 }
 

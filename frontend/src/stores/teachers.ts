@@ -17,6 +17,8 @@ export interface Teacher {
   subject_names?: string[]
   subject_ids?: number[]
   school_ids?: number[]
+  primary_school_id?: number | null
+  primary_school_name?: string | null
   credit_hours?: number | null
 }
 
@@ -26,6 +28,8 @@ export interface TeacherSchoolAssignment {
   school_id: number
   academic_year_id: number
   travel_time_minutes: number
+  is_primary: boolean
+  school_name?: string | null
 }
 
 export interface TeacherAvailability {
@@ -84,6 +88,11 @@ export const useTeachersStore = defineStore('teachers', () => {
     await api.delete(`/teachers/school-assignments/${assignmentId}`)
   }
 
+  async function setPrimarySchool(assignmentId: number) {
+    const { data } = await api.patch<TeacherSchoolAssignment>(`/teachers/school-assignments/${assignmentId}/set-primary`)
+    return data
+  }
+
   async function fetchSubjects(teacherId: number) {
     const { data } = await api.get(`/teachers/${teacherId}/subjects`)
     return data
@@ -114,7 +123,7 @@ export const useTeachersStore = defineStore('teachers', () => {
 
   return {
     teachers, loading, fetchAll, create, update, remove,
-    fetchSchoolAssignments, addSchoolAssignment, removeSchoolAssignment,
+    fetchSchoolAssignments, addSchoolAssignment, removeSchoolAssignment, setPrimarySchool,
     fetchSubjects, addSubject, removeSubject,
     fetchAvailability, setAvailabilityBulk,
   }

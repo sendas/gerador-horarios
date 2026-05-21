@@ -35,7 +35,22 @@ def _build_response(t: Teacher) -> TeacherResponse:
     r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
     r.subject_ids = [ts.subject_id for ts in t.teacher_subjects]
     r.school_ids = list({sa.school_id for sa in t.school_assignments})
+    primary = next((sa for sa in t.school_assignments if sa.is_primary), None)
+    r.primary_school_id = primary.school_id if primary else None
+    r.primary_school_name = primary.school.name if primary and primary.school else None
     return r
+
+
+def _sa_dict(sa: TeacherSchoolAssignment) -> dict:
+    return {
+        "id": sa.id,
+        "teacher_id": sa.teacher_id,
+        "school_id": sa.school_id,
+        "academic_year_id": sa.academic_year_id,
+        "travel_time_minutes": sa.travel_time_minutes,
+        "is_primary": bool(sa.is_primary),
+        "school_name": sa.school.name if sa.school else None,
+    }
 
 
 @router.put("/bulk-update")
@@ -146,18 +161,44 @@ def list_teacher_curriculum(id: int, academic_year_id: int = None, db: Session =
 
 # School assignments
 
-@router.get("/{id}/school-assignments", response_model=List[TeacherSchoolAssignmentResponse])
+@router.get("/{id}/school-assignments")
 def list_school_assignments(id: int, db: Session = Depends(get_db)):
-    return db.query(TeacherSchoolAssignment).filter(TeacherSchoolAssignment.teacher_id == id).all()
+    rows = db.query(TeacherSchoolAssignment).filter(TeacherSchoolAssignment.teacher_id == id).all()
+    return [_sa_dict(sa) for sa in rows]
 
 
-@router.post("/{id}/school-assignments", response_model=TeacherSchoolAssignmentResponse, status_code=201)
+@router.post("/{id}/school-assignments", status_code=201)
 def add_school_assignment(id: int, data: TeacherSchoolAssignmentCreate, db: Session = Depends(get_db)):
+    # If marked primary, unset previous primary for this teacher+year
+    if data.is_primary:
+        db.query(TeacherSchoolAssignment).filter(
+            TeacherSchoolAssignment.teacher_id == id,
+            TeacherSchoolAssignment.academic_year_id == data.academic_year_id,
+            TeacherSchoolAssignment.is_primary == True,
+        ).update({"is_primary": False})
     obj = TeacherSchoolAssignment(**{**data.model_dump(exclude={"teacher_id"}), "teacher_id": id})
     db.add(obj)
     db.commit()
     db.refresh(obj)
-    return obj
+    return _sa_dict(obj)
+
+
+@router.patch("/school-assignments/{assignment_id}/set-primary", status_code=200)
+def set_primary_school(assignment_id: int, db: Session = Depends(get_db)):
+    """Mark this assignment as the teacher's primary school for its academic year."""
+    obj = db.query(TeacherSchoolAssignment).filter(TeacherSchoolAssignment.id == assignment_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    # Unset any existing primary for same teacher+year
+    db.query(TeacherSchoolAssignment).filter(
+        TeacherSchoolAssignment.teacher_id == obj.teacher_id,
+        TeacherSchoolAssignment.academic_year_id == obj.academic_year_id,
+        TeacherSchoolAssignment.is_primary == True,
+    ).update({"is_primary": False})
+    obj.is_primary = True
+    db.commit()
+    db.refresh(obj)
+    return _sa_dict(obj)
 
 
 @router.delete("/school-assignments/{assignment_id}", status_code=204)
