@@ -445,6 +445,288 @@ _TOOLS = [
             "required": ["academic_year_id"],
         },
     },
+    # ── Criar / editar / eliminar Professores ─────────────────────────────────
+    {
+        "name": "criar_professor",
+        "description": "Cria um novo professor num agrupamento.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cluster_id": {"type": "integer", "description": "ID do agrupamento"},
+                "name": {"type": "string", "description": "Nome completo"},
+                "email": {"type": "string", "description": "Email (opcional)"},
+                "birth_date": {"type": "string", "description": "Data nascimento YYYY-MM-DD (opcional)"},
+                "teaching_component": {"type": "integer", "description": "Componente letiva h/semana (opcional)"},
+                "credit_hours": {"type": "integer", "description": "Horas de redução/crédito (opcional)"},
+                "max_daily_lessons": {"type": "integer", "description": "Máximo aulas/dia (padrão 5)"},
+            },
+            "required": ["cluster_id", "name"],
+        },
+    },
+    {
+        "name": "eliminar_professor",
+        "description": (
+            "Elimina um professor. Falha se tiver aulas marcadas num horário gerado. "
+            "Usa listar_professores para obter o ID."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "teacher_id": {"type": "integer", "description": "ID do professor"},
+                "forcar": {"type": "boolean", "description": "Se true, remove mesmo com entradas curriculares (padrão: false)"},
+            },
+            "required": ["teacher_id"],
+        },
+    },
+    {
+        "name": "definir_especialidade_professor",
+        "description": (
+            "Adiciona ou remove uma especialidade (disciplina) a um professor. "
+            "Usa listar_professores e listar_disciplinas para obter IDs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "teacher_id": {"type": "integer", "description": "ID do professor"},
+                "subject_id": {"type": "integer", "description": "ID da disciplina"},
+                "acao": {"type": "string", "description": "'adicionar' ou 'remover'"},
+            },
+            "required": ["teacher_id", "subject_id", "acao"],
+        },
+    },
+    # ── Criar / editar / eliminar Turmas ──────────────────────────────────────
+    {
+        "name": "criar_turma",
+        "description": "Cria uma nova turma num ano letivo.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo"},
+                "school_id": {"type": "integer", "description": "ID da escola"},
+                "name": {"type": "string", "description": "Nome da turma (ex: '8A')"},
+                "year_level": {"type": "integer", "description": "Ano de escolaridade (ex: 8)"},
+                "num_students": {"type": "integer", "description": "Número de alunos (padrão 25)"},
+            },
+            "required": ["academic_year_id", "school_id", "name", "year_level"],
+        },
+    },
+    {
+        "name": "atualizar_turma",
+        "description": "Atualiza dados de uma turma: nome, ano de escolaridade, número de alunos ou notas.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "class_id": {"type": "integer", "description": "ID da turma"},
+                "name": {"type": "string", "description": "Novo nome (opcional)"},
+                "year_level": {"type": "integer", "description": "Novo ano de escolaridade (opcional)"},
+                "num_students": {"type": "integer", "description": "Novo número de alunos (opcional)"},
+                "notes": {"type": "string", "description": "Notas/observações (opcional)"},
+            },
+            "required": ["class_id"],
+        },
+    },
+    {
+        "name": "eliminar_turma",
+        "description": "Elimina uma turma e o seu currículo. IRREVERSÍVEL.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "class_id": {"type": "integer", "description": "ID da turma"},
+            },
+            "required": ["class_id"],
+        },
+    },
+    # ── Criar / eliminar Disciplinas ──────────────────────────────────────────
+    {
+        "name": "criar_disciplina",
+        "description": "Cria uma nova disciplina num agrupamento.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cluster_id": {"type": "integer", "description": "ID do agrupamento"},
+                "name": {"type": "string", "description": "Nome da disciplina"},
+                "code": {"type": "string", "description": "Código (opcional)"},
+                "weekly_structure": {"type": "string", "description": "Estrutura semanal: '1', '1+1', '2', '2+1', '1+1+1' (padrão: '1+1')"},
+                "regime": {"type": "string", "description": "'annual' ou 'semestral' (padrão: 'annual')"},
+                "is_physical_education": {"type": "boolean", "description": "É Educação Física? (padrão: false)"},
+            },
+            "required": ["cluster_id", "name"],
+        },
+    },
+    {
+        "name": "eliminar_disciplina",
+        "description": "Elimina uma disciplina se não tiver entradas curriculares. IRREVERSÍVEL.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "subject_id": {"type": "integer", "description": "ID da disciplina"},
+            },
+            "required": ["subject_id"],
+        },
+    },
+    # ── Gestão de Currículo ───────────────────────────────────────────────────
+    {
+        "name": "adicionar_entrada_curriculo",
+        "description": (
+            "Adiciona uma disciplina ao currículo de uma turma com horas/semana e estrutura de blocos. "
+            "Usa listar_turmas e listar_disciplinas para obter IDs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "class_id": {"type": "integer", "description": "ID da turma"},
+                "subject_id": {"type": "integer", "description": "ID da disciplina"},
+                "hours_per_week": {"type": "number", "description": "Horas por semana (ex: 2.0)"},
+                "split_count": {"type": "integer", "description": "Número de blocos/aulas por semana (padrão: igual a hours_per_week)"},
+                "consecutive_pairs": {"type": "integer", "description": "Número de blocos que devem ser duplos consecutivos (padrão: 0)"},
+                "teacher_id": {"type": "integer", "description": "Professor a atribuir (opcional)"},
+                "is_semestral": {"type": "boolean", "description": "Disciplina semestral? (padrão: false)"},
+                "semester": {"type": "integer", "description": "Semestre: 1 ou 2 (se semestral)"},
+            },
+            "required": ["class_id", "subject_id", "hours_per_week"],
+        },
+    },
+    {
+        "name": "atualizar_entrada_curriculo",
+        "description": "Atualiza horas, professor, blocos ou regime semestral de uma entrada curricular.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entry_id": {"type": "integer", "description": "ID da entrada curricular"},
+                "hours_per_week": {"type": "number", "description": "Novas horas/semana (opcional)"},
+                "split_count": {"type": "integer", "description": "Novo número de blocos (opcional)"},
+                "consecutive_pairs": {"type": "integer", "description": "Novos blocos duplos consecutivos (opcional)"},
+                "teacher_id": {"type": "integer", "description": "Novo professor (null para remover)"},
+                "is_semestral": {"type": "boolean", "description": "Alterar para semestral/anual (opcional)"},
+                "semester": {"type": "integer", "description": "Novo semestre: 1 ou 2 (opcional)"},
+            },
+            "required": ["entry_id"],
+        },
+    },
+    {
+        "name": "remover_entrada_curriculo",
+        "description": "Remove uma disciplina do currículo de uma turma. IRREVERSÍVEL.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entry_id": {"type": "integer", "description": "ID da entrada curricular"},
+            },
+            "required": ["entry_id"],
+        },
+    },
+    # ── Disponibilidade de professor ──────────────────────────────────────────
+    {
+        "name": "definir_disponibilidade_professor",
+        "description": (
+            "Define os slots de indisponibilidade de um professor num ano letivo. "
+            "Passa a lista de slots onde o professor NÃO pode ter aulas. "
+            "Dias: 0=Segunda, 1=Terça, 2=Quarta, 3=Quinta, 4=Sexta. "
+            "Substitui completamente a disponibilidade anterior se substituir=true."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "teacher_id": {"type": "integer", "description": "ID do professor"},
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo"},
+                "slots_indisponiveis": {
+                    "type": "array",
+                    "description": "Lista de slots indisponíveis: [{dia: 0-4, slot: 1-N}]",
+                    "items": {"type": "object", "properties": {"dia": {"type": "integer"}, "slot": {"type": "integer"}}},
+                },
+                "substituir": {"type": "boolean", "description": "Se true, apaga indisponibilidades anteriores (padrão: true)"},
+            },
+            "required": ["teacher_id", "academic_year_id", "slots_indisponiveis"],
+        },
+    },
+    # ── Regras de horário ─────────────────────────────────────────────────────
+    {
+        "name": "atualizar_regras_horario",
+        "description": (
+            "Cria ou atualiza regras de horário para um agrupamento/ano letivo. "
+            "Qualquer campo omitido mantém o valor atual."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cluster_id": {"type": "integer", "description": "ID do agrupamento"},
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo (null = global)"},
+                "max_aulas_dia_turma": {"type": "integer", "description": "Máximo aulas/dia por turma"},
+                "max_aulas_dia_professor": {"type": "integer", "description": "Máximo aulas/dia por professor"},
+                "max_consecutivas_turma": {"type": "integer", "description": "Máximo aulas consecutivas por turma"},
+                "max_consecutivas_professor": {"type": "integer", "description": "Máximo aulas consecutivas por professor"},
+                "sem_gaps_alunos": {"type": "boolean", "description": "Proibir intervalos entre aulas das turmas"},
+                "sem_mesma_disciplina_2x_dia": {"type": "boolean", "description": "Proibir mesma disciplina 2x no mesmo dia"},
+                "alunos_comecam_slot1": {"type": "boolean", "description": "Turmas começam sempre no slot 1"},
+                "sem_ed_fisica_apos_almoco": {"type": "boolean", "description": "Proibir Ed. Física após almoço"},
+                "almoco_apos_slot": {"type": "integer", "description": "Último slot antes do almoço"},
+            },
+            "required": ["cluster_id"],
+        },
+    },
+    # ── Gestão de horários ────────────────────────────────────────────────────
+    {
+        "name": "eliminar_horario",
+        "description": "Elimina um horário e todas as aulas geradas. IRREVERSÍVEL.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "timetable_id": {"type": "integer", "description": "ID do horário"},
+            },
+            "required": ["timetable_id"],
+        },
+    },
+    {
+        "name": "limpar_aulas_horario",
+        "description": "Apaga todas as aulas geradas de um horário, repondo-o para estado de rascunho.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "timetable_id": {"type": "integer", "description": "ID do horário"},
+            },
+            "required": ["timetable_id"],
+        },
+    },
+    # ── Serviço não letivo ────────────────────────────────────────────────────
+    {
+        "name": "listar_tipos_servico",
+        "description": "Lista os tipos de serviço não letivo disponíveis (ex: Direção de Turma, Apoio, etc.).",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "adicionar_servico_nao_letivo",
+        "description": (
+            "Atribui um slot de serviço não letivo a um professor. "
+            "Usa listar_tipos_servico para obter o tipo_id. "
+            "Dias: 0=Segunda … 4=Sexta."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "teacher_id": {"type": "integer", "description": "ID do professor"},
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo"},
+                "tipo_id": {"type": "integer", "description": "ID do tipo de serviço"},
+                "dia": {"type": "integer", "description": "Dia: 0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex"},
+                "slot": {"type": "integer", "description": "Número do slot/tempo"},
+                "school_id": {"type": "integer", "description": "ID da escola (opcional)"},
+            },
+            "required": ["teacher_id", "academic_year_id", "tipo_id", "dia", "slot"],
+        },
+    },
+    {
+        "name": "remover_servico_nao_letivo",
+        "description": "Remove um registo de serviço não letivo. Usa listar_servico_nao_letivo para obter o ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "assignment_id": {"type": "integer", "description": "ID do registo de serviço não letivo"},
+            },
+            "required": ["assignment_id"],
+        },
+    },
     {
         "name": "ver_regras_horario",
         "description": (
@@ -1018,6 +1300,307 @@ def _tool_unificar_disciplinas(db: Session, subject_id_manter: int, subject_id_r
     })
 
 
+def _tool_criar_professor(
+    db: Session, cluster_id: int, name: str, email: str = None,
+    birth_date: str = None, teaching_component: int = None,
+    credit_hours: int = None, max_daily_lessons: int = 5,
+) -> str:
+    from datetime import date as date_type
+    bd = None
+    if birth_date:
+        try:
+            bd = date_type.fromisoformat(birth_date)
+        except ValueError:
+            return _j({"erro": "birth_date inválido, usar YYYY-MM-DD"})
+    t = Teacher(
+        cluster_id=cluster_id, name=name.strip(), email=email or None,
+        birth_date=bd, teaching_component=teaching_component,
+        credit_hours=credit_hours or 0, max_daily_lessons=max_daily_lessons,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return _j({"ok": True, "id": t.id, "nome": t.name})
+
+
+def _tool_eliminar_professor(db: Session, teacher_id: int, forcar: bool = False) -> str:
+    t = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not t:
+        return _j({"erro": f"Professor {teacher_id} não encontrado"})
+    lessons = db.query(ScheduledLesson).filter(ScheduledLesson.teacher_id == teacher_id).count()
+    if lessons and not forcar:
+        return _j({"erro": f"Professor tem {lessons} aulas marcadas. Usa forcar=true para eliminar mesmo assim."})
+    nome = t.name
+    db.delete(t)
+    db.commit()
+    return _j({"ok": True, "eliminado": nome})
+
+
+def _tool_definir_especialidade_professor(
+    db: Session, teacher_id: int, subject_id: int, acao: str
+) -> str:
+    acao = acao.lower().strip()
+    if acao not in ("adicionar", "remover"):
+        return _j({"erro": "acao deve ser 'adicionar' ou 'remover'"})
+    teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    subj = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not teacher or not subj:
+        return _j({"erro": "Professor ou disciplina não encontrados"})
+    existing = db.query(TeacherSubject).filter(
+        TeacherSubject.teacher_id == teacher_id, TeacherSubject.subject_id == subject_id
+    ).first()
+    if acao == "adicionar":
+        if existing:
+            return _j({"ok": True, "nota": "Especialidade já existia", "professor": teacher.name, "disciplina": subj.name})
+        db.add(TeacherSubject(teacher_id=teacher_id, subject_id=subject_id))
+        db.commit()
+        return _j({"ok": True, "professor": teacher.name, "disciplina": subj.name, "acao": "adicionada"})
+    else:
+        if not existing:
+            return _j({"ok": True, "nota": "Especialidade não existia", "professor": teacher.name, "disciplina": subj.name})
+        db.delete(existing)
+        db.commit()
+        return _j({"ok": True, "professor": teacher.name, "disciplina": subj.name, "acao": "removida"})
+
+
+def _tool_criar_turma(
+    db: Session, academic_year_id: int, school_id: int, name: str,
+    year_level: int, num_students: int = 25,
+) -> str:
+    c = Class(
+        academic_year_id=academic_year_id, school_id=school_id,
+        name=name.strip(), year_level=year_level, num_students=num_students,
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return _j({"ok": True, "id": c.id, "nome": c.name, "ano": c.year_level})
+
+
+def _tool_atualizar_turma(
+    db: Session, class_id: int, name: str = None, year_level: int = None,
+    num_students: int = None, notes: str = None,
+) -> str:
+    c = db.query(Class).filter(Class.id == class_id).first()
+    if not c:
+        return _j({"erro": f"Turma {class_id} não encontrada"})
+    if name is not None: c.name = name.strip()
+    if year_level is not None: c.year_level = year_level
+    if num_students is not None: c.num_students = num_students
+    if notes is not None: c.notes = notes
+    db.commit()
+    return _j({"ok": True, "id": c.id, "nome": c.name})
+
+
+def _tool_eliminar_turma(db: Session, class_id: int) -> str:
+    c = db.query(Class).filter(Class.id == class_id).first()
+    if not c:
+        return _j({"erro": f"Turma {class_id} não encontrada"})
+    nome = c.name
+    db.delete(c)
+    db.commit()
+    return _j({"ok": True, "eliminada": nome})
+
+
+def _tool_criar_disciplina(
+    db: Session, cluster_id: int, name: str, code: str = None,
+    weekly_structure: str = "1+1", regime: str = "annual",
+    is_physical_education: bool = False,
+) -> str:
+    s = Subject(
+        cluster_id=cluster_id, name=name.strip(), code=code or None,
+        weekly_structure=weekly_structure, regime=regime,
+        is_physical_education=is_physical_education,
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return _j({"ok": True, "id": s.id, "nome": s.name})
+
+
+def _tool_eliminar_disciplina(db: Session, subject_id: int) -> str:
+    s = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not s:
+        return _j({"erro": f"Disciplina {subject_id} não encontrada"})
+    count = db.query(CurriculumEntry).filter(CurriculumEntry.subject_id == subject_id).count()
+    if count:
+        return _j({"erro": f"Disciplina tem {count} entradas curriculares. Remove-as primeiro ou usa unificar_disciplinas."})
+    nome = s.name
+    db.delete(s)
+    db.commit()
+    return _j({"ok": True, "eliminada": nome})
+
+
+def _tool_adicionar_entrada_curriculo(
+    db: Session, class_id: int, subject_id: int, hours_per_week: float,
+    split_count: int = None, consecutive_pairs: int = 0,
+    teacher_id: int = None, is_semestral: bool = False, semester: int = None,
+) -> str:
+    if split_count is None:
+        split_count = max(1, int(hours_per_week))
+    e = CurriculumEntry(
+        class_id=class_id, subject_id=subject_id, hours_per_week=hours_per_week,
+        split_count=split_count, consecutive_pairs=consecutive_pairs,
+        teacher_id=teacher_id, is_semestral=is_semestral, semester=semester,
+        is_split=split_count > 1,
+    )
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    subj = db.query(Subject).filter(Subject.id == subject_id).first()
+    cls = db.query(Class).filter(Class.id == class_id).first()
+    return _j({"ok": True, "id": e.id, "turma": cls.name if cls else class_id,
+               "disciplina": subj.name if subj else subject_id, "horas": hours_per_week})
+
+
+def _tool_atualizar_entrada_curriculo(
+    db: Session, entry_id: int, hours_per_week: float = None,
+    split_count: int = None, consecutive_pairs: int = None,
+    teacher_id: int = None, is_semestral: bool = None, semester: int = None,
+) -> str:
+    e = db.query(CurriculumEntry).filter(CurriculumEntry.id == entry_id).first()
+    if not e:
+        return _j({"erro": f"Entrada curricular {entry_id} não encontrada"})
+    if hours_per_week is not None: e.hours_per_week = hours_per_week
+    if split_count is not None:
+        e.split_count = split_count
+        e.is_split = split_count > 1
+    if consecutive_pairs is not None: e.consecutive_pairs = consecutive_pairs
+    if teacher_id is not None: e.teacher_id = teacher_id if teacher_id > 0 else None
+    if is_semestral is not None: e.is_semestral = is_semestral
+    if semester is not None: e.semester = semester
+    db.commit()
+    return _j({"ok": True, "id": entry_id})
+
+
+def _tool_remover_entrada_curriculo(db: Session, entry_id: int) -> str:
+    e = db.query(CurriculumEntry).filter(CurriculumEntry.id == entry_id).first()
+    if not e:
+        return _j({"erro": f"Entrada curricular {entry_id} não encontrada"})
+    db.delete(e)
+    db.commit()
+    return _j({"ok": True, "removida": entry_id})
+
+
+def _tool_definir_disponibilidade_professor(
+    db: Session, teacher_id: int, academic_year_id: int,
+    slots_indisponiveis: list, substituir: bool = True,
+) -> str:
+    teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not teacher:
+        return _j({"erro": f"Professor {teacher_id} não encontrado"})
+    if substituir:
+        db.query(TeacherAvailability).filter(
+            TeacherAvailability.teacher_id == teacher_id,
+            TeacherAvailability.academic_year_id == academic_year_id,
+            TeacherAvailability.is_available.is_(False),
+        ).delete()
+    added = 0
+    for s in slots_indisponiveis:
+        dia = int(s.get("dia", -1))
+        slot = int(s.get("slot", -1))
+        if dia < 0 or slot < 1:
+            continue
+        exists = db.query(TeacherAvailability).filter(
+            TeacherAvailability.teacher_id == teacher_id,
+            TeacherAvailability.academic_year_id == academic_year_id,
+            TeacherAvailability.day_of_week == dia,
+            TeacherAvailability.slot_number == slot,
+        ).first()
+        if not exists:
+            db.add(TeacherAvailability(
+                teacher_id=teacher_id, academic_year_id=academic_year_id,
+                day_of_week=dia, slot_number=slot, is_available=False,
+            ))
+            added += 1
+    db.commit()
+    return _j({"ok": True, "professor": teacher.name, "slots_indisponiveis_definidos": added})
+
+
+def _tool_atualizar_regras_horario(
+    db: Session, cluster_id: int, academic_year_id: int = None,
+    max_aulas_dia_turma: int = None, max_aulas_dia_professor: int = None,
+    max_consecutivas_turma: int = None, max_consecutivas_professor: int = None,
+    sem_gaps_alunos: bool = None, sem_mesma_disciplina_2x_dia: bool = None,
+    alunos_comecam_slot1: bool = None, sem_ed_fisica_apos_almoco: bool = None,
+    almoco_apos_slot: int = None,
+) -> str:
+    q = db.query(SchedulingRules).filter(SchedulingRules.cluster_id == cluster_id)
+    if academic_year_id:
+        q = q.filter(SchedulingRules.academic_year_id == academic_year_id)
+    else:
+        q = q.filter(SchedulingRules.academic_year_id.is_(None))
+    r = q.first()
+    if not r:
+        r = SchedulingRules(cluster_id=cluster_id, academic_year_id=academic_year_id)
+        db.add(r)
+    if max_aulas_dia_turma is not None: r.max_periods_per_day_class = max_aulas_dia_turma
+    if max_aulas_dia_professor is not None: r.max_periods_per_day_teacher = max_aulas_dia_professor
+    if max_consecutivas_turma is not None: r.max_consecutive_periods_class = max_consecutivas_turma
+    if max_consecutivas_professor is not None: r.max_consecutive_periods_teacher = max_consecutivas_professor
+    if sem_gaps_alunos is not None: r.no_student_gaps = sem_gaps_alunos
+    if sem_mesma_disciplina_2x_dia is not None: r.no_same_subject_twice_per_day = sem_mesma_disciplina_2x_dia
+    if alunos_comecam_slot1 is not None: r.students_start_slot_1 = alunos_comecam_slot1
+    if sem_ed_fisica_apos_almoco is not None: r.no_pe_after_lunch = sem_ed_fisica_apos_almoco
+    if almoco_apos_slot is not None: r.lunch_after_slot = almoco_apos_slot
+    db.commit()
+    return _j({"ok": True, "cluster_id": cluster_id, "academic_year_id": academic_year_id})
+
+
+def _tool_eliminar_horario(db: Session, timetable_id: int) -> str:
+    t = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+    if not t:
+        return _j({"erro": f"Horário {timetable_id} não encontrado"})
+    nome = t.name
+    db.delete(t)
+    db.commit()
+    return _j({"ok": True, "eliminado": nome})
+
+
+def _tool_limpar_aulas_horario(db: Session, timetable_id: int) -> str:
+    t = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+    if not t:
+        return _j({"erro": f"Horário {timetable_id} não encontrado"})
+    deleted = db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
+    t.status = "draft"
+    t.solver_status = None
+    t.generation_log = None
+    db.commit()
+    return _j({"ok": True, "aulas_removidas": deleted, "status": "draft"})
+
+
+def _tool_listar_tipos_servico(db: Session) -> str:
+    tipos = db.query(NonTeachingType).all()
+    return _j({"tipos": [{"id": tp.id, "nome": tp.name} for tp in tipos]})
+
+
+def _tool_adicionar_servico_nao_letivo(
+    db: Session, teacher_id: int, academic_year_id: int,
+    tipo_id: int, dia: int, slot: int, school_id: int = None,
+) -> str:
+    teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+    if not teacher:
+        return _j({"erro": f"Professor {teacher_id} não encontrado"})
+    a = NonTeachingAssignment(
+        teacher_id=teacher_id, academic_year_id=academic_year_id,
+        non_teaching_type_id=tipo_id, day_of_week=dia,
+        slot_number=slot, school_id=school_id,
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    return _j({"ok": True, "id": a.id, "professor": teacher.name, "dia": _day_name(dia), "slot": slot})
+
+
+def _tool_remover_servico_nao_letivo(db: Session, assignment_id: int) -> str:
+    a = db.query(NonTeachingAssignment).filter(NonTeachingAssignment.id == assignment_id).first()
+    if not a:
+        return _j({"erro": f"Registo {assignment_id} não encontrado"})
+    db.delete(a)
+    db.commit()
+    return _j({"ok": True, "removido": assignment_id})
+
+
 def _tool_listar_disciplinas(db: Session, cluster_id: int, academic_year_id: int = None) -> str:
     subjects = db.query(Subject).filter(Subject.cluster_id == cluster_id).order_by(Subject.name).all()
     rows = []
@@ -1328,6 +1911,24 @@ def _execute_tool(name: str, inp: dict, db: Session) -> str:
             "listar_anos_letivos":       lambda: _tool_listar_anos_letivos(db, **inp),
             "verificar_duplicados_curriculo": lambda: _tool_verificar_duplicados_curriculo(db, **inp),
             "atribuir_professores_por_disciplina": lambda: _tool_atribuir_professores_por_disciplina(db, **inp),
+            "criar_professor":           lambda: _tool_criar_professor(db, **inp),
+            "eliminar_professor":        lambda: _tool_eliminar_professor(db, **inp),
+            "definir_especialidade_professor": lambda: _tool_definir_especialidade_professor(db, **inp),
+            "criar_turma":               lambda: _tool_criar_turma(db, **inp),
+            "atualizar_turma":           lambda: _tool_atualizar_turma(db, **inp),
+            "eliminar_turma":            lambda: _tool_eliminar_turma(db, **inp),
+            "criar_disciplina":          lambda: _tool_criar_disciplina(db, **inp),
+            "eliminar_disciplina":       lambda: _tool_eliminar_disciplina(db, **inp),
+            "adicionar_entrada_curriculo": lambda: _tool_adicionar_entrada_curriculo(db, **inp),
+            "atualizar_entrada_curriculo": lambda: _tool_atualizar_entrada_curriculo(db, **inp),
+            "remover_entrada_curriculo": lambda: _tool_remover_entrada_curriculo(db, **inp),
+            "definir_disponibilidade_professor": lambda: _tool_definir_disponibilidade_professor(db, **inp),
+            "atualizar_regras_horario":  lambda: _tool_atualizar_regras_horario(db, **inp),
+            "eliminar_horario":          lambda: _tool_eliminar_horario(db, **inp),
+            "limpar_aulas_horario":      lambda: _tool_limpar_aulas_horario(db, **inp),
+            "listar_tipos_servico":      lambda: _tool_listar_tipos_servico(db),
+            "adicionar_servico_nao_letivo": lambda: _tool_adicionar_servico_nao_letivo(db, **inp),
+            "remover_servico_nao_letivo": lambda: _tool_remover_servico_nao_letivo(db, **inp),
         }
         fn = dispatch.get(name)
         if fn is None:
