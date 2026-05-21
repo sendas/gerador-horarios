@@ -296,6 +296,38 @@ _TOOLS = [
         },
     },
     {
+        "name": "renomear_disciplina",
+        "description": (
+            "Renomeia uma disciplina existente. Usa listar_disciplinas para obter o ID. "
+            "Útil para corrigir capitalização ou inconsistências de nomes."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "subject_id": {"type": "integer", "description": "ID da disciplina a renomear"},
+                "novo_nome": {"type": "string", "description": "Novo nome da disciplina"},
+                "novo_codigo": {"type": "string", "description": "Novo código (opcional)"},
+            },
+            "required": ["subject_id", "novo_nome"],
+        },
+    },
+    {
+        "name": "unificar_disciplinas",
+        "description": (
+            "Unifica duas disciplinas: migra todas as entradas curriculares, atribuições de professores "
+            "e histórico da disciplina a remover para a disciplina a manter, depois elimina a duplicada. "
+            "IRREVERSÍVEL — confirma sempre os IDs com listar_disciplinas antes."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "subject_id_manter": {"type": "integer", "description": "ID da disciplina a manter (destino)"},
+                "subject_id_remover": {"type": "integer", "description": "ID da disciplina a eliminar (origem)"},
+            },
+            "required": ["subject_id_manter", "subject_id_remover"],
+        },
+    },
+    {
         "name": "ver_curriculo_turma",
         "description": (
             "Mostra o currículo completo de uma turma: disciplinas, horas/semana, "
@@ -904,6 +936,60 @@ def _tool_ver_regras(db: Session, cluster_id: int, academic_year_id: int = None)
     return _j({"regras": result})
 
 
+def _tool_renomear_disciplina(db: Session, subject_id: int, novo_nome: str, novo_codigo: str = None) -> str:
+    subj = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subj:
+        return _j({"erro": f"Disciplina {subject_id} não encontrada"})
+    nome_antigo = subj.name
+    subj.name = novo_nome.strip()
+    if novo_codigo is not None:
+        subj.code = novo_codigo.strip() or None
+    db.commit()
+    return _j({"ok": True, "nome_anterior": nome_antigo, "nome_novo": subj.name, "id": subject_id})
+
+
+def _tool_unificar_disciplinas(db: Session, subject_id_manter: int, subject_id_remover: int) -> str:
+    manter = db.query(Subject).filter(Subject.id == subject_id_manter).first()
+    remover = db.query(Subject).filter(Subject.id == subject_id_remover).first()
+    if not manter:
+        return _j({"erro": f"Disciplina a manter ({subject_id_manter}) não encontrada"})
+    if not remover:
+        return _j({"erro": f"Disciplina a remover ({subject_id_remover}) não encontrada"})
+    if subject_id_manter == subject_id_remover:
+        return _j({"erro": "Os dois IDs são iguais"})
+
+    # Migrate curriculum entries
+    entries_migradas = (
+        db.query(CurriculumEntry)
+        .filter(CurriculumEntry.subject_id == subject_id_remover)
+        .all()
+    )
+    for e in entries_migradas:
+        e.subject_id = subject_id_manter
+
+    # Migrate teacher-subject assignments (skip if already exists)
+    for ts in db.query(TeacherSubject).filter(TeacherSubject.subject_id == subject_id_remover).all():
+        exists = db.query(TeacherSubject).filter(
+            TeacherSubject.teacher_id == ts.teacher_id,
+            TeacherSubject.subject_id == subject_id_manter,
+        ).first()
+        if exists:
+            db.delete(ts)
+        else:
+            ts.subject_id = subject_id_manter
+
+    db.flush()
+    nome_removida = remover.name
+    db.delete(remover)
+    db.commit()
+    return _j({
+        "ok": True,
+        "disciplina_mantida": {"id": subject_id_manter, "nome": manter.name},
+        "disciplina_removida": nome_removida,
+        "entradas_curriculares_migradas": len(entries_migradas),
+    })
+
+
 def _tool_listar_disciplinas(db: Session, cluster_id: int, academic_year_id: int = None) -> str:
     subjects = db.query(Subject).filter(Subject.cluster_id == cluster_id).order_by(Subject.name).all()
     rows = []
@@ -1109,6 +1195,8 @@ def _execute_tool(name: str, inp: dict, db: Session) -> str:
             "listar_servico_nao_letivo": lambda: _tool_listar_servico_nao_letivo(db, **inp),
             "ver_regras_horario":        lambda: _tool_ver_regras(db, **inp),
             "listar_disciplinas":        lambda: _tool_listar_disciplinas(db, **inp),
+            "renomear_disciplina":       lambda: _tool_renomear_disciplina(db, **inp),
+            "unificar_disciplinas":      lambda: _tool_unificar_disciplinas(db, **inp),
             "ver_curriculo_turma":       lambda: _tool_ver_curriculo_turma(db, **inp),
             "listar_salas":              lambda: _tool_listar_salas(db, **inp),
             "ver_atribuicao_professores": lambda: _tool_ver_atribuicao_professores(db, **inp),

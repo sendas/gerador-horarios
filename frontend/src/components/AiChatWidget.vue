@@ -219,6 +219,8 @@ const TOOL_LABELS: Record<string, string> = {
   ver_disponibilidade_professor: 'disponibilidade',
   listar_anos_letivos: 'anos letivos',
   verificar_duplicados_curriculo: 'verificar duplicados',
+  renomear_disciplina: 'renomear disciplina',
+  unificar_disciplinas: 'unificar disciplinas',
 }
 
 function toolLabel(name: string): string {
