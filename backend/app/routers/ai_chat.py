@@ -403,6 +403,30 @@ _TOOLS = [
     },
     # ── Regras ────────────────────────────────────────────────────────────────
     {
+        "name": "atribuir_professores_por_disciplina",
+        "description": (
+            "Atribui automaticamente professores às entradas curriculares sem professor, "
+            "com base nas especialidades configuradas (TeacherSubject) e equilibrando a carga horária. "
+            "Por defeito não sobrescreve atribuições existentes. "
+            "Retorna quantas entradas foram atribuídas e quais ficaram por atribuir."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "academic_year_id": {"type": "integer", "description": "ID do ano letivo"},
+                "sobrescrever": {
+                    "type": "boolean",
+                    "description": "Se true, sobrescreve atribuições já existentes (padrão: false)",
+                },
+                "subject_id": {
+                    "type": "integer",
+                    "description": "Limitar a uma disciplina específica (opcional)",
+                },
+            },
+            "required": ["academic_year_id"],
+        },
+    },
+    {
         "name": "verificar_duplicados_curriculo",
         "description": (
             "Verifica se há disciplinas duplicadas no currículo das turmas de um ano letivo — "
@@ -1042,6 +1066,75 @@ def _tool_ver_curriculo_turma(db: Session, class_id: int) -> str:
     })
 
 
+def _tool_atribuir_professores_por_disciplina(
+    db: Session, academic_year_id: int, sobrescrever: bool = False, subject_id: int = None
+) -> str:
+    q = (
+        db.query(CurriculumEntry)
+        .join(CurriculumEntry.class_)
+        .filter(Class.academic_year_id == academic_year_id)
+    )
+    if subject_id:
+        q = q.filter(CurriculumEntry.subject_id == subject_id)
+    if not sobrescrever:
+        q = q.filter(CurriculumEntry.teacher_id.is_(None))
+    entries = q.all()
+
+    # Build load map: teacher_id → total hours assigned so far
+    load: dict = {}
+    all_entries = (
+        db.query(CurriculumEntry)
+        .join(CurriculumEntry.class_)
+        .filter(Class.academic_year_id == academic_year_id, CurriculumEntry.teacher_id.isnot(None))
+        .all()
+    )
+    for e in all_entries:
+        load[e.teacher_id] = load.get(e.teacher_id, 0) + e.hours_per_week
+
+    atribuidas = []
+    sem_professor = []
+
+    for entry in entries:
+        # Find teachers qualified for this subject
+        qualified = (
+            db.query(TeacherSubject)
+            .filter(TeacherSubject.subject_id == entry.subject_id)
+            .all()
+        )
+        if not qualified:
+            subj = db.query(Subject).filter(Subject.id == entry.subject_id).first()
+            cls = db.query(Class).filter(Class.id == entry.class_id).first()
+            sem_professor.append({
+                "turma": cls.name if cls else entry.class_id,
+                "disciplina": subj.name if subj else entry.subject_id,
+                "motivo": "Nenhum professor com esta especialidade",
+            })
+            continue
+
+        # Pick teacher with lowest load
+        best_tid = min(qualified, key=lambda ts: load.get(ts.teacher_id, 0)).teacher_id
+        teacher = db.query(Teacher).filter(Teacher.id == best_tid).first()
+        subj = db.query(Subject).filter(Subject.id == entry.subject_id).first()
+        cls = db.query(Class).filter(Class.id == entry.class_id).first()
+
+        entry.teacher_id = best_tid
+        load[best_tid] = load.get(best_tid, 0) + entry.hours_per_week
+        atribuidas.append({
+            "turma": cls.name if cls else entry.class_id,
+            "disciplina": subj.name if subj else entry.subject_id,
+            "professor": teacher.name if teacher else best_tid,
+            "horas": entry.hours_per_week,
+        })
+
+    db.commit()
+    return _j({
+        "atribuidas": len(atribuidas),
+        "sem_professor_disponivel": len(sem_professor),
+        "detalhes_atribuidas": atribuidas,
+        "detalhes_sem_professor": sem_professor,
+    })
+
+
 def _tool_listar_salas(db: Session, cluster_id: int, school_id: int = None) -> str:
     schools = db.query(School).filter(School.cluster_id == cluster_id).all()
     school_ids = [s.id for s in schools]
@@ -1203,6 +1296,7 @@ def _execute_tool(name: str, inp: dict, db: Session) -> str:
             "ver_disponibilidade_professor": lambda: _tool_ver_disponibilidade_professor(db, **inp),
             "listar_anos_letivos":       lambda: _tool_listar_anos_letivos(db, **inp),
             "verificar_duplicados_curriculo": lambda: _tool_verificar_duplicados_curriculo(db, **inp),
+            "atribuir_professores_por_disciplina": lambda: _tool_atribuir_professores_por_disciplina(db, **inp),
         }
         fn = dispatch.get(name)
         if fn is None:
