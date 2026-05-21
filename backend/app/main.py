@@ -18,6 +18,7 @@ from app.routers import backup as backup_router
 from app.routers import service_distribution as service_distribution_router
 from app.routers import timetable_locks as timetable_locks_router
 from app.routers import settings as settings_router
+from app.routers import ai_chat as ai_chat_router
 from app import scheduler_instance
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,7 @@ app.include_router(backup_router.router, prefix=API_PREFIX, dependencies=[_auth]
 app.include_router(service_distribution_router.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(timetable_locks_router.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(settings_router.router, prefix=API_PREFIX, dependencies=[_auth])
+app.include_router(ai_chat_router.router, prefix=API_PREFIX, dependencies=[_auth])
 
 
 @app.on_event("startup")

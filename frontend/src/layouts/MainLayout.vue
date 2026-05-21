@@ -170,6 +170,8 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <AiChatWidget />
   </q-layout>
 </template>
 
@@ -178,6 +180,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'stores/auth'
+import AiChatWidget from 'components/AiChatWidget.vue'
 
 const leftDrawerOpen = ref(false)
 const auth = useAuthStore()
