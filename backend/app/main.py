@@ -447,17 +447,54 @@ def start_scheduler():
 
 @app.on_event("startup")
 def cleanup_stuck_generating():
-    """Mark any timetable left in 'generating' as 'error' — they were interrupted by a restart."""
+    """Mark any timetable left in 'generating' as 'error' — they were interrupted by a restart.
+    Grace period of 3 minutes: if the heartbeat was recent, schedule the check for later."""
     from app.models.models import Timetable
+    from datetime import timedelta
     db = SessionLocal()
     try:
         stuck = db.query(Timetable).filter(Timetable.status == "generating").all()
-        for t in stuck:
+        now = datetime.utcnow()
+        grace = timedelta(minutes=3)
+        to_mark = [t for t in stuck if (now - (t.updated_at or t.created_at)) > grace]
+        recent  = [t for t in stuck if (now - (t.updated_at or t.created_at)) <= grace]
+        for t in to_mark:
             t.status = "error"
             t.solver_status = "Processo interrompido — o servidor foi reiniciado durante a geração."
             logger.warning(f"Timetable {t.id} estava preso em 'generating' — marcado como erro.")
-        if stuck:
+        if to_mark:
             db.commit()
+        # Schedule a deferred check for recently-active ones
+        for t in recent:
+            tid = t.id
+            logger.info(f"Timetable {tid} em 'generating' com heartbeat recente — a verificar novamente em 4 min.")
+            from apscheduler.triggers.date import DateTrigger
+            run_at = now + timedelta(minutes=4)
+            try:
+                from app.scheduler.notifications import get_scheduler
+                sched = get_scheduler()
+                if sched:
+                    sched.add_job(
+                        _deferred_cleanup, DateTrigger(run_date=run_at),
+                        args=[tid], id=f"cleanup_{tid}", replace_existing=True,
+                    )
+            except Exception as e:
+                logger.warning(f"Não foi possível agendar cleanup diferido para {tid}: {e}")
+    finally:
+        db.close()
+
+
+def _deferred_cleanup(timetable_id: int):
+    """Mark a timetable as interrupted if still 'generating' after the grace period."""
+    from app.models.models import Timetable
+    db = SessionLocal()
+    try:
+        t = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+        if t and t.status == "generating":
+            t.status = "error"
+            t.solver_status = "Processo interrompido — o servidor foi reiniciado durante a geração."
+            db.commit()
+            logger.warning(f"Timetable {timetable_id} continuava em 'generating' — marcado como erro (cleanup diferido).")
     finally:
         db.close()
 
