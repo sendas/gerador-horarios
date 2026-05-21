@@ -186,11 +186,11 @@ const apiKeyMissing = ref(false)
 const scrollRef = ref<{ setScrollPercentage: (axis: string, pct: number) => void } | null>(null)
 
 const suggestions = [
-  'Qual é o estado do horário atual?',
-  'Quais professores têm componente letiva em falta?',
-  'Gera o horário para o 7.º ano',
-  'Define 22h letivas a todos os professores',
-  'Mostra a distribuição de serviço',
+  'Consigo gerar o horário agora?',
+  'Mostra o horário da turma 8A',
+  'Quais professores estão em défice de horas?',
+  'Gera o horário para o 7.º e 8.º ano',
+  'Define 22h letivas a todos com Art. 79.°',
 ]
 
 // ── Tool labels ───────────────────────────────────────────────────────────────
@@ -198,11 +198,19 @@ const suggestions = [
 const TOOL_LABELS: Record<string, string> = {
   obter_contexto: 'contexto',
   listar_professores: 'professores',
+  atualizar_professor: 'atualizar prof.',
   listar_turmas: 'turmas',
   ver_estado_horario: 'estado horário',
-  ver_distribuicao_servico: 'distribuição',
+  ver_preflight_horario: 'preflight',
+  criar_horario: 'criar horário',
   iniciar_geracao: 'gerar horário',
+  ver_horario_professor: 'horário prof.',
+  ver_horario_turma: 'horário turma',
+  mover_aula: 'mover aula',
+  ver_distribuicao_servico: 'distribuição',
   definir_componentes_letivos: 'componentes',
+  listar_servico_nao_letivo: 'serv. não letivo',
+  ver_regras_horario: 'regras',
 }
 
 function toolLabel(name: string): string {
