@@ -23,22 +23,55 @@
               @dragover.prevent="onDragOver($event, dayIdx, slot)"
               @drop.prevent="onDrop(dayIdx, slot)"
             >
-              <div
-                v-for="lesson in cellLessons(dayIdx, slot)"
-                :key="lesson.id"
-                class="lesson-card"
-                :class="{ 'lesson-card--dragging': dragging?.id === lesson.id }"
-                :style="cardStyle(lesson)"
-                :draggable="!!timetableId"
-                @dragstart.stop="onDragStart($event, lesson)"
-                @dragend.stop="onDragEnd"
-              >
-                <q-icon v-if="timetableId" name="drag_indicator" size="xs" class="lesson-drag-icon" />
-                <div class="lesson-subject">{{ lesson.subject_name }}</div>
-                <div class="lesson-meta" v-if="view !== 'class' && lesson.class_name">{{ lesson.class_name }}</div>
-                <div class="lesson-meta" v-if="view !== 'teacher' && lesson.teacher_name">{{ lesson.teacher_name }}</div>
-                <div class="lesson-meta" v-if="view !== 'room' && lesson.room_name">{{ lesson.room_name }}</div>
-              </div>
+              <template v-for="group in cellGroups(dayIdx, slot)" :key="group.key">
+                <!-- Paired semestral block -->
+                <div
+                  v-if="group.type === 'paired'"
+                  class="lesson-card lesson-card--paired"
+                  :draggable="false"
+                >
+                  <div class="paired-half" :style="halfStyle(group.s1!)">
+                    <span class="paired-sem-tag">S1</span>
+                    <span class="lesson-subject">{{ group.s1!.subject_name }}</span>
+                    <div class="lesson-meta" v-if="view !== 'class' && group.s1!.class_name">{{ group.s1!.class_name }}</div>
+                    <div class="lesson-meta" v-if="view !== 'teacher' && group.s1!.teacher_name">{{ group.s1!.teacher_name }}</div>
+                    <div class="lesson-meta" v-if="view !== 'room' && group.s1!.room_name">{{ group.s1!.room_name }}</div>
+                  </div>
+                  <div class="paired-divider" />
+                  <div class="paired-half" :style="halfStyle(group.s2!)">
+                    <span class="paired-sem-tag">S2</span>
+                    <span class="lesson-subject">{{ group.s2!.subject_name }}</span>
+                    <div class="lesson-meta" v-if="view !== 'class' && group.s2!.class_name">{{ group.s2!.class_name }}</div>
+                    <div class="lesson-meta" v-if="view !== 'teacher' && group.s2!.teacher_name">{{ group.s2!.teacher_name }}</div>
+                    <div class="lesson-meta" v-if="view !== 'room' && group.s2!.room_name">{{ group.s2!.room_name }}</div>
+                  </div>
+                </div>
+
+                <!-- Regular single lesson -->
+                <div
+                  v-else
+                  class="lesson-card"
+                  :class="{ 'lesson-card--dragging': dragging?.id === group.lesson!.id }"
+                  :style="cardStyle(group.lesson!)"
+                  :draggable="!!timetableId"
+                  @dragstart.stop="onDragStart($event, group.lesson!)"
+                  @dragend.stop="onDragEnd"
+                >
+                  <q-icon v-if="timetableId" name="drag_indicator" size="xs" class="lesson-drag-icon" />
+                  <div class="lesson-subject">
+                    {{ group.lesson!.subject_name }}
+                    <q-badge
+                      v-if="group.lesson!.is_semestral"
+                      :color="group.lesson!.semester === 1 ? 'blue-7' : 'orange-7'"
+                      :label="group.lesson!.semester === 1 ? 'S1' : 'S2'"
+                      class="q-ml-xs"
+                    />
+                  </div>
+                  <div class="lesson-meta" v-if="view !== 'class' && group.lesson!.class_name">{{ group.lesson!.class_name }}</div>
+                  <div class="lesson-meta" v-if="view !== 'teacher' && group.lesson!.teacher_name">{{ group.lesson!.teacher_name }}</div>
+                  <div class="lesson-meta" v-if="view !== 'room' && group.lesson!.room_name">{{ group.lesson!.room_name }}</div>
+                </div>
+              </template>
 
               <!-- Drop target hint while dragging: green checkmark or red X -->
               <div
@@ -172,6 +205,39 @@ function cellLessons(day: number, slot: number): ScheduledLesson[] {
   return props.lessons.filter((l) => l.day_of_week === day && l.slot_number === slot)
 }
 
+interface LessonGroup {
+  key: string
+  type: 'single' | 'paired'
+  lesson?: ScheduledLesson
+  s1?: ScheduledLesson
+  s2?: ScheduledLesson
+}
+
+function cellGroups(day: number, slot: number): LessonGroup[] {
+  const lessons = cellLessons(day, slot)
+  const groups: LessonGroup[] = []
+  const used = new Set<number>()
+  for (const lesson of lessons) {
+    if (used.has(lesson.id)) continue
+    if (lesson.is_semestral && lesson.paired_entry_id) {
+      const partner = lessons.find(
+        (l) => l.curriculum_entry_id === lesson.paired_entry_id && !used.has(l.id)
+      )
+      if (partner) {
+        used.add(lesson.id)
+        used.add(partner.id)
+        const s1 = lesson.semester === 1 ? lesson : partner
+        const s2 = lesson.semester === 2 ? lesson : partner
+        groups.push({ key: `pair-${lesson.id}-${partner.id}`, type: 'paired', s1, s2 })
+        continue
+      }
+    }
+    used.add(lesson.id)
+    groups.push({ key: `single-${lesson.id}`, type: 'single', lesson })
+  }
+  return groups
+}
+
 function cardStyle(lesson: ScheduledLesson) {
   const color = lesson.subject_color ?? '#3498db'
   return {
@@ -180,6 +246,15 @@ function cardStyle(lesson: ScheduledLesson) {
     borderRadius: '4px',
     padding: '4px 6px',
     minHeight: '44px',
+  }
+}
+
+function halfStyle(lesson: ScheduledLesson) {
+  const color = lesson.subject_color ?? '#3498db'
+  return {
+    borderLeft: `4px solid ${color}`,
+    background: color + '18',
+    padding: '3px 5px',
   }
 }
 
@@ -337,6 +412,33 @@ async function forceMove() {
 }
 .lesson-subject { font-weight: bold; }
 .lesson-meta { font-size: 11px; opacity: 0.8; }
+
+/* Paired semestral block */
+.lesson-card--paired {
+  cursor: default;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #ccc;
+}
+.body--dark .lesson-card--paired { border-color: #555; }
+.paired-half {
+  padding: 3px 5px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.paired-divider {
+  height: 1px;
+  background: rgba(0,0,0,0.15);
+}
+.body--dark .paired-divider { background: rgba(255,255,255,0.15); }
+.paired-sem-tag {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.7;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 /* Drop hint */
 .drop-hint {

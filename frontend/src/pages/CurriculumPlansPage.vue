@@ -195,12 +195,12 @@
 
     <!-- Add/Edit entry dialog -->
     <q-dialog v-model="entryDialog" persistent>
-      <q-card style="min-width:400px">
+      <q-card style="min-width:340px;max-width:480px;width:100%;max-height:90vh;display:flex;flex-direction:column">
         <q-card-section class="bg-deep-purple-6 text-white">
           <div class="text-h6">{{ editingEntry ? 'Editar' : 'Adicionar' }} Disciplina</div>
           <div class="text-caption">{{ dialogYearLevel }}.º ano</div>
         </q-card-section>
-        <q-card-section class="q-gutter-sm">
+        <q-card-section class="q-gutter-sm" style="overflow-y:auto;flex:1">
           <q-select
             v-model="entryForm.subject_id"
             :options="subjectOptions"

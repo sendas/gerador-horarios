@@ -39,6 +39,7 @@ router = APIRouter(prefix="/timetables", tags=["timetables"])
 
 def build_lesson_detail(lesson: ScheduledLesson) -> dict:
     entry = lesson.curriculum_entry
+    paired = entry.paired_entry if entry else None
     return {
         "id": lesson.id,
         "timetable_id": lesson.timetable_id,
@@ -47,11 +48,16 @@ def build_lesson_detail(lesson: ScheduledLesson) -> dict:
         "curriculum_entry_id": lesson.curriculum_entry_id,
         "teacher_id": lesson.teacher_id,
         "room_id": lesson.room_id,
+        "semester": lesson.semester,
+        "is_semestral": bool(entry.is_semestral) if entry else False,
+        "paired_entry_id": entry.paired_entry_id if entry else None,
         "subject_name": entry.subject.name if entry and entry.subject else None,
         "subject_color": entry.subject.color if entry and entry.subject else None,
         "class_name": entry.class_.name if entry and entry.class_ else None,
         "teacher_name": lesson.teacher.name if lesson.teacher else None,
         "room_name": lesson.room.name if lesson.room else None,
+        "paired_subject_name": paired.subject.name if paired and paired.subject else None,
+        "paired_subject_color": paired.subject.color if paired and paired.subject else None,
     }
 
 

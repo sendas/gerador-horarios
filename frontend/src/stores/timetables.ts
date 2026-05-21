@@ -21,11 +21,16 @@ export interface ScheduledLesson {
   curriculum_entry_id: number
   teacher_id?: number
   room_id?: number
+  semester?: number
+  is_semestral?: boolean
+  paired_entry_id?: number
   subject_name?: string
   subject_color?: string
   class_name?: string
   teacher_name?: string
   room_name?: string
+  paired_subject_name?: string
+  paired_subject_color?: string
 }
 
 export interface TimetableDetail extends Timetable {
