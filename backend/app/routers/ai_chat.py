@@ -865,6 +865,7 @@ def chat(
     client = OpenAI(
         api_key=api_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        timeout=25.0,  # 25s per request — keeps total well under Cloudflare's limit
     )
 
     # System message + conversation history
@@ -876,7 +877,7 @@ def chat(
     tools_called: list = []
 
     try:
-        for _ in range(10):
+        for _ in range(5):  # max 5 rounds of tool calls
             response = client.chat.completions.create(
                 model="gemini-1.5-flash",
                 messages=messages,
