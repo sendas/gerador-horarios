@@ -301,10 +301,9 @@ async function send() {
     })
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string }; status?: number } }
-    const detail = err.response?.data?.detail ?? 'Erro de comunicação com o servidor.'
-    if (err.response?.status === 503) {
-      apiKeyMissing.value = true
-    }
+    const status = err.response?.status
+    const detail = err.response?.data?.detail ?? 'Erro de comunicação com o servidor. Verifica se o backend está a funcionar.'
+    if (status === 503) apiKeyMissing.value = true
     messages.value.push({ role: 'assistant', content: detail, error: true })
   } finally {
     loading.value = false

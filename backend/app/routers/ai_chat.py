@@ -860,7 +860,7 @@ def chat(
             ),
         )
 
-    from openai import OpenAI
+    from openai import OpenAI, RateLimitError, APIStatusError
 
     client = OpenAI(
         api_key=api_key,
@@ -875,44 +875,57 @@ def chat(
     tools = _openai_tools()
     tools_called: list = []
 
-    for _ in range(10):
-        response = client.chat.completions.create(
-            model="gemini-2.0-flash",
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-        )
+    try:
+        for _ in range(10):
+            response = client.chat.completions.create(
+                model="gemini-2.0-flash",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+            )
 
-        choice = response.choices[0]
-        msg = choice.message
+            choice = response.choices[0]
+            msg = choice.message
 
-        # No tool calls — final answer
-        if not msg.tool_calls:
-            return {"response": msg.content or "", "tools_called": tools_called}
+            # No tool calls — final answer
+            if not msg.tool_calls:
+                return {"response": msg.content or "", "tools_called": tools_called}
 
-        # Add assistant turn (with tool_calls) to history
-        messages.append({
-            "role": "assistant",
-            "content": msg.content,
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                }
-                for tc in msg.tool_calls
-            ],
-        })
-
-        # Execute each tool and add results
-        for tc in msg.tool_calls:
-            tools_called.append(tc.function.name)
-            args = json.loads(tc.function.arguments)
-            result = _execute_tool(tc.function.name, args, db)
+            # Add assistant turn (with tool_calls) to history
             messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
+                "role": "assistant",
+                "content": msg.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in msg.tool_calls
+                ],
             })
+
+            # Execute each tool and add results
+            for tc in msg.tool_calls:
+                tools_called.append(tc.function.name)
+                args = json.loads(tc.function.arguments)
+                result = _execute_tool(tc.function.name, args, db)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
+
+    except RateLimitError:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Limite da API Gemini atingido (quota: limit=0). "
+                "Verifica se a chave foi criada em aistudio.google.com com uma conta Gmail pessoal, "
+                "ou aguarda alguns segundos e tenta novamente."
+            ),
+        )
+    except APIStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Erro da API Gemini: {exc.message}")
 
     return {"response": "Não foi possível processar o pedido.", "tools_called": tools_called}
