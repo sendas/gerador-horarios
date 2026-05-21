@@ -2,7 +2,11 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Agrupamentos</div>
-      <q-btn color="primary" icon="add" label="Novo" @click="openCreate" />
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="primary" icon="add" label="Novo" @click="openCreate" class="q-ml-sm" />
     </div>
 
     <q-table
@@ -10,6 +14,8 @@
       :columns="columns"
       row-key="id"
       :loading="clustersStore.loading"
+      :filter="search"
+      sort-by="name"
     >
       <template #body-cell-actions="props">
         <q-td :props="props">
@@ -53,6 +59,7 @@ const columns = [
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
 
+const search = ref('')
 const dialog = ref(false)
 const editing = ref<null | { id: number }>(null)
 const form = ref({ name: '', description: '' })

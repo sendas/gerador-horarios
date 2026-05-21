@@ -278,6 +278,12 @@
       <q-card-section style="max-height:70vh;overflow-y:auto">
         <div v-if="hoursLoading" class="text-center q-pa-xl"><q-spinner size="40px" color="primary" /></div>
         <template v-else>
+          <div class="row items-center q-mb-sm">
+            <q-space />
+            <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+              <template #prepend><q-icon name="search" /></template>
+            </q-input>
+          </div>
           <div v-for="school in hoursDialogData" :key="school.school_id" class="q-mb-lg">
             <div class="text-subtitle1 text-weight-bold text-teal-7 q-mb-sm row items-center">
               <q-icon name="school" class="q-mr-xs" />{{ school.school_name }}
@@ -291,6 +297,8 @@
               dense
               hide-pagination
               :rows-per-page-options="[0]"
+              :filter="search"
+              sort-by="name"
             >
               <template #body-cell-sel="props">
                 <q-td :props="props">
@@ -368,6 +376,7 @@ type Entry = {
 }
 
 // ── State ──────────────────────────────────────────────
+const search = ref('')
 const selectedYearId = ref<number | null>(null)
 const selectedTeacherId = ref<number | null>(null)
 const allEntries = ref<Entry[]>([])

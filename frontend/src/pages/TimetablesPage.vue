@@ -2,7 +2,11 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Horários</div>
-      <q-btn color="orange-8" icon="fact_check" label="Verificar dados" @click="openPreflight" class="q-mr-sm" />
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="orange-8" icon="fact_check" label="Verificar dados" @click="openPreflight" class="q-ml-sm q-mr-sm" />
       <q-btn color="primary" icon="add" label="Novo" @click="openCreate" />
     </div>
 
@@ -35,6 +39,8 @@
 
     <q-table :rows="store.timetables" :columns="columns" row-key="id" :loading="store.loading"
       :row-class="(row) => row.status === 'generating' ? 'row-generating' : ''"
+      :filter="search"
+      sort-by="name"
     >
       <template #body-cell-status="props">
         <q-td :props="props">
@@ -441,6 +447,7 @@ function formatDateTime(iso: string | undefined | null): string {
   })
 }
 
+const search = ref('')
 const dialog = ref(false)
 const form = ref({ academic_year_id: null as number | null, name: '' })
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))

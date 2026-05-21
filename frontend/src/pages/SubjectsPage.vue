@@ -2,10 +2,14 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Disciplinas</div>
-      <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="primary" icon="add" label="Nova" @click="openCreate" class="q-ml-sm" />
     </div>
 
-    <q-table :rows="subjectsStore.subjects" :columns="columns" row-key="id" :loading="subjectsStore.loading">
+    <q-table :rows="subjectsStore.subjects" :columns="columns" row-key="id" :loading="subjectsStore.loading" :filter="search" sort-by="name">
       <template #body-cell-color="{ row }">
         <q-td auto-width>
           <div style="width:22px;height:22px;border-radius:4px;display:inline-block" :style="{ background: row.color }" />
@@ -185,6 +189,7 @@ const columns = [
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
 
+const search = ref('')
 const dialog = ref(false)
 const editing = ref<Subject | null>(null)
 const form = ref({

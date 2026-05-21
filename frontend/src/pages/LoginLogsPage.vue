@@ -23,6 +23,9 @@
       :rows-per-page-options="[50, 100, 200]"
       rows-per-page-label="Linhas por página"
       :pagination="{ rowsPerPage: 50, sortBy: 'timestamp', descending: true }"
+      :filter="filterUser"
+      sort-by="timestamp"
+      :descending="true"
     >
       <template #body-cell-success="{ row }">
         <q-td>

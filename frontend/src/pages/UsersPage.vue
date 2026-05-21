@@ -3,7 +3,10 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5">Utilizadores</div>
       <q-space />
-      <q-btn color="primary" icon="add" label="Novo utilizador" @click="openCreate" />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="primary" icon="add" label="Novo utilizador" @click="openCreate" class="q-ml-sm" />
     </div>
 
     <q-table
@@ -13,6 +16,8 @@
       :loading="loading"
       flat
       bordered
+      :filter="search"
+      sort-by="username"
     >
       <template #body-cell-role="props">
         <q-td :props="props">
@@ -131,6 +136,7 @@ interface UserRow {
   created_at: string
 }
 
+const search = ref('')
 const users = ref<UserRow[]>([])
 const loading = ref(false)
 const saving = ref(false)

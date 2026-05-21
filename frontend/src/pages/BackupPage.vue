@@ -138,12 +138,21 @@
         <div class="text-h6 q-mb-md">
           <q-icon name="history" color="grey-7" class="q-mr-sm" />Histórico
         </div>
+        <div class="row items-center q-mb-sm">
+          <q-space />
+          <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+            <template #prepend><q-icon name="search" /></template>
+          </q-input>
+        </div>
         <q-table
           :rows="history"
           :columns="histCols"
           row-key="id"
           dense flat
           :rows-per-page-options="[10]"
+          :filter="search"
+          sort-by="created_at"
+          :descending="true"
         >
           <template #body-cell-status="props">
             <q-td :props="props">
@@ -184,6 +193,7 @@ interface BackupConfigResponse {
   next_backup_at: string | null
 }
 
+const search = ref('')
 const config = ref<BackupConfigResponse | null>(null)
 const history = ref<Record<string, unknown>[]>([])
 const downloading = ref(false)

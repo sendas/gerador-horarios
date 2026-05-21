@@ -43,7 +43,13 @@
               </div>
             </div>
 
-            <q-table :rows="assignments" :columns="assignCols" row-key="id" dense flat>
+            <div class="row items-center q-mb-sm">
+              <q-space />
+              <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+                <template #prepend><q-icon name="search" /></template>
+              </q-input>
+            </div>
+            <q-table :rows="assignments" :columns="assignCols" row-key="id" dense flat :filter="search" sort-by="teacher_name">
               <template #top>
                 <q-btn color="primary" icon="add" label="Adicionar" @click="openAssignCreate" dense />
               </template>
@@ -120,6 +126,7 @@ const yearsStore = useAcademicYearsStore()
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
 const dayOptions = DAYS.map((d, i) => ({ label: d, value: i }))
 
+const search = ref('')
 const types = ref<{ id: number; cluster_id: number; name: string; color: string }[]>([])
 const assignments = ref<{ id: number; teacher_id: number; non_teaching_type_id: number; academic_year_id: number; day_of_week: number; slot_number: number }[]>([])
 const filterTeacher = ref<number | null>(null)

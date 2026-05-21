@@ -30,6 +30,11 @@ class BulkComponentRequest(BaseModel):
     apply_art79: bool = False
 
 
+class BulkFreeDayRequest(BaseModel):
+    cluster_id: int
+    day: Optional[int] = None  # 0=Seg … 4=Sex, None = limpar
+
+
 def _build_response(t: Teacher) -> TeacherResponse:
     r = TeacherResponse.model_validate(t)
     r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
@@ -51,6 +56,18 @@ def _sa_dict(sa: TeacherSchoolAssignment) -> dict:
         "is_primary": bool(sa.is_primary),
         "school_name": sa.school.name if sa.school else None,
     }
+
+
+@router.post("/bulk-free-day")
+def bulk_set_free_day(req: BulkFreeDayRequest, db: Session = Depends(get_db)):
+    """Set the same preferred free day (or clear it) for ALL teachers in a cluster."""
+    updated = db.query(Teacher).filter(Teacher.cluster_id == req.cluster_id).update(
+        {"preferred_free_day": req.day}, synchronize_session=False
+    )
+    db.commit()
+    day_names = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+    day_label = day_names[req.day] if req.day is not None else "nenhum (limpo)"
+    return {"updated": updated, "day": req.day, "message": f"Dia livre definido como {day_label} para {updated} professor(es)."}
 
 
 @router.put("/bulk-update")

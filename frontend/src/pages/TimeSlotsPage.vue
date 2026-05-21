@@ -39,6 +39,13 @@
       </div>
     </q-banner>
 
+    <div class="row items-center q-mb-sm">
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+    </div>
+
     <q-tabs v-model="activeDay" dense class="q-mb-md">
       <q-tab v-for="(day, i) in DAYS" :key="i" :name="i" :label="day">
         <q-badge v-if="slotsForDay(i).length" color="teal" floating>{{ slotsForDay(i).length }}</q-badge>
@@ -54,6 +61,8 @@
           flat
           dense
           :loading="loading"
+          :filter="search"
+          sort-by="slot_number"
         >
           <template #body-cell-actions="props">
             <q-td :props="props">
@@ -199,6 +208,7 @@ const yearsStore = useAcademicYearsStore()
 const schoolsStore = useSchoolsStore()
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
+const search = ref('')
 const activeDay = ref(0)
 const selectedYear = ref<number | null>(null)
 const selectedSchool = ref<number | null>(null)

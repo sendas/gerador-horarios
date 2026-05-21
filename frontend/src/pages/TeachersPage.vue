@@ -2,7 +2,14 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Professores</div>
-      <q-btn color="primary" icon="add" label="Novo" @click="openCreate" />
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="orange-7" icon="event_busy" label="Dia sem aulas" @click="freeDayDialog = true" class="q-ml-sm">
+        <q-tooltip>Definir o mesmo dia sem aulas para todos os professores</q-tooltip>
+      </q-btn>
+      <q-btn color="primary" icon="add" label="Novo" @click="openCreate" class="q-ml-sm" />
       <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
     </div>
 
@@ -32,7 +39,7 @@
       <q-badge v-if="selectedSchoolIds.size > 0" color="teal-7" :label="`${filteredTeachers.length} professor(es)`" class="q-ml-xs" />
     </div>
 
-    <q-table :rows="filteredTeachers" :columns="columns" row-key="id" :loading="teachersStore.loading">
+    <q-table :rows="filteredTeachers" :columns="columns" row-key="id" :loading="teachersStore.loading" :filter="search" sort-by="name">
       <template #body-cell-primary_school="props">
         <q-td :props="props">
           <span v-if="props.row.primary_school_name">
@@ -66,6 +73,47 @@
         </q-td>
       </template>
     </q-table>
+
+    <!-- Bulk free day dialog -->
+    <q-dialog v-model="freeDayDialog" persistent>
+      <q-card style="min-width:340px">
+        <q-card-section class="bg-orange-7 text-white">
+          <div class="text-h6">Dia sem aulas — todos os professores</div>
+          <div class="text-caption">Define o mesmo dia livre preferido para todos os docentes do agrupamento</div>
+        </q-card-section>
+        <q-card-section class="q-gutter-sm">
+          <q-select
+            v-model="freeDaySelected"
+            :options="[
+              { label: 'Segunda-feira', value: 0 },
+              { label: 'Terça-feira',   value: 1 },
+              { label: 'Quarta-feira',  value: 2 },
+              { label: 'Quinta-feira',  value: 3 },
+              { label: 'Sexta-feira',   value: 4 },
+              { label: 'Sem dia livre (limpar)', value: null },
+            ]"
+            emit-value map-options
+            label="Dia sem aulas"
+            outlined dense
+          />
+          <div class="text-caption text-grey-6">
+            <q-icon name="info" size="xs" />
+            O solver tentará garantir que nenhum professor tenha aulas neste dia.
+            Pode ser sobreposto individualmente em cada professor.
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" @click="freeDayDialog = false" />
+          <q-btn
+            label="Aplicar a todos"
+            color="orange-7"
+            :loading="freeDayLoading"
+            :disable="freeDaySelected === undefined"
+            @click="applyFreeDay"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Teacher dialog -->
     <q-dialog v-model="dialog">
@@ -445,7 +493,11 @@ const teachersStore = useTeachersStore()
 const clustersStore = useClustersStore()
 const classesStore = useClassesStore()
 
+const search = ref('')
 const showImport = ref(false)
+const freeDayDialog = ref(false)
+const freeDaySelected = ref<number | null | undefined>(undefined)
+const freeDayLoading = ref(false)
 const selectedClusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
 const schoolsStore = useSchoolsStore()
 const yearsStore = useAcademicYearsStore()
@@ -933,6 +985,27 @@ async function saveAvailability() {
   }
   await teachersStore.setAvailabilityBulk(selectedTeacher.value.id, availYear.value, availabilities)
   $q.notify({ type: 'positive', message: 'Disponibilidade guardada' })
+}
+
+async function applyFreeDay() {
+  if (freeDaySelected.value === undefined) return
+  const clusterId = selectedClusterId.value
+  if (!clusterId) {
+    $q.notify({ type: 'warning', message: 'Nenhum agrupamento selecionado.' })
+    return
+  }
+  freeDayLoading.value = true
+  try {
+    const res = await teachersStore.bulkFreeDay(clusterId, freeDaySelected.value)
+    freeDayDialog.value = false
+    freeDaySelected.value = undefined
+    await teachersStore.fetchAll()
+    $q.notify({ type: 'positive', message: res.message })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao aplicar dia livre.' })
+  } finally {
+    freeDayLoading.value = false
+  }
 }
 
 function confirmDelete(row: Teacher) {

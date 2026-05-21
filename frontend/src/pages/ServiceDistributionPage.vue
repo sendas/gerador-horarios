@@ -152,6 +152,12 @@
     </div>
 
     <!-- Main table -->
+    <div v-if="teachers.length > 0" class="row items-center q-mb-sm">
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+    </div>
     <q-table
       v-if="teachers.length > 0"
       :rows="teachers"
@@ -162,6 +168,8 @@
       dense
       :pagination="{ rowsPerPage: 0 }"
       hide-bottom
+      :filter="search"
+      sort-by="name"
     >
       <template #body="props">
         <q-tr :props="props" @click="toggleExpand(props.row)" class="cursor-pointer">
@@ -384,6 +392,7 @@ interface TimetableOption {
 
 // ── State ────────────────────────────────────────────────────────────────────
 
+const search = ref('')
 const loading = ref(false)
 const selectedYearId = ref<number | null>(null)
 const selectedTimetableId = ref<number | null>(null)

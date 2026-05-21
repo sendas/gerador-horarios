@@ -2,7 +2,11 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Turmas</div>
-      <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="primary" icon="add" label="Nova" @click="openCreate" class="q-ml-sm" />
       <q-btn color="secondary" icon="upload" label="Importar Turmas" @click="showImport = true" class="q-ml-sm" />
     </div>
 
@@ -15,7 +19,7 @@
       @done="classesStore.fetchAll()"
     />
 
-    <q-table :rows="classesStore.classes" :columns="columns" row-key="id" :loading="classesStore.loading">
+    <q-table :rows="classesStore.classes" :columns="columns" row-key="id" :loading="classesStore.loading" :filter="search" sort-by="name">
       <template #body-cell-notes="props">
         <q-td :props="props">
           <span v-if="props.row.notes" class="text-caption text-grey-8">
@@ -222,6 +226,7 @@ const schoolsStore = useSchoolsStore()
 const yearsStore = useAcademicYearsStore()
 const subjectsStore = useSubjectsStore()
 
+const search = ref('')
 const showImport = ref(false)
 const selectedSchoolId = computed(() => schoolsStore.schools[0]?.id ?? null)
 const selectedYearId = computed(() => yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null)

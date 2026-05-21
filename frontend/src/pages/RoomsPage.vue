@@ -2,7 +2,11 @@
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Salas</div>
-      <q-btn color="primary" icon="add" label="Nova" @click="openCreate" />
+      <q-space />
+      <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
+        <template #prepend><q-icon name="search" /></template>
+      </q-input>
+      <q-btn color="primary" icon="add" label="Nova" @click="openCreate" class="q-ml-sm" />
       <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
     </div>
 
@@ -19,7 +23,7 @@
       <q-select v-model="filterSchool" :options="schoolOptions" label="Filtrar por escola" emit-value map-options clearable style="max-width:300px" @update:model-value="loadRooms" />
     </div>
 
-    <q-table :rows="rooms" :columns="columns" row-key="id" :loading="loading">
+    <q-table :rows="rooms" :columns="columns" row-key="id" :loading="loading" :filter="search" sort-by="name">
       <template #body-cell-actions="props">
         <q-td :props="props">
           <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
@@ -58,6 +62,7 @@ import ImportDialog from 'components/ImportDialog.vue'
 const $q = useQuasar()
 const schoolsStore = useSchoolsStore()
 
+const search = ref('')
 const showImport = ref(false)
 const rooms = ref<{ id: number; school_id: number; name: string; capacity: number; room_type: string }[]>([])
 const loading = ref(false)
