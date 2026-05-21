@@ -394,17 +394,50 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     slot_day_of = [all_slots[si][0] for si in range(n_slots)]
     slot_num_of = [all_slots[si][1] for si in range(n_slots)]
 
+    # ── Fixed-teacher optimisation ────────────────────────────────────────────
+    # When every entry has exactly one possible teacher (the common case after
+    # teacher assignment), we can skip t-variables entirely and express teacher
+    # double-booking as AddAtMostOne directly on x-variables. This eliminates
+    # ~N_OCC × N_SLOTS auxiliary BoolVars and speeds up the solver significantly.
+    all_fixed = all(len(entry_teachers.get(e.id, [])) == 1 for e in entries)
+    teacher_of: dict[tuple, int] = {}
+    occ_by_teacher: dict[int, list] = defaultdict(list)
+    if all_fixed:
+        for (eid, occ) in occurrences:
+            tid = entry_teachers[eid][0]
+            teacher_of[(eid, occ)] = tid
+            occ_by_teacher[tid].append((eid, occ))
+
+    # Pre-prune allowed slots per occurrence: skip slots where the (fixed) teacher
+    # is blocked, so we never create x-variables we'd immediately force to 0.
+    _allowed: dict[tuple, set] = {}
+    for (eid, occ) in occurrences:
+        if all_fixed:
+            tid = teacher_of[(eid, occ)]
+            _blk: set = set(blocked.get(tid, set()))
+            _t = teachers.get(tid)
+            if _t:
+                if _t.min_start_slot is not None:
+                    _blk |= {(d, s) for d, s in all_slots if s < _t.min_start_slot}
+                if _t.max_end_slot is not None:
+                    _blk |= {(d, s) for d, s in all_slots if s > _t.max_end_slot}
+            _allowed[(eid, occ)] = {slot_indices[ds] for ds in all_slots if ds not in _blk}
+        else:
+            _allowed[(eid, occ)] = set(range(n_slots))
+
     # x[(entry_id, occ, slot_idx)] = BoolVar: is this occurrence at this slot?
     x: dict[tuple, cp_model.IntVar] = {}
     for (eid, occ) in occurrences:
-        for si in range(n_slots):
+        for si in _allowed[(eid, occ)]:
             x[(eid, occ, si)] = model.NewBoolVar(f"x_{eid}_{occ}_{si}")
 
     # t[(entry_id, occ, teacher_id)] = BoolVar: is this teacher assigned?
+    # In fixed-teacher mode these are not needed; we use x directly.
     t: dict[tuple, cp_model.IntVar] = {}
-    for (eid, occ) in occurrences:
-        for tid in entry_teachers.get(eid, []):
-            t[(eid, occ, tid)] = model.NewBoolVar(f"t_{eid}_{occ}_{tid}")
+    if not all_fixed:
+        for (eid, occ) in occurrences:
+            for tid in entry_teachers.get(eid, []):
+                t[(eid, occ, tid)] = model.NewBoolVar(f"t_{eid}_{occ}_{tid}")
 
     # ── Constraints ──────────────────────────────────────────────────────────
 
@@ -424,11 +457,12 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     for (eid, occ) in occurrences:
         model.AddExactlyOne([x[(eid, occ, si)] for si in range(n_slots)])
 
-    # 2. Each occurrence has exactly one teacher (if any teachers available)
-    for (eid, occ) in occurrences:
-        teacher_vars = [t[(eid, occ, tid)] for tid in entry_teachers.get(eid, []) if (eid, occ, tid) in t]
-        if teacher_vars:
-            model.AddExactlyOne(teacher_vars)
+    # 2. Each occurrence has exactly one teacher (variable-teacher mode only)
+    if not all_fixed:
+        for (eid, occ) in occurrences:
+            teacher_vars = [t[(eid, occ, tid)] for tid in entry_teachers.get(eid, []) if (eid, occ, tid) in t]
+            if teacher_vars:
+                model.AddExactlyOne(teacher_vars)
 
     # 3. No class double-booking: for each class, at most one lesson per slot
     # Semestral pairs share a slot, so we skip counting one from each pair
@@ -617,92 +651,126 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                             model.AddBoolOr([var_i.Not(), var_j.Not()])
 
     # 4. No teacher double-booking: for each (teacher, slot), at most one lesson
-    # Use auxiliary variables: a[(eid, occ, tid, si)] = x AND t
     all_teacher_ids = list(teachers.keys())
-    for tid in all_teacher_ids:
-        for si in range(n_slots):
-            teaching_here = []
-            for (eid, occ) in occurrences:
-                if (eid, occ, tid) in t and (eid, occ, si) in x:
-                    aux = model.NewBoolVar(f"aux_{eid}_{occ}_{tid}_{si}")
-                    model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
-                    model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
-                    teaching_here.append(aux)
-            if len(teaching_here) > 1:
-                model.AddAtMostOne(teaching_here)
+    if all_fixed:
+        # Direct AddAtMostOne on x vars — no auxiliary variables needed.
+        # This alone eliminates ~N_OCC * N_SLOTS implicit aux vars from the model.
+        for tid, my_occs in occ_by_teacher.items():
+            for si in range(n_slots):
+                at_si = [x[(eid, occ, si)] for (eid, occ) in my_occs if (eid, occ, si) in x]
+                if len(at_si) > 1:
+                    model.AddAtMostOne(at_si)
+    else:
+        for tid in all_teacher_ids:
+            for si in range(n_slots):
+                teaching_here = []
+                for (eid, occ) in occurrences:
+                    if (eid, occ, tid) in t and (eid, occ, si) in x:
+                        aux = model.NewBoolVar(f"aux_{eid}_{occ}_{tid}_{si}")
+                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                        teaching_here.append(aux)
+                if len(teaching_here) > 1:
+                    model.AddAtMostOne(teaching_here)
 
-    # 5. Teacher availability: if slot (day, slot) is blocked for teacher, they can't teach
-    for (eid, occ) in occurrences:
-        for tid in entry_teachers.get(eid, []):
-            if (eid, occ, tid) not in t:
-                continue
-            for (day, slot) in blocked.get(tid, set()):
-                if (day, slot) in slot_indices:
-                    si = slot_indices[(day, slot)]
-                    if (eid, occ, si) in x:
-                        # If teacher is assigned AND slot is this blocked slot -> forbidden
-                        model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
+    # 5. Teacher availability: blocked slots forbid scheduling there.
+    # In fixed-teacher mode this is already handled by pre-pruning (no x-var created
+    # for blocked slots), so we only need the logic for variable-teacher mode.
+    if not all_fixed:
+        for (eid, occ) in occurrences:
+            for tid in entry_teachers.get(eid, []):
+                if (eid, occ, tid) not in t:
+                    continue
+                for (day, slot) in blocked.get(tid, set()):
+                    if (day, slot) in slot_indices:
+                        si = slot_indices[(day, slot)]
+                        if (eid, occ, si) in x:
+                            model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
 
-    # 5c. Teacher min_start_slot / max_end_slot
-    for (eid, occ) in occurrences:
-        for tid in entry_teachers.get(eid, []):
-            if (eid, occ, tid) not in t:
-                continue
-            teacher = teachers.get(tid)
-            if not teacher:
-                continue
-            if teacher.min_start_slot is not None:
-                for si, (day, slot_num) in enumerate(all_slots):
-                    if slot_num < teacher.min_start_slot and (eid, occ, si) in x:
-                        model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
-            if teacher.max_end_slot is not None:
-                for si, (day, slot_num) in enumerate(all_slots):
-                    if slot_num > teacher.max_end_slot and (eid, occ, si) in x:
-                        model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
+    # 5c. Teacher min_start_slot / max_end_slot (also pre-pruned in fixed mode)
+    if not all_fixed:
+        for (eid, occ) in occurrences:
+            for tid in entry_teachers.get(eid, []):
+                if (eid, occ, tid) not in t:
+                    continue
+                teacher = teachers.get(tid)
+                if not teacher:
+                    continue
+                if teacher.min_start_slot is not None:
+                    for si, (day, slot_num) in enumerate(all_slots):
+                        if slot_num < teacher.min_start_slot and (eid, occ, si) in x:
+                            model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
+                if teacher.max_end_slot is not None:
+                    for si, (day, slot_num) in enumerate(all_slots):
+                        if slot_num > teacher.max_end_slot and (eid, occ, si) in x:
+                            model.AddImplication(t[(eid, occ, tid)], x[(eid, occ, si)].Not())
 
     # 5d. Travel time: teacher cannot have back-to-back lessons at different schools.
-    # Any teacher assigned to 2+ schools needs at least 1 free slot when switching school.
     entries_map_by_id = {e.id: e for e in entries}
-    for tid in all_teacher_ids:
-        t_school_ids = set(teacher_schools.get(tid, {}).keys())
-        if len(t_school_ids) < 2:
-            continue  # single school — no travel gap needed
-
-        for day in DAYS:
-            day_slots_sorted = sorted(
-                [si for si in range(n_slots) if slot_day_of[si] == day],
-                key=lambda si: slot_num_of[si],
-            )
-            if len(day_slots_sorted) < 2:
+    if all_fixed:
+        # Simplified: x-vars directly represent teacher presence; no aux needed.
+        for tid, my_occs in occ_by_teacher.items():
+            t_school_ids = set(teacher_schools.get(tid, {}).keys())
+            if len(t_school_ids) < 2:
                 continue
-
-            # For each slot build: [(aux_var, school_id)] = "T teaches at school S at this slot"
-            slot_school_aux: dict[int, list] = {}
-            for si in day_slots_sorted:
-                aux_list = []
-                for (eid, occ) in occurrences:
-                    if (eid, occ, tid) not in t or (eid, occ, si) not in x:
-                        continue
-                    entry_t = entries_map_by_id.get(eid)
-                    if not entry_t:
-                        continue
-                    sch = class_school.get(entry_t.class_id)
-                    if sch not in t_school_ids:
-                        continue
-                    aux = model.NewBoolVar(f"ttrv_{tid}_{eid}_{occ}_{si}")
-                    model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
-                    model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
-                    aux_list.append((aux, sch))
-                slot_school_aux[si] = aux_list
-
-            # Consecutive slot pairs: forbid switching school without a free period
-            for k in range(len(day_slots_sorted) - 1):
-                si_a = day_slots_sorted[k]
-                si_b = day_slots_sorted[k + 1]
-                for (aux_a, sch_a) in slot_school_aux.get(si_a, []):
-                    for (aux_b, sch_b) in slot_school_aux.get(si_b, []):
-                        if sch_a != sch_b:
-                            model.AddBoolOr([aux_a.Not(), aux_b.Not()])
+            for day in DAYS:
+                day_slots_sorted = sorted(
+                    [si for si in range(n_slots) if slot_day_of[si] == day],
+                    key=lambda si: slot_num_of[si],
+                )
+                if len(day_slots_sorted) < 2:
+                    continue
+                for k in range(len(day_slots_sorted) - 1):
+                    si_a, si_b = day_slots_sorted[k], day_slots_sorted[k + 1]
+                    for (eid_a, occ_a) in my_occs:
+                        if (eid_a, occ_a, si_a) not in x:
+                            continue
+                        ea = entries_map_by_id.get(eid_a)
+                        sch_a = class_school.get(ea.class_id) if ea else None
+                        if not sch_a or sch_a not in t_school_ids:
+                            continue
+                        for (eid_b, occ_b) in my_occs:
+                            if (eid_b, occ_b, si_b) not in x:
+                                continue
+                            eb = entries_map_by_id.get(eid_b)
+                            sch_b = class_school.get(eb.class_id) if eb else None
+                            if sch_b and sch_b != sch_a and sch_b in t_school_ids:
+                                model.AddBoolOr([x[(eid_a, occ_a, si_a)].Not(), x[(eid_b, occ_b, si_b)].Not()])
+    else:
+        for tid in all_teacher_ids:
+            t_school_ids = set(teacher_schools.get(tid, {}).keys())
+            if len(t_school_ids) < 2:
+                continue
+            for day in DAYS:
+                day_slots_sorted = sorted(
+                    [si for si in range(n_slots) if slot_day_of[si] == day],
+                    key=lambda si: slot_num_of[si],
+                )
+                if len(day_slots_sorted) < 2:
+                    continue
+                slot_school_aux: dict[int, list] = {}
+                for si in day_slots_sorted:
+                    aux_list = []
+                    for (eid, occ) in occurrences:
+                        if (eid, occ, tid) not in t or (eid, occ, si) not in x:
+                            continue
+                        entry_t = entries_map_by_id.get(eid)
+                        if not entry_t:
+                            continue
+                        sch = class_school.get(entry_t.class_id)
+                        if sch not in t_school_ids:
+                            continue
+                        aux = model.NewBoolVar(f"ttrv_{tid}_{eid}_{occ}_{si}")
+                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                        aux_list.append((aux, sch))
+                    slot_school_aux[si] = aux_list
+                for k in range(len(day_slots_sorted) - 1):
+                    si_a, si_b = day_slots_sorted[k], day_slots_sorted[k + 1]
+                    for (aux_a, sch_a) in slot_school_aux.get(si_a, []):
+                        for (aux_b, sch_b) in slot_school_aux.get(si_b, []):
+                            if sch_a != sch_b:
+                                model.AddBoolOr([aux_a.Not(), aux_b.Not()])
 
     # 5b. Max periods per day per class (hard constraint from scheduling rules)
     for class_id, eids in entry_by_class.items():
@@ -880,142 +948,211 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     # ── Soft constraints (objective) ─────────────────────────────────────────
     penalty_terms = []
 
-    for tid, teacher in teachers.items():
-        # Soft: preferred free day
-        if teacher.preferred_free_day is not None:
-            free_day = teacher.preferred_free_day
-            day_slots = [si for si, (d, s) in enumerate(all_slots) if d == free_day]
-            for (eid, occ) in occurrences:
-                if (eid, occ, 0) not in x:
-                    continue
-                for si in day_slots:
-                    if (eid, occ, si) not in x:
-                        continue
-                    if (eid, occ, tid) in t:
-                        aux = model.NewBoolVar(f"pref_{eid}_{occ}_{tid}_{si}")
-                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
-                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
-                        penalty_terms.append(aux)
+    def _teacher_at_var(tid_: int, my_occs_: list, si_: int, tag: str):
+        """Return a BoolVar that is 1 iff teacher tid_ teaches at slot si_."""
+        tv = [x[(e, o, si_)] for (e, o) in my_occs_ if (e, o, si_) in x]
+        if not tv:
+            return model.NewConstant(0)
+        if len(tv) == 1:
+            return tv[0]
+        v = model.NewBoolVar(tag)
+        model.AddBoolOr(tv).OnlyEnforceIf(v)
+        model.AddBoolAnd([u.Not() for u in tv]).OnlyEnforceIf(v.Not())
+        return v
 
-        # Soft: max_daily_lessons (combining teacher's own limit with global rule)
-        max_daily = min(teacher.max_daily_lessons, max_per_day_teacher)
-        for day in DAYS:
-            day_slots_idx = [si for si, (d, s) in enumerate(all_slots) if d == day]
-            daily_lessons = []
-            for (eid, occ) in occurrences:
-                for si in day_slots_idx:
-                    if (eid, occ, si) in x and (eid, occ, tid) in t:
-                        aux = model.NewBoolVar(f"daily_{eid}_{occ}_{tid}_{day}_{si}")
-                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
-                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
-                        daily_lessons.append(aux)
-            if daily_lessons:
-                excess = model.NewIntVar(0, len(daily_lessons), f"excess_{tid}_{day}")
-                model.Add(sum(daily_lessons) - max_daily <= excess)
-                model.Add(excess >= 0)
-                penalty_terms.append(excess)
-
-    # Soft: avoid isolated periods for teachers
-    if avoid_isolated:
-        for tid in all_teacher_ids:
-            for day in DAYS:
-                day_slots_sorted = sorted(
-                    [si for si in range(n_slots) if slot_day_of[si] == day],
-                    key=lambda si: slot_num_of[si]
-                )
-                for k, si in enumerate(day_slots_sorted):
-                    prev_si = day_slots_sorted[k - 1] if k > 0 else None
-                    next_si = day_slots_sorted[k + 1] if k < len(day_slots_sorted) - 1 else None
-                    for (eid, occ) in occurrences:
-                        if (eid, occ, si) not in x or (eid, occ, tid) not in t:
-                            continue
-                        # aux_here = x AND t
-                        aux_here = model.NewBoolVar(f"iso_here_{eid}_{occ}_{tid}_{si}")
-                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux_here)
-                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux_here.Not())
-                        # Check if any adjacent slot has a lesson for this teacher
-                        adj_teaching = []
-                        for adj_si in [prev_si, next_si]:
-                            if adj_si is None:
-                                continue
-                            for (eid2, occ2) in occurrences:
-                                if (eid2, occ2, adj_si) in x and (eid2, occ2, tid) in t:
-                                    aux_adj = model.NewBoolVar(f"adj_{eid}_{occ}_{tid}_{si}_{eid2}_{occ2}_{adj_si}")
-                                    model.AddBoolAnd([x[(eid2, occ2, adj_si)], t[(eid2, occ2, tid)]]).OnlyEnforceIf(aux_adj)
-                                    model.AddBoolOr([x[(eid2, occ2, adj_si)].Not(), t[(eid2, occ2, tid)].Not()]).OnlyEnforceIf(aux_adj.Not())
-                                    adj_teaching.append(aux_adj)
-                        if adj_teaching:
-                            # is_isolated = aux_here AND (none of adj_teaching)
-                            is_isolated = model.NewBoolVar(f"isol_{eid}_{occ}_{tid}_{si}")
-                            model.AddBoolAnd([aux_here] + [v.Not() for v in adj_teaching]).OnlyEnforceIf(is_isolated)
-                            model.AddBoolOr([aux_here.Not()] + adj_teaching).OnlyEnforceIf(is_isolated.Not())
-                            penalty_terms.append(is_isolated)
-
-    # Soft: preferred shift (morning/afternoon)
-    for tid, teacher in teachers.items():
-        if not teacher.preferred_shift:
-            continue
-        for day in DAYS:
-            day_slots_list = sorted([si for si in range(n_slots) if slot_day_of[si] == day])
-            if not day_slots_list:
+    if all_fixed:
+        # ── Fixed-teacher soft constraints (no t-variables) ───────────────────
+        for tid, my_occs in occ_by_teacher.items():
+            teacher = teachers.get(tid)
+            if not teacher:
                 continue
-            half = len(day_slots_list) // 2
-            if teacher.preferred_shift == 'morning':
-                penalty_slots = day_slots_list[half:]  # penalize afternoon slots
-            else:
-                penalty_slots = day_slots_list[:half]  # penalize morning slots
-            for (eid, occ) in occurrences:
-                for si in penalty_slots:
-                    if (eid, occ, si) in x and (eid, occ, tid) in t:
-                        aux = model.NewBoolVar(f"shift_{eid}_{occ}_{tid}_{si}")
-                        model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
-                        model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
-                        penalty_terms.append(aux)
 
-    # Soft: minimize teacher gaps
-    if opt_minimize_teacher_gaps and opt_teacher_gap_weight > 0:
-        for tid in all_teacher_ids:
+            # Preferred free day
+            if teacher.preferred_free_day is not None:
+                for (eid, occ) in my_occs:
+                    for si in range(n_slots):
+                        if slot_day_of[si] == teacher.preferred_free_day and (eid, occ, si) in x:
+                            penalty_terms.append(x[(eid, occ, si)])
+
+            # Max daily lessons
+            max_daily = min(teacher.max_daily_lessons, max_per_day_teacher)
             for day in DAYS:
-                day_slots_sorted = sorted(
-                    [si for si in range(n_slots) if slot_day_of[si] == day],
-                    key=lambda si: slot_num_of[si]
-                )
-                if len(day_slots_sorted) < 3:
-                    continue
-                # teacher_at[si] = BoolVar: teacher has a lesson here
-                teacher_at = {}
-                for si in day_slots_sorted:
-                    t_vars_here = []
-                    for (eid, occ) in occurrences:
+                daily_x = [x[(eid, occ, si)] for (eid, occ) in my_occs
+                            for si in range(n_slots) if slot_day_of[si] == day and (eid, occ, si) in x]
+                if len(daily_x) > max_daily:
+                    excess = model.NewIntVar(0, len(daily_x), f"excess_{tid}_{day}")
+                    model.Add(sum(daily_x) - max_daily <= excess)
+                    model.Add(excess >= 0)
+                    penalty_terms.append(excess)
+
+            # Preferred shift
+            if teacher.preferred_shift:
+                for day in DAYS:
+                    day_sl = sorted([si for si in range(n_slots) if slot_day_of[si] == day])
+                    half = len(day_sl) // 2
+                    bad = day_sl[half:] if teacher.preferred_shift == 'morning' else day_sl[:half]
+                    for (eid, occ) in my_occs:
+                        for si in bad:
+                            if (eid, occ, si) in x:
+                                penalty_terms.append(x[(eid, occ, si)])
+
+        # Avoid isolated periods (fixed mode)
+        if avoid_isolated:
+            for tid, my_occs in occ_by_teacher.items():
+                for day in DAYS:
+                    day_slots_sorted = sorted(
+                        [si for si in range(n_slots) if slot_day_of[si] == day],
+                        key=lambda si: slot_num_of[si]
+                    )
+                    for k, si in enumerate(day_slots_sorted):
+                        here = _teacher_at_var(tid, my_occs, si, f"iso_h_{tid}_{day}_{si}")
+                        if isinstance(here, int) and here == 0:
+                            continue
+                        adj_vs = []
+                        for adj_k in [k - 1, k + 1]:
+                            if 0 <= adj_k < len(day_slots_sorted):
+                                adj_v = _teacher_at_var(tid, my_occs, day_slots_sorted[adj_k],
+                                                        f"iso_a_{tid}_{day}_{si}_{adj_k}")
+                                if not (isinstance(adj_v, int) and adj_v == 0):
+                                    adj_vs.append(adj_v)
+                        if adj_vs:
+                            is_iso = model.NewBoolVar(f"iso_{tid}_{day}_{si}")
+                            model.AddBoolAnd([here] + [v.Not() for v in adj_vs]).OnlyEnforceIf(is_iso)
+                            model.AddBoolOr([here.Not()] + adj_vs).OnlyEnforceIf(is_iso.Not())
+                            penalty_terms.append(is_iso)
+
+        # Minimize teacher gaps (fixed mode)
+        if opt_minimize_teacher_gaps and opt_teacher_gap_weight > 0:
+            for tid, my_occs in occ_by_teacher.items():
+                for day in DAYS:
+                    day_slots_sorted = sorted(
+                        [si for si in range(n_slots) if slot_day_of[si] == day],
+                        key=lambda si: slot_num_of[si]
+                    )
+                    if len(day_slots_sorted) < 3:
+                        continue
+                    teacher_at = {si: _teacher_at_var(tid, my_occs, si, f"tg_{tid}_{day}_{si}")
+                                  for si in day_slots_sorted}
+                    n_day = len(day_slots_sorted)
+                    for ji in range(n_day):
+                        for ki in range(ji + 2, n_day):
+                            for ii in range(ji + 1, ki):
+                                sj, sk, sm = day_slots_sorted[ji], day_slots_sorted[ki], day_slots_sorted[ii]
+                                gv = model.NewBoolVar(f"gp_{tid}_{day}_{ji}_{ii}_{ki}")
+                                model.AddBoolAnd([teacher_at[sj], teacher_at[sk],
+                                                  teacher_at[sm].Not()]).OnlyEnforceIf(gv)
+                                model.AddBoolOr([teacher_at[sj].Not(), teacher_at[sk].Not(),
+                                                 teacher_at[sm]]).OnlyEnforceIf(gv.Not())
+                                penalty_terms.append(LinearExpr.Term(gv, opt_teacher_gap_weight))
+
+    else:
+        # ── Variable-teacher soft constraints (original aux-variable approach) ─
+        for tid, teacher in teachers.items():
+            if teacher.preferred_free_day is not None:
+                free_day = teacher.preferred_free_day
+                day_slots = [si for si, (d, s) in enumerate(all_slots) if d == free_day]
+                for (eid, occ) in occurrences:
+                    for si in day_slots:
                         if (eid, occ, si) in x and (eid, occ, tid) in t:
-                            aux = model.NewBoolVar(f"tgap_at_{tid}_{day}_{si}_{eid}_{occ}")
+                            aux = model.NewBoolVar(f"pref_{eid}_{occ}_{tid}_{si}")
                             model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
                             model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
-                            t_vars_here.append(aux)
-                    if not t_vars_here:
-                        teacher_at[si] = model.NewConstant(0)
-                    else:
-                        at_v = model.NewBoolVar(f"tgap_used_{tid}_{day}_{si}")
-                        model.AddBoolOr(t_vars_here).OnlyEnforceIf(at_v)
-                        model.AddBoolAnd([v.Not() for v in t_vars_here]).OnlyEnforceIf(at_v.Not())
-                        teacher_at[si] = at_v
-                # Penalize each gap slot (slot between first and last teacher lesson that is free)
-                n_day = len(day_slots_sorted)
-                for ji in range(n_day):
-                    for ki in range(ji + 2, n_day):
-                        for ii in range(ji + 1, ki):
-                            sj = day_slots_sorted[ji]
-                            sk = day_slots_sorted[ki]
-                            si_mid = day_slots_sorted[ii]
-                            # gap = teacher_at[sj] AND teacher_at[sk] AND NOT teacher_at[si_mid]
-                            gap_v = model.NewBoolVar(f"gap_{tid}_{day}_{sj}_{si_mid}_{sk}")
-                            model.AddBoolAnd([
-                                teacher_at[sj], teacher_at[sk], teacher_at[si_mid].Not()
-                            ]).OnlyEnforceIf(gap_v)
-                            model.AddBoolOr([
-                                teacher_at[sj].Not(), teacher_at[sk].Not(), teacher_at[si_mid]
-                            ]).OnlyEnforceIf(gap_v.Not())
-                            penalty_terms.append(LinearExpr.Term(gap_v, opt_teacher_gap_weight))
+                            penalty_terms.append(aux)
+            max_daily = min(teacher.max_daily_lessons, max_per_day_teacher)
+            for day in DAYS:
+                day_slots_idx = [si for si, (d, s) in enumerate(all_slots) if d == day]
+                daily_lessons = []
+                for (eid, occ) in occurrences:
+                    for si in day_slots_idx:
+                        if (eid, occ, si) in x and (eid, occ, tid) in t:
+                            aux = model.NewBoolVar(f"daily_{eid}_{occ}_{tid}_{day}_{si}")
+                            model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                            model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                            daily_lessons.append(aux)
+                if daily_lessons:
+                    excess = model.NewIntVar(0, len(daily_lessons), f"excess_{tid}_{day}")
+                    model.Add(sum(daily_lessons) - max_daily <= excess)
+                    model.Add(excess >= 0)
+                    penalty_terms.append(excess)
+            if teacher.preferred_shift:
+                for day in DAYS:
+                    day_slots_list = sorted([si for si in range(n_slots) if slot_day_of[si] == day])
+                    if not day_slots_list:
+                        continue
+                    half = len(day_slots_list) // 2
+                    penalty_slots = day_slots_list[half:] if teacher.preferred_shift == 'morning' else day_slots_list[:half]
+                    for (eid, occ) in occurrences:
+                        for si in penalty_slots:
+                            if (eid, occ, si) in x and (eid, occ, tid) in t:
+                                aux = model.NewBoolVar(f"shift_{eid}_{occ}_{tid}_{si}")
+                                model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                                model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                                penalty_terms.append(aux)
+
+        if avoid_isolated:
+            for tid in all_teacher_ids:
+                for day in DAYS:
+                    day_slots_sorted = sorted([si for si in range(n_slots) if slot_day_of[si] == day],
+                                              key=lambda si: slot_num_of[si])
+                    for k, si in enumerate(day_slots_sorted):
+                        prev_si = day_slots_sorted[k - 1] if k > 0 else None
+                        next_si = day_slots_sorted[k + 1] if k < len(day_slots_sorted) - 1 else None
+                        for (eid, occ) in occurrences:
+                            if (eid, occ, si) not in x or (eid, occ, tid) not in t:
+                                continue
+                            aux_here = model.NewBoolVar(f"iso_here_{eid}_{occ}_{tid}_{si}")
+                            model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux_here)
+                            model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux_here.Not())
+                            adj_teaching = []
+                            for adj_si in [prev_si, next_si]:
+                                if adj_si is None:
+                                    continue
+                                for (eid2, occ2) in occurrences:
+                                    if (eid2, occ2, adj_si) in x and (eid2, occ2, tid) in t:
+                                        aux_adj = model.NewBoolVar(f"adj_{eid}_{occ}_{tid}_{si}_{eid2}_{occ2}_{adj_si}")
+                                        model.AddBoolAnd([x[(eid2, occ2, adj_si)], t[(eid2, occ2, tid)]]).OnlyEnforceIf(aux_adj)
+                                        model.AddBoolOr([x[(eid2, occ2, adj_si)].Not(), t[(eid2, occ2, tid)].Not()]).OnlyEnforceIf(aux_adj.Not())
+                                        adj_teaching.append(aux_adj)
+                            if adj_teaching:
+                                is_isolated = model.NewBoolVar(f"isol_{eid}_{occ}_{tid}_{si}")
+                                model.AddBoolAnd([aux_here] + [v.Not() for v in adj_teaching]).OnlyEnforceIf(is_isolated)
+                                model.AddBoolOr([aux_here.Not()] + adj_teaching).OnlyEnforceIf(is_isolated.Not())
+                                penalty_terms.append(is_isolated)
+
+        if opt_minimize_teacher_gaps and opt_teacher_gap_weight > 0:
+            for tid in all_teacher_ids:
+                for day in DAYS:
+                    day_slots_sorted = sorted([si for si in range(n_slots) if slot_day_of[si] == day],
+                                              key=lambda si: slot_num_of[si])
+                    if len(day_slots_sorted) < 3:
+                        continue
+                    teacher_at = {}
+                    for si in day_slots_sorted:
+                        t_vars_here = []
+                        for (eid, occ) in occurrences:
+                            if (eid, occ, si) in x and (eid, occ, tid) in t:
+                                aux = model.NewBoolVar(f"tgap_at_{tid}_{day}_{si}_{eid}_{occ}")
+                                model.AddBoolAnd([x[(eid, occ, si)], t[(eid, occ, tid)]]).OnlyEnforceIf(aux)
+                                model.AddBoolOr([x[(eid, occ, si)].Not(), t[(eid, occ, tid)].Not()]).OnlyEnforceIf(aux.Not())
+                                t_vars_here.append(aux)
+                        if not t_vars_here:
+                            teacher_at[si] = model.NewConstant(0)
+                        else:
+                            at_v = model.NewBoolVar(f"tgap_used_{tid}_{day}_{si}")
+                            model.AddBoolOr(t_vars_here).OnlyEnforceIf(at_v)
+                            model.AddBoolAnd([v.Not() for v in t_vars_here]).OnlyEnforceIf(at_v.Not())
+                            teacher_at[si] = at_v
+                    n_day = len(day_slots_sorted)
+                    for ji in range(n_day):
+                        for ki in range(ji + 2, n_day):
+                            for ii in range(ji + 1, ki):
+                                sj, sk, sm = day_slots_sorted[ji], day_slots_sorted[ki], day_slots_sorted[ii]
+                                gap_v = model.NewBoolVar(f"gap_{tid}_{day}_{sj}_{sm}_{sk}")
+                                model.AddBoolAnd([teacher_at[sj], teacher_at[sk],
+                                                  teacher_at[sm].Not()]).OnlyEnforceIf(gap_v)
+                                model.AddBoolOr([teacher_at[sj].Not(), teacher_at[sk].Not(),
+                                                 teacher_at[sm]]).OnlyEnforceIf(gap_v.Not())
+                                penalty_terms.append(LinearExpr.Term(gap_v, opt_teacher_gap_weight))
 
     # Soft: prefer different days for split occurrences
     if opt_distribute_weight > 0:
@@ -1175,11 +1312,14 @@ def _run_solver(db, timetable_id: int, options: dict = None):
 
             day, slot = all_slots[scheduled_si]
 
-            assigned_teacher = None
-            for tid in entry_teachers.get(eid, []):
-                if (eid, occ, tid) in t and solver.Value(t[(eid, occ, tid)]) == 1:
-                    assigned_teacher = tid
-                    break
+            if all_fixed:
+                assigned_teacher = teacher_of.get((eid, occ))
+            else:
+                assigned_teacher = None
+                for tid in entry_teachers.get(eid, []):
+                    if (eid, occ, tid) in t and solver.Value(t[(eid, occ, tid)]) == 1:
+                        assigned_teacher = tid
+                        break
 
             # Assign a room from the class's school
             entry = next((e for e in entries if e.id == eid), None)
