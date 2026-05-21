@@ -58,14 +58,19 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     if not tt:
         raise ValueError(f"Timetable {timetable_id} not found")
 
-    tt.generation_log = None
-    db.commit()
+    # ── Extract generation options ────────────────────────────────────────────
+    opts = dict(options) if options else {}
+
+    # Internal flags for auto-retry (not user-facing)
+    _preserve_log  = opts.pop('_preserve_log',  False)
+    _relaxed_retry = opts.pop('_relaxed_retry', False)
+
+    if not _preserve_log:
+        tt.generation_log = None
+        db.commit()
     _log(db, tt, "A carregar dados do ano letivo...")
 
     academic_year_id = tt.academic_year_id
-
-    # ── Extract generation options ────────────────────────────────────────────
-    opts = options or {}
     year_levels_filter = opts.get("year_levels")  # None or list of ints
     school_ids_filter  = opts.get("school_ids")   # None or list of ints
     class_ids_filter   = opts.get("class_ids")    # None or list of ints (most specific — overrides others)
@@ -1233,4 +1238,31 @@ def _run_solver(db, timetable_id: int, options: dict = None):
 
     tt.updated_at = datetime.utcnow()
     db.commit()
+
+    # ── Phase 3: auto-retry with relaxed constraints ──────────────────────────
+    # If both phases failed and this isn't already a relaxed retry, automatically
+    # try again without the two hardest structural constraints. These are the most
+    # common causes of UNKNOWN on large staff/few classes scenarios.
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE) and not _relaxed_retry:
+        relaxed_labels = []
+        retry_opts = {k: v for k, v in opts.items()}
+        if retry_opts.get('students_start_slot_1', True):
+            retry_opts['students_start_slot_1'] = False
+            relaxed_labels.append("'Alunos entram no 1.º tempo'")
+        if retry_opts.get('no_student_gaps', True):
+            retry_opts['no_student_gaps'] = False
+            relaxed_labels.append("'Sem furos nos alunos'")
+        if relaxed_labels:
+            phase3_time = min(max_time, 420)  # cap phase 3 at 7 min
+            retry_opts['max_time_seconds'] = phase3_time
+            retry_opts['_relaxed_retry'] = True
+            retry_opts['_preserve_log'] = True
+            _log(db, tt, (
+                f"Sem solução em {max_time}s com todas as restrições — "
+                f"a tentar automaticamente sem {' e '.join(relaxed_labels)} ({phase3_time}s)..."
+            ))
+            db.commit()
+            _run_solver(db, timetable_id, retry_opts)
+            return  # inner call handles saving results
+
     logger.info(f"Timetable {timetable_id} generation complete: {tt.solver_status}")
