@@ -19,6 +19,7 @@ from app.routers import service_distribution as service_distribution_router
 from app.routers import timetable_locks as timetable_locks_router
 from app.routers import settings as settings_router
 from app.routers import ai_chat as ai_chat_router
+from app.routers import curriculum_plans as curriculum_plans_router
 from app import scheduler_instance
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ for _sql in [
     "CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)",
     "ALTER TABLE teachers ADD COLUMN credit_hours INTEGER DEFAULT 0",
     "ALTER TABLE teachers ADD COLUMN birth_date DATE",
+    "CREATE TABLE IF NOT EXISTS curriculum_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, cluster_id INTEGER NOT NULL REFERENCES clusters(id), academic_year_id INTEGER NOT NULL REFERENCES academic_years(id), year_level INTEGER NOT NULL, subject_id INTEGER NOT NULL REFERENCES subjects(id), hours_per_week REAL NOT NULL DEFAULT 2.0, weekly_structure TEXT DEFAULT '1+1')",
 ]:
     try:
         with engine.connect() as _conn:
@@ -110,6 +112,7 @@ app.include_router(service_distribution_router.router, prefix=API_PREFIX, depend
 app.include_router(timetable_locks_router.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(settings_router.router, prefix=API_PREFIX, dependencies=[_auth])
 app.include_router(ai_chat_router.router, prefix=API_PREFIX, dependencies=[_auth])
+app.include_router(curriculum_plans_router.router, prefix=API_PREFIX, dependencies=[_auth])
 
 
 @app.on_event("startup")

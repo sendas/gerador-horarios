@@ -26,6 +26,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'service-distribution', component: () => import('pages/ServiceAssignmentPage.vue') },
       { path: 'service-distribution-report', component: () => import('pages/ServiceDistributionPage.vue') },
       { path: 'import-curriculum', component: () => import('pages/ImportCurriculumPage.vue') },
+      { path: 'curriculum-plans', component: () => import('pages/CurriculumPlansPage.vue') },
       { path: 'non-teaching', component: () => import('pages/NonTeachingPage.vue') },
       { path: 'scheduling-rules', component: () => import('pages/SchedulingRulesPage.vue') },
       { path: 'users', component: () => import('pages/UsersPage.vue'), meta: { requiresAdmin: true } },

@@ -6,7 +6,7 @@
         <q-toolbar-title>
           <q-icon name="hub" class="q-mr-sm" />
           Sinaptik
-          <span style="font-size:0.65em;opacity:0.75;margin-left:6px;font-weight:400">v1.12.0</span>
+          <span style="font-size:0.65em;opacity:0.75;margin-left:6px;font-weight:400">v1.13.0</span>
         </q-toolbar-title>
 
         <!-- Demo badge -->
@@ -98,6 +98,11 @@
         <q-item clickable v-ripple :to="'/classes'">
           <q-item-section avatar><q-icon name="group" color="blue-8" /></q-item-section>
           <q-item-section>Turmas</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple :to="'/curriculum-plans'">
+          <q-item-section avatar><q-icon name="menu_book" color="deep-purple-6" /></q-item-section>
+          <q-item-section>Planos Curriculares</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple :to="'/import-curriculum'">

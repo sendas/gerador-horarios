@@ -365,3 +365,21 @@ class AppSetting(Base):
 
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=True)
+
+
+class CurriculumPlan(Base):
+    """Standard curriculum template per year level — defines which subjects and hours
+    should be applied to all classes of a given year level in an academic year."""
+    __tablename__ = "curriculum_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(Integer, ForeignKey("clusters.id"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id"), nullable=False)
+    year_level = Column(Integer, nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    hours_per_week = Column(Float, nullable=False, default=2.0)
+    weekly_structure = Column(String, default="1+1")  # e.g. "2+1", "1+1+1", "1+1", "1"
+
+    subject = relationship("Subject")
+    academic_year = relationship("AcademicYear")
+
