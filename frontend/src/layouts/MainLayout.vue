@@ -148,6 +148,10 @@
             <q-item-section avatar><q-icon name="manage_accounts" color="red-7" /></q-item-section>
             <q-item-section>Utilizadores</q-item-section>
           </q-item>
+          <q-item clickable v-ripple :to="'/login-logs'">
+            <q-item-section avatar><q-icon name="history" color="blue-grey-6" /></q-item-section>
+            <q-item-section>Registo de Acessos</q-item-section>
+          </q-item>
           <q-item clickable v-ripple :to="'/backup'">
             <q-item-section avatar><q-icon name="cloud_upload" color="teal-6" /></q-item-section>
             <q-item-section>Cópia de Segurança</q-item-section>

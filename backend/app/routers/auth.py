@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, LoginLog
 from app.auth import (
     hash_password, verify_password, create_access_token,
     get_current_user, require_admin
@@ -20,6 +20,29 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: "UserResponse"
+
+
+class LoginLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    timestamp: datetime
+    username: str
+    user_id: Optional[int] = None
+    action: str
+    success: bool
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+def _log(db: Session, request: Request, username: str, action: str, success: bool, user_id: int = None):
+    ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else None)
+    if ip and "," in ip:
+        ip = ip.split(",")[0].strip()
+    db.add(LoginLog(
+        username=username, user_id=user_id, action=action, success=success,
+        ip_address=ip, user_agent=request.headers.get("User-Agent", "")[:255],
+    ))
+    db.commit()
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -51,14 +74,16 @@ Token.model_rebuild()
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=Token)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form.username, User.is_active == True).first()
     if not user or not verify_password(form.password, user.hashed_password):
+        _log(db, request, form.username, "login_failed", False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Utilizador ou palavra-passe incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    _log(db, request, user.username, "login", True, user.id)
     token = create_access_token({"sub": user.username})
     return {"access_token": token, "token_type": "bearer", "user": user}
 
@@ -141,11 +166,25 @@ def delete_user(id: int, db: Session = Depends(get_db), current: User = Depends(
 
 
 @router.post("/demo")
-def demo_login(db: Session = Depends(get_db)):
+def demo_login(request: Request, db: Session = Depends(get_db)):
     """Login sem password para modo demonstração."""
     from datetime import timedelta
     demo_user = db.query(User).filter(User.username == "demo").first()
     if not demo_user:
         raise HTTPException(status_code=503, detail="Modo demo não disponível")
+    _log(db, request, "demo", "demo_login", True, demo_user.id)
     token = create_access_token({"sub": demo_user.username}, expires_delta=timedelta(minutes=60))
     return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(demo_user)}
+
+
+@router.get("/login-logs", response_model=List[LoginLogResponse])
+def get_login_logs(
+    limit: int = 200,
+    username: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    q = db.query(LoginLog).order_by(LoginLog.timestamp.desc())
+    if username:
+        q = q.filter(LoginLog.username == username)
+    return q.limit(limit).all()
