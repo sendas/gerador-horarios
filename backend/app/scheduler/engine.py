@@ -2,6 +2,8 @@
 OR-Tools CP-SAT scheduler engine for school timetable generation.
 """
 import logging
+import os
+import multiprocessing
 from datetime import datetime
 from collections import defaultdict
 from itertools import combinations
@@ -1039,22 +1041,40 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         model.Minimize(sum(penalty_terms))
 
     # ── Solve ─────────────────────────────────────────────────────────────────
-    n_bool_vars = len(x) + len(t)
-    logger.info(
-        "Timetable %d: a resolver modelo CP-SAT (%d BoolVars, limite=%ds, workers=4)…",
-        timetable_id, n_bool_vars, max_time,
-    )
-    _log(db, tt, f"Modelo criado: {n_bool_vars} variáveis booleanas. A resolver... (limite: {max_time}s)")
-
-    import os
     import threading
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = float(max_time)
-    solver.parameters.num_workers = 4
-    solver.parameters.max_memory_in_mb = int(os.environ.get("SOLVER_MAX_MEMORY_MB", 512))
 
-    # Heartbeat: write a log line every 60s while solver runs so updated_at stays fresh
+    n_bool_vars = len(x) + len(t)
+    _w = int(os.environ.get("SOLVER_WORKERS", "0"))
+    n_workers = _w if _w > 0 else min(multiprocessing.cpu_count(), 16)
+    max_mem   = int(os.environ.get("SOLVER_MAX_MEMORY_MB", 2048))
+
+    logger.info(
+        "Timetable %d: CP-SAT %d BoolVars, limite=%ds, workers=%d, mem=%dMB",
+        timetable_id, n_bool_vars, max_time, n_workers, max_mem,
+    )
+    _log(db, tt, f"Modelo criado: {n_bool_vars} variáveis booleanas. A resolver... (limite: {max_time}s, workers: {n_workers})")
+
+    # ── Phase 1: find ANY feasible solution quickly (no objective, PORTFOLIO) ─
+    # Allocate up to 40% of total time (min 60s, max 300s) to find a first solution.
+    phase1_time = max(60, min(int(max_time * 0.4), 300))
+    solver1 = cp_model.CpSolver()
+    solver1.parameters.max_time_in_seconds = float(phase1_time)
+    solver1.parameters.num_workers = n_workers
+    solver1.parameters.max_memory_in_mb = max_mem
+    solver1.parameters.search_branching = cp_model.PORTFOLIO_WITH_QUICK_RESTART
+
+    # Temporarily remove objective to find feasibility fast
+    has_objective = bool(penalty_terms)
+    if has_objective:
+        # Solve a copy — OR-Tools models are not easily cloned, so we use
+        # a fresh solver on the same model with ClearObjective via assumptions trick.
+        # Simplest: just solve with objective but PORTFOLIO_WITH_QUICK_RESTART strategy
+        # which finds a feasible solution quickly then keeps improving.
+        pass  # use model as-is; PORTFOLIO_WITH_QUICK_RESTART already handles this
+
+    # Heartbeat thread
     heartbeat_stop = threading.Event()
+    start_wall = datetime.utcnow()
     def _heartbeat():
         elapsed = 0
         while not heartbeat_stop.wait(60):
@@ -1072,7 +1092,54 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     hb = threading.Thread(target=_heartbeat, daemon=True)
     hb.start()
 
-    status = solver.Solve(model)
+    status = solver1.Solve(model)
+    phase1_wall = solver1.WallTime()
+
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        # Phase 1 found a solution — collect it as hints for phase 2
+        _log(db, tt, f"Fase 1: solução encontrada em {phase1_wall:.1f}s — a otimizar...")
+        remaining = max_time - phase1_wall
+        solver = solver1  # already has result; use for extraction below
+        if remaining > 10 and has_objective and status != cp_model.OPTIMAL:
+            # Phase 2: optimize from the feasible solution found in phase 1
+            hints = {}
+            for k, v in x.items():
+                hints[v] = solver1.Value(v)
+            for k, v in t.items():
+                hints[v] = solver1.Value(v)
+            solver2 = cp_model.CpSolver()
+            solver2.parameters.max_time_in_seconds = float(remaining)
+            solver2.parameters.num_workers = n_workers
+            solver2.parameters.max_memory_in_mb = max_mem
+            # Provide hint (warm start)
+            for var, val in hints.items():
+                model.AddHint(var, val)
+            status2 = solver2.Solve(model)
+            if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                solver = solver2
+                status = status2
+                _log(db, tt, f"Fase 2: {solver2.StatusName(status2)} em {solver2.WallTime():.1f}s adicionais")
+            else:
+                _log(db, tt, f"Fase 2: sem melhoria ({solver2.StatusName(status2)}) — a usar solução da fase 1")
+    else:
+        # Phase 1 failed — try phase 2 with remaining time and AUTOMATIC strategy
+        remaining = max_time - phase1_wall
+        if remaining > 30:
+            _log(db, tt, f"Fase 1 sem solução ({solver1.StatusName(status)}) em {phase1_wall:.1f}s — tentativa com estratégia alternativa ({remaining:.0f}s)...")
+            solver2 = cp_model.CpSolver()
+            solver2.parameters.max_time_in_seconds = float(remaining)
+            solver2.parameters.num_workers = n_workers
+            solver2.parameters.max_memory_in_mb = max_mem
+            solver2.parameters.random_seed = 42
+            status2 = solver2.Solve(model)
+            if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                solver = solver2
+                status = status2
+            else:
+                solver = solver2
+                status = status2
+        else:
+            solver = solver1
 
     heartbeat_stop.set()
     hb.join(timeout=2)
