@@ -20,8 +20,12 @@ class PlanEntry(BaseModel):
     subject_id: int
     hours_per_week: float
     weekly_structure: str = "1+1"
+    is_semestral: bool = False
+    semester: Optional[int] = None
+    paired_subject_id: Optional[int] = None
     subject_name: Optional[str] = None
     subject_color: Optional[str] = None
+    paired_subject_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -34,11 +38,17 @@ class PlanCreate(BaseModel):
     subject_id: int
     hours_per_week: float
     weekly_structure: str = "1+1"
+    is_semestral: bool = False
+    semester: Optional[int] = None
+    paired_subject_id: Optional[int] = None
 
 
 class PlanUpdate(BaseModel):
     hours_per_week: Optional[float] = None
     weekly_structure: Optional[str] = None
+    is_semestral: Optional[bool] = None
+    semester: Optional[int] = None
+    paired_subject_id: Optional[int] = None
 
 
 class ApplyRequest(BaseModel):
@@ -88,8 +98,12 @@ def _plan_to_dict(p: CurriculumPlan) -> dict:
         "subject_id": p.subject_id,
         "hours_per_week": p.hours_per_week,
         "weekly_structure": p.weekly_structure,
+        "is_semestral": bool(p.is_semestral),
+        "semester": p.semester,
+        "paired_subject_id": p.paired_subject_id,
         "subject_name": p.subject.name if p.subject else None,
         "subject_color": p.subject.color if p.subject else None,
+        "paired_subject_name": p.paired_subject.name if p.paired_subject else None,
     }
 
 
@@ -197,6 +211,8 @@ def apply_plan(req: ApplyRequest, db: Session = Depends(get_db)):
                     exists.is_split = is_split
                     exists.split_count = sc
                     exists.consecutive_pairs = cp
+                    exists.is_semestral = plan.is_semestral
+                    exists.semester = plan.semester if plan.is_semestral else None
                     created += 1
                 else:
                     skipped += 1
@@ -210,9 +226,32 @@ def apply_plan(req: ApplyRequest, db: Session = Depends(get_db)):
                 is_split=is_split,
                 split_count=sc,
                 consecutive_pairs=cp,
+                is_semestral=plan.is_semestral,
+                semester=plan.semester if plan.is_semestral else None,
             )
             db.add(entry)
             created += 1
+
+    db.commit()
+
+    # Wire paired_entry_id for semestral subjects
+    semestral_plans = [p for yl_p in plans_by_yl.values() for p in yl_p
+                       if p.is_semestral and p.paired_subject_id]
+    for cls in classes:
+        for plan in semestral_plans:
+            if plan.year_level != cls.year_level:
+                continue
+            entry = db.query(CurriculumEntry).filter(
+                CurriculumEntry.class_id == cls.id,
+                CurriculumEntry.subject_id == plan.subject_id,
+            ).first()
+            paired = db.query(CurriculumEntry).filter(
+                CurriculumEntry.class_id == cls.id,
+                CurriculumEntry.subject_id == plan.paired_subject_id,
+            ).first()
+            if entry and paired:
+                entry.paired_entry_id = paired.id
+                paired.paired_entry_id = entry.id
 
     db.commit()
     return {
@@ -268,6 +307,9 @@ def copy_plan(req: CopyRequest, db: Session = Depends(get_db)):
             subject_id=src.subject_id,
             hours_per_week=src.hours_per_week,
             weekly_structure=src.weekly_structure,
+            is_semestral=src.is_semestral,
+            semester=src.semester,
+            paired_subject_id=src.paired_subject_id,
         )
         db.add(new_p)
         copied += 1
@@ -327,6 +369,9 @@ def copy_year_level(req: CopyYearLevelRequest, db: Session = Depends(get_db)):
             subject_id=src.subject_id,
             hours_per_week=src.hours_per_week,
             weekly_structure=src.weekly_structure,
+            is_semestral=src.is_semestral,
+            semester=src.semester,
+            paired_subject_id=src.paired_subject_id,
         ))
         copied += 1
 

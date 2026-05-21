@@ -147,6 +147,28 @@
                 </q-td>
               </template>
 
+              <template #body-cell-semester="props">
+                <q-td :props="props">
+                  <q-badge
+                    v-if="props.row.is_semestral"
+                    :color="props.row.semester === 1 ? 'blue-7' : 'orange-7'"
+                    :label="props.row.semester === 1 ? '1.º Sem' : '2.º Sem'"
+                  />
+                  <span v-else class="text-grey-5 text-caption">Anual</span>
+                </q-td>
+              </template>
+
+              <template #body-cell-paired="props">
+                <q-td :props="props">
+                  <span v-if="props.row.paired_subject_name" class="text-caption text-positive">
+                    <q-icon name="swap_horiz" size="xs" class="q-mr-xs" />{{ props.row.paired_subject_name }}
+                  </span>
+                  <span v-else-if="props.row.is_semestral" class="text-caption text-warning">
+                    <q-icon name="warning" size="xs" class="q-mr-xs" />sem par
+                  </span>
+                </q-td>
+              </template>
+
               <template #body-cell-weekly_structure="props">
                 <q-td :props="props">
                   <q-chip dense size="sm" color="blue-grey-1" text-color="blue-grey-8">
@@ -173,7 +195,7 @@
 
     <!-- Add/Edit entry dialog -->
     <q-dialog v-model="entryDialog" persistent>
-      <q-card style="min-width:360px">
+      <q-card style="min-width:400px">
         <q-card-section class="bg-deep-purple-6 text-white">
           <div class="text-h6">{{ editingEntry ? 'Editar' : 'Adicionar' }} Disciplina</div>
           <div class="text-caption">{{ dialogYearLevel }}.º ano</div>
@@ -188,6 +210,7 @@
             map-options
             label="Disciplina *"
             :disable="!!editingEntry"
+            @update:model-value="onSubjectSelected"
           />
           <q-input
             v-model.number="entryForm.hours_per_week"
@@ -203,9 +226,36 @@
             emit-value
             map-options
           />
-          <div class="text-caption text-grey-6 q-mt-xs">
-            Estrutura: "2+1" = bloco de 2 + 1 aula; "1+1" = duas aulas separadas; "1+1+1" = três aulas separadas
+          <div class="text-caption text-grey-6">
+            "2+1" = bloco de 2 + 1 aula · "1+1" = duas aulas separadas · "1+1+1" = três aulas separadas
           </div>
+
+          <q-separator class="q-my-sm" />
+
+          <q-checkbox v-model="entryForm.is_semestral" label="Disciplina semestral (apenas meio ano)" />
+
+          <template v-if="entryForm.is_semestral">
+            <q-select
+              v-model="entryForm.semester"
+              :options="semesterOptions"
+              option-value="value"
+              option-label="label"
+              emit-value
+              map-options
+              label="Semestre em que ocorre *"
+            />
+            <q-select
+              v-model="entryForm.paired_subject_id"
+              :options="pairedSubjectOptions"
+              option-value="id"
+              option-label="name"
+              emit-value
+              map-options
+              clearable
+              label="Disciplina par (semestre oposto)"
+              hint="Disciplina que ocupa o mesmo horário no outro semestre"
+            />
+          </template>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancelar" @click="entryDialog = false" />
@@ -359,6 +409,9 @@ const entryForm = ref({
   subject_id: null as number | null,
   hours_per_week: 2,
   weekly_structure: '1+1',
+  is_semestral: false,
+  semester: null as number | null,
+  paired_subject_id: null as number | null,
 })
 
 const structureOptions = [
@@ -375,6 +428,8 @@ const columns = [
   { name: 'subject_name', label: 'Disciplina', field: 'subject_name', align: 'left' as const, sortable: true },
   { name: 'hours_per_week', label: 'H/semana', field: 'hours_per_week', align: 'center' as const, sortable: true },
   { name: 'weekly_structure', label: 'Estrutura', field: 'weekly_structure', align: 'center' as const },
+  { name: 'semester', label: 'Semestre', field: 'semester', align: 'center' as const },
+  { name: 'paired', label: 'Par semestral', field: 'paired_subject_id', align: 'left' as const },
   { name: 'actions', label: '', field: 'id', align: 'right' as const },
 ]
 
@@ -401,6 +456,21 @@ const copyYLTargetOptions = computed(() =>
 )
 
 const subjectOptions = computed(() => subjects.value)
+
+const semesterOptions = [
+  { label: '1.º Semestre', value: 1 },
+  { label: '2.º Semestre', value: 2 },
+]
+
+const pairedSubjectOptions = computed(() => {
+  const currentId = entryForm.value.subject_id
+  const yl = dialogYearLevel.value
+  // subjects already in this year level that are semestral, excluding the current one
+  const inYL = new Set((plansByYL.value[yl] || []).map((p: any) => p.subject_id))
+  return subjects.value.filter((s: any) =>
+    s.id !== currentId && (inYL.has(s.id) || s.regime === 'semestral')
+  )
+})
 
 const token = () => localStorage.getItem('token') || ''
 const headers = () => ({ Authorization: `Bearer ${token()}` })
@@ -443,7 +513,7 @@ async function loadPlans() {
 function openAddEntry(yl: number) {
   dialogYearLevel.value = yl
   editingEntry.value = null
-  entryForm.value = { subject_id: null, hours_per_week: 2, weekly_structure: '1+1' }
+  entryForm.value = { subject_id: null, hours_per_week: 2, weekly_structure: '1+1', is_semestral: false, semester: null, paired_subject_id: null }
   entryDialog.value = true
 }
 
@@ -454,8 +524,21 @@ function openEditEntry(row: any) {
     subject_id: row.subject_id,
     hours_per_week: row.hours_per_week,
     weekly_structure: row.weekly_structure,
+    is_semestral: !!row.is_semestral,
+    semester: row.semester ?? null,
+    paired_subject_id: row.paired_subject_id ?? null,
   }
   entryDialog.value = true
+}
+
+function onSubjectSelected(subjectId: number) {
+  const subj = subjects.value.find((s: any) => s.id === subjectId)
+  if (!subj) return
+  if (subj.regime === 'semestral') {
+    entryForm.value.is_semestral = true
+    if (subj.default_semester) entryForm.value.semester = subj.default_semester
+    if (subj.weekly_structure) entryForm.value.weekly_structure = subj.weekly_structure
+  }
 }
 
 async function saveEntry() {
@@ -465,10 +548,16 @@ async function saveEntry() {
   }
   saving.value = true
   try {
+    const semestralPayload = {
+      is_semestral: entryForm.value.is_semestral,
+      semester: entryForm.value.is_semestral ? entryForm.value.semester : null,
+      paired_subject_id: entryForm.value.is_semestral ? entryForm.value.paired_subject_id : null,
+    }
     if (editingEntry.value) {
       await axios.put(`${API}/curriculum-plans/${editingEntry.value.id}`, {
         hours_per_week: entryForm.value.hours_per_week,
         weekly_structure: entryForm.value.weekly_structure,
+        ...semestralPayload,
       }, { headers: headers() })
     } else {
       await axios.post(`${API}/curriculum-plans`, {
@@ -478,6 +567,7 @@ async function saveEntry() {
         subject_id: entryForm.value.subject_id,
         hours_per_week: entryForm.value.hours_per_week,
         weekly_structure: entryForm.value.weekly_structure,
+        ...semestralPayload,
       }, { headers: headers() })
     }
     entryDialog.value = false

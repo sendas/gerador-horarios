@@ -62,6 +62,9 @@ for _sql in [
     "ALTER TABLE teachers ADD COLUMN credit_hours INTEGER DEFAULT 0",
     "ALTER TABLE teachers ADD COLUMN birth_date DATE",
     "CREATE TABLE IF NOT EXISTS curriculum_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, cluster_id INTEGER NOT NULL REFERENCES clusters(id), academic_year_id INTEGER NOT NULL REFERENCES academic_years(id), year_level INTEGER NOT NULL, subject_id INTEGER NOT NULL REFERENCES subjects(id), hours_per_week REAL NOT NULL DEFAULT 2.0, weekly_structure TEXT DEFAULT '1+1')",
+    "ALTER TABLE curriculum_plans ADD COLUMN is_semestral BOOLEAN DEFAULT 0",
+    "ALTER TABLE curriculum_plans ADD COLUMN semester INTEGER",
+    "ALTER TABLE curriculum_plans ADD COLUMN paired_subject_id INTEGER REFERENCES subjects(id)",
 ]:
     try:
         with engine.connect() as _conn:

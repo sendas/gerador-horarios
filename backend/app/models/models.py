@@ -379,7 +379,11 @@ class CurriculumPlan(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
     hours_per_week = Column(Float, nullable=False, default=2.0)
     weekly_structure = Column(String, default="1+1")  # e.g. "2+1", "1+1+1", "1+1", "1"
+    is_semestral = Column(Boolean, default=False)
+    semester = Column(Integer, nullable=True)  # 1 or 2
+    paired_subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
 
-    subject = relationship("Subject")
+    subject = relationship("Subject", foreign_keys="[CurriculumPlan.subject_id]")
+    paired_subject = relationship("Subject", foreign_keys="[CurriculumPlan.paired_subject_id]")
     academic_year = relationship("AcademicYear")
 
