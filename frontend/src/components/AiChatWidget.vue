@@ -37,8 +37,9 @@
       >
         <template #avatar><q-icon name="warning" color="orange" /></template>
         <span class="text-caption">
-          <strong>ANTHROPIC_API_KEY</strong> não configurada.<br>
-          Adiciona ao <code>docker-compose.yml</code> em <code>environment:</code>.
+          <strong>GEMINI_API_KEY</strong> não configurada.<br>
+          Obtém gratuitamente em <strong>aistudio.google.com</strong>
+          e adiciona ao ficheiro <code>.env</code> do servidor.
         </span>
       </q-banner>
 

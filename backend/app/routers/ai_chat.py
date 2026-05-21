@@ -826,6 +826,22 @@ def _execute_tool(name: str, inp: dict, db: Session) -> str:
         return _j({"erro": str(exc)})
 
 
+# ── OpenAI-format tool definitions (Gemini OpenAI-compatible endpoint) ────────
+
+def _openai_tools() -> list:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
+        }
+        for t in _TOOLS
+    ]
+
+
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
 @router.post("/chat")
@@ -834,51 +850,69 @@ def chat(
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="ANTHROPIC_API_KEY não configurada. Adiciona a variável de ambiente ao servidor.",
+            detail=(
+                "GEMINI_API_KEY não configurada. "
+                "Obtém a tua chave gratuita em aistudio.google.com e adiciona ao ficheiro .env."
+            ),
         )
 
-    import anthropic
+    from openai import OpenAI
 
-    client = anthropic.Anthropic(api_key=api_key)
-    messages: list = [{"role": m.role, "content": m.content} for m in request.messages]
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    )
+
+    # System message + conversation history
+    messages: list = [{"role": "system", "content": _SYSTEM}]
+    for m in request.messages:
+        messages.append({"role": m.role, "content": m.content})
+
+    tools = _openai_tools()
     tools_called: list = []
 
     for _ in range(10):
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4096,
-            system=_SYSTEM,
-            tools=_TOOLS,
+        response = client.chat.completions.create(
+            model="gemini-2.0-flash",
             messages=messages,
+            tools=tools,
+            tool_choice="auto",
         )
 
-        if response.stop_reason == "end_turn":
-            text = next((b.text for b in response.content if hasattr(b, "text")), "")
-            return {"response": text, "tools_called": tools_called}
+        choice = response.choices[0]
+        msg = choice.message
 
-        if response.stop_reason == "tool_use":
-            assistant_content = []
-            tool_results = []
-            for block in response.content:
-                if block.type == "text":
-                    assistant_content.append({"type": "text", "text": block.text})
-                elif block.type == "tool_use":
-                    assistant_content.append({
-                        "type": "tool_use", "id": block.id,
-                        "name": block.name, "input": block.input,
-                    })
-                    tools_called.append(block.name)
-                    result = _execute_tool(block.name, block.input, db)
-                    tool_results.append({
-                        "type": "tool_result", "tool_use_id": block.id, "content": result,
-                    })
-            messages.append({"role": "assistant", "content": assistant_content})
-            messages.append({"role": "user", "content": tool_results})
-        else:
-            break
+        # No tool calls — final answer
+        if not msg.tool_calls:
+            return {"response": msg.content or "", "tools_called": tools_called}
+
+        # Add assistant turn (with tool_calls) to history
+        messages.append({
+            "role": "assistant",
+            "content": msg.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ],
+        })
+
+        # Execute each tool and add results
+        for tc in msg.tool_calls:
+            tools_called.append(tc.function.name)
+            args = json.loads(tc.function.arguments)
+            result = _execute_tool(tc.function.name, args, db)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result,
+            })
 
     return {"response": "Não foi possível processar o pedido.", "tools_called": tools_called}
