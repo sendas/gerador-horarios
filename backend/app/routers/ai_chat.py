@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -841,8 +842,10 @@ def _openai_tools() -> list:
         for t in _TOOLS
     ]
 
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-# ── Endpoint ──────────────────────────────────────────────────────────────────
+# ── Streaming endpoint ────────────────────────────────────────────────────────
 
 @router.post("/chat")
 def chat(
@@ -860,73 +863,78 @@ def chat(
             ),
         )
 
-    from openai import OpenAI, RateLimitError, APIStatusError
+    def generate():
+        from openai import OpenAI, RateLimitError, APIStatusError
 
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        timeout=25.0,  # 25s per request — keeps total well under Cloudflare's limit
-    )
-
-    # System message + conversation history
-    messages: list = [{"role": "system", "content": _SYSTEM}]
-    for m in request.messages:
-        messages.append({"role": m.role, "content": m.content})
-
-    tools = _openai_tools()
-    tools_called: list = []
-
-    try:
-        for _ in range(5):  # max 5 rounds of tool calls
-            response = client.chat.completions.create(
-                model="gemini-1.5-flash",
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-            )
-
-            choice = response.choices[0]
-            msg = choice.message
-
-            # No tool calls — final answer
-            if not msg.tool_calls:
-                return {"response": msg.content or "", "tools_called": tools_called}
-
-            # Add assistant turn (with tool_calls) to history
-            messages.append({
-                "role": "assistant",
-                "content": msg.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                    }
-                    for tc in msg.tool_calls
-                ],
-            })
-
-            # Execute each tool and add results
-            for tc in msg.tool_calls:
-                tools_called.append(tc.function.name)
-                args = json.loads(tc.function.arguments)
-                result = _execute_tool(tc.function.name, args, db)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                })
-
-    except RateLimitError:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                "Limite da API Gemini atingido (quota: limit=0). "
-                "Verifica se a chave foi criada em aistudio.google.com com uma conta Gmail pessoal, "
-                "ou aguarda alguns segundos e tenta novamente."
-            ),
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            timeout=25.0,
         )
-    except APIStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Erro da API Gemini: {exc.message}")
 
-    return {"response": "Não foi possível processar o pedido.", "tools_called": tools_called}
+        messages: list = [{"role": "system", "content": _SYSTEM}]
+        for m in request.messages:
+            messages.append({"role": m.role, "content": m.content})
+
+        tools = _openai_tools()
+        tools_called: list = []
+
+        try:
+            # Phase 1: tool-calling rounds (non-streaming)
+            # Each tool event is sent immediately → Cloudflare stays alive
+            for _ in range(5):
+                response = client.chat.completions.create(
+                    model="gemini-1.5-flash",
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                )
+                msg = response.choices[0].message
+
+                if not msg.tool_calls:
+                    # Phase 2: stream final text in small chunks (typewriter effect)
+                    content = msg.content or ""
+                    for i in range(0, len(content), 6):
+                        yield _sse({"type": "text", "content": content[i:i + 6]})
+                    break
+
+                # Execute tools — yield one event per tool so connection stays warm
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.content,
+                    "tool_calls": [
+                        {
+                            "id": tc.id, "type": "function",
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                        }
+                        for tc in msg.tool_calls
+                    ],
+                })
+                for tc in msg.tool_calls:
+                    tools_called.append(tc.function.name)
+                    yield _sse({"type": "tool", "name": tc.function.name})
+                    args = json.loads(tc.function.arguments)
+                    result = _execute_tool(tc.function.name, args, db)
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+            yield _sse({"type": "done", "tools_called": tools_called})
+
+        except RateLimitError:
+            yield _sse({"type": "error", "message": (
+                "Limite da API Gemini atingido (quota: limit=0). "
+                "Verifica se a chave foi criada em aistudio.google.com com uma conta Gmail pessoal."
+            )})
+        except APIStatusError as exc:
+            yield _sse({"type": "error", "message": f"Erro da API Gemini: {exc.message}"})
+        except Exception as exc:
+            yield _sse({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

@@ -273,38 +273,70 @@ async function send() {
   loadingLabel.value = 'A pensar…'
   await scrollToBottom()
 
-  // Build conversation history for API (only role + content text)
   const history = messages.value
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }))
 
-  // Context hints
   const activeYear = yearsStore.years.find((y) => y.is_active)
+  const authHeader = (api.defaults.headers.common as Record<string, string>)['Authorization'] ?? ''
+
+  // Add empty assistant message — filled in as SSE chunks arrive
+  const assistantMsg: Message = { role: 'assistant', content: '', tools_called: [] }
+  messages.value.push(assistantMsg)
+  const msgIdx = messages.value.length - 1
 
   try {
-    const { data } = await api.post('/ai/chat', {
-      messages: history,
-      academic_year_id: activeYear?.id ?? null,
-      cluster_id: activeYear?.cluster_id ?? null,
+    const response = await fetch('/api/v1/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+      body: JSON.stringify({
+        messages: history,
+        academic_year_id: activeYear?.id ?? null,
+        cluster_id: activeYear?.cluster_id ?? null,
+      }),
     })
 
-    // Simulate a slight delay before showing tool info
-    if (data.tools_called?.length) {
-      loadingLabel.value = `A usar ${data.tools_called.length} ferramenta(s)…`
-      await new Promise((r) => setTimeout(r, 300))
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      const detail = err.detail ?? `Erro ${response.status}`
+      if (response.status === 503) apiKeyMissing.value = true
+      messages.value[msgIdx].content = detail
+      messages.value[msgIdx].error = true
+      return
     }
 
-    messages.value.push({
-      role: 'assistant',
-      content: data.response,
-      tools_called: data.tools_called ?? [],
-    })
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string }; status?: number } }
-    const status = err.response?.status
-    const detail = err.response?.data?.detail ?? 'Erro de comunicação com o servidor. Verifica se o backend está a funcionar.'
-    if (status === 503) apiKeyMissing.value = true
-    messages.value.push({ role: 'assistant', content: detail, error: true })
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const data = JSON.parse(line.slice(6))
+          if (data.type === 'tool') {
+            messages.value[msgIdx].tools_called!.push(data.name)
+            loadingLabel.value = `A usar ${toolLabel(data.name)}…`
+          } else if (data.type === 'text') {
+            messages.value[msgIdx].content += data.content
+            await scrollToBottom()
+          } else if (data.type === 'error') {
+            messages.value[msgIdx].content = data.message
+            messages.value[msgIdx].error = true
+          }
+        } catch { /* skip malformed line */ }
+      }
+    }
+  } catch {
+    messages.value[msgIdx].content = 'Erro de comunicação com o servidor. Verifica se o backend está a funcionar.'
+    messages.value[msgIdx].error = true
   } finally {
     loading.value = false
     if (!open.value) unread.value++
