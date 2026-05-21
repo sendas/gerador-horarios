@@ -465,7 +465,7 @@ def cleanup_stuck_generating():
     """Mark any timetable left in 'generating' as 'error' — they were interrupted by a restart.
     Grace period of 3 minutes: if the heartbeat was recent, schedule the check for later."""
     from app.models.models import Timetable
-    from datetime import timedelta
+    from datetime import datetime, timedelta
     db = SessionLocal()
     try:
         stuck = db.query(Timetable).filter(Timetable.status == "generating").all()
