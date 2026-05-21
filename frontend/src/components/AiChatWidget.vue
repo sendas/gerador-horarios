@@ -278,7 +278,8 @@ async function send() {
     .map((m) => ({ role: m.role, content: m.content }))
 
   const activeYear = yearsStore.years.find((y) => y.is_active)
-  const authHeader = (api.defaults.headers.common as Record<string, string>)['Authorization'] ?? ''
+  const token = localStorage.getItem('token')
+  const authHeader = token ? `Bearer ${token}` : ''
 
   // Add empty assistant message — filled in as SSE chunks arrive
   const assistantMsg: Message = { role: 'assistant', content: '', tools_called: [] }
