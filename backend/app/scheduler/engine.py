@@ -62,8 +62,9 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     opts = dict(options) if options else {}
 
     # Internal flags for auto-retry (not user-facing)
-    _preserve_log  = opts.pop('_preserve_log',  False)
-    _relaxed_retry = opts.pop('_relaxed_retry', False)
+    _preserve_log   = opts.pop('_preserve_log',   False)
+    _relaxed_retry  = opts.pop('_relaxed_retry',  False)
+    _relaxed_labels = opts.pop('_relaxed_labels', [])
 
     if not _preserve_log:
         tt.generation_log = None
@@ -1411,7 +1412,16 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             db.query(ScheduledLesson).filter(ScheduledLesson.timetable_id == timetable_id).delete()
         db.add_all(lessons_to_add)
         tt.status = "generated"
-        tt.solver_status = solver.StatusName(status)
+        if _relaxed_retry and _relaxed_labels:
+            relaxed_str = " + ".join(_relaxed_labels)
+            tt.solver_status = f"⚠ RESTRIÇÕES REMOVIDAS: {relaxed_str}"
+            _log(db, tt, (
+                f"⚠ Horário gerado SEM {relaxed_str}. "
+                "Para eliminar os furos, regenere com mais tempo de cálculo (recomendado: 1h+) "
+                "ou ajuste a disponibilidade/carga dos professores."
+            ))
+        else:
+            tt.solver_status = solver.StatusName(status)
         _log(db, tt, f"Completo: {len(lessons_to_add)} novas aulas + {len(pinned_lesson_ids)} bloqueadas preservadas.")
     else:
         tt.status = "error"
@@ -1457,6 +1467,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             phase3_time = min(max_time, 420)  # cap phase 3 at 7 min
             retry_opts['max_time_seconds'] = phase3_time
             retry_opts['_relaxed_retry'] = True
+            retry_opts['_relaxed_labels'] = relaxed_labels
             retry_opts['_preserve_log'] = True
             _log(db, tt, (
                 f"Sem solução em {max_time}s com todas as restrições — "

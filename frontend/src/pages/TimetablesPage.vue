@@ -52,7 +52,23 @@
       </template>
       <template #body-cell-solver_status="props">
         <q-td :props="props">
-          <template v-if="props.row.status === 'error' && props.row.solver_status">
+          <!-- Relaxed-constraints warning (generated but with gaps/missing constraints) -->
+          <template v-if="props.row.status === 'generated' && props.row.solver_status?.startsWith('⚠')">
+            <q-badge color="orange-8" outline class="q-mr-xs" style="font-size:11px;vertical-align:middle">
+              <q-icon name="warning" size="12px" class="q-mr-xs" />furos
+            </q-badge>
+            <q-btn flat round dense size="xs" icon="info" color="orange-8">
+              <q-tooltip max-width="460px" anchor="bottom middle" self="top middle">
+                <div style="white-space:pre-wrap;font-size:0.82rem;max-width:440px">
+                  <div class="text-weight-bold q-mb-xs">{{ props.row.solver_status }}</div>
+                  <div>O solver não encontrou solução sem furos dentro do tempo disponível e gerou o horário com restrições relaxadas.<br><br>
+                  Para corrigir: <strong>regenere com 1h ou mais de tempo</strong> e as opções "Sem furos nos horários dos alunos" e "Alunos entram no 1.º tempo" ativadas.</div>
+                </div>
+              </q-tooltip>
+            </q-btn>
+          </template>
+          <!-- Error status -->
+          <template v-else-if="props.row.status === 'error' && props.row.solver_status">
             <span class="text-negative text-caption" style="max-width:260px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle">
               {{ props.row.solver_status.split('\n')[0] }}
             </span>
