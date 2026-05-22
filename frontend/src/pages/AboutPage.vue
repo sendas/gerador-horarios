@@ -24,6 +24,34 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="analytics" color="teal-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="teal-7" class="version-badge">v1.19.0</q-badge>
+                  Distribuição de Serviço — Saldo de Horas em Tempo Real
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="analytics" size="xs" color="teal-7" />
+                  Painel <strong>Saldo de Horas Letivas</strong> sempre visível ao atribuir professores: mostra todos os docentes ordenados por horas livres, com barra de progresso e estado a cores (completo / incompleto / excedido). Atualiza em tempo real à medida que as atribuições são feitas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="badge" size="xs" color="teal-7" />
+                  Nos <em>dropdowns</em> de professor, cada opção mostra as horas livres do docente — facilita escolher quem ainda tem capacidade disponível
+                </div>
+                <div class="feature-item">
+                  <q-icon name="auto_fix_high" size="xs" color="teal-7" />
+                  "Preencher auto" melhorado: escolhe o professor com mais horas disponíveis em vez de aleatório, ajudando a equilibrar o serviço automaticamente
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="sync" color="orange-8">
               <template #title>
                 <span class="version-title">
