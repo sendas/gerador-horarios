@@ -7,6 +7,15 @@
       <q-chip v-else-if="allEntries.length > 0" color="positive" text-color="white" icon="check_circle" label="Todos atribuídos" />
 
       <q-btn
+        outline color="orange-8" icon="sync" label="Sincronizar disciplinas"
+        :loading="syncing"
+        :disable="!selectedYearId"
+        @click="syncFromPlans"
+      >
+        <q-tooltip>Aplica os planos curriculares a todas as turmas, criando as disciplinas em falta</q-tooltip>
+      </q-btn>
+
+      <q-btn
         flat dense round icon="analytics"
         :color="showHoursPanel ? 'teal-7' : 'grey-5'"
         @click="showHoursPanel = !showHoursPanel"
@@ -99,13 +108,17 @@
                 class="q-ml-xs"
               />
             </div>
-            <q-btn color="primary" icon="add" label="Adicionar disciplina" dense unelevated @click="openAddSubject" />
           </div>
 
           <q-card flat bordered>
             <q-list separator>
-              <q-item v-if="!selectedEntries.length" class="text-grey-5 text-caption">
-                <q-item-section>Sem disciplinas. Adicione disciplinas com o botão acima.</q-item-section>
+              <q-item v-if="!selectedEntries.length" class="q-pa-md">
+                <q-item-section>
+                  <div class="text-grey-7 text-caption">
+                    <q-icon name="info" size="xs" class="q-mr-xs" />
+                    Sem disciplinas atribuídas a esta turma. Use <strong>Sincronizar disciplinas</strong> para aplicar o plano curricular.
+                  </div>
+                </q-item-section>
               </q-item>
 
               <q-item v-for="entry in selectedEntries" :key="entry.id" class="q-py-sm">
@@ -163,9 +176,6 @@
                   </div>
                 </q-item-section>
 
-                <q-item-section side top>
-                  <q-btn flat round dense icon="delete" color="negative" size="sm" @click="deleteEntry(entry)" />
-                </q-item-section>
               </q-item>
             </q-list>
           </q-card>
@@ -236,50 +246,6 @@
       </div>
     </div>
 
-    <!-- Add subject dialog -->
-    <q-dialog v-model="showAddSubject">
-      <q-card style="min-width:400px">
-        <q-card-section class="row items-center">
-          <div class="text-h6">Adicionar disciplina</div>
-          <q-space /><q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-card-section>
-          <q-select
-            v-model="newSubjectId"
-            :options="availableSubjectOptions"
-            label="Disciplina *"
-            emit-value map-options dense outlined use-input input-debounce="0"
-            @filter="filterSubjectsFn"
-            class="q-mb-sm"
-          />
-          <q-input v-model.number="newHours" label="Horas/semana *" type="number" min="1" max="10" dense outlined class="q-mb-sm" />
-          <q-select
-            v-model="newTeacherId"
-            :options="filteredTeacherOpts"
-            label="Professor (opcional)"
-            emit-value map-options dense outlined clearable use-input input-debounce="0"
-            @filter="filterAllTeachersFn"
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>{{ scope.opt.name }}</q-item-section>
-                <q-item-section side>
-                  <q-badge
-                    :color="scope.opt.remaining < 0 ? 'negative' : scope.opt.remaining === 0 ? 'positive' : scope.opt.remaining <= 2 ? 'warning' : 'blue-3'"
-                    :text-color="scope.opt.remaining < 0 ? 'white' : 'dark'"
-                    :label="scope.opt.remaining >= 0 ? `+${scope.opt.remaining}h` : `${scope.opt.remaining}h`"
-                  />
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
-        </q-card-section>
-        <q-card-section class="row justify-end q-gutter-sm">
-          <q-btn flat label="Cancelar" v-close-popup />
-          <q-btn color="primary" label="Adicionar" :disable="!newSubjectId || !newHours" @click="addSubject" />
-        </q-card-section>
-      </q-card>
-    </q-dialog>
   </q-page>
 </template>
 
@@ -291,7 +257,6 @@ import { useClustersStore } from 'stores/clusters'
 import { useAcademicYearsStore } from 'stores/academicYears'
 import { useTeachersStore } from 'stores/teachers'
 import type { Teacher } from 'stores/teachers'
-import { useSubjectsStore } from 'stores/subjects'
 import { useSchoolsStore } from 'stores/schools'
 import { useClassesStore } from 'stores/classes'
 import type { SchoolClass } from 'stores/classes'
@@ -300,7 +265,6 @@ const $q = useQuasar()
 const clustersStore = useClustersStore()
 const yearsStore = useAcademicYearsStore()
 const teachersStore = useTeachersStore()
-const subjectsStore = useSubjectsStore()
 const schoolsStore = useSchoolsStore()
 const classesStore = useClassesStore()
 
@@ -329,14 +293,11 @@ const showHoursPanel = ref(true)
 const teacherPanelSearch = ref('')
 const teacherPanelFilter = ref<'all' | 'incomplete' | 'done' | 'over'>('all')
 
-// Add subject dialog
-const showAddSubject = ref(false)
-const newSubjectId = ref<number | null>(null)
-const newHours = ref(2)
-const newTeacherId = ref<number | null>(null)
+// Sync state
+const syncing = ref(false)
+
+// Teacher dropdown options cache per subject
 const teacherOptsBySubject = ref<Record<number, TeacherOpt[]>>({})
-const filteredTeacherOpts = ref<TeacherOpt[]>([])
-const availableSubjectOptions = ref<{ label: string; value: number }[]>([])
 
 // ── Basic computed ─────────────────────────────────────────────────────────
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))
@@ -457,26 +418,6 @@ function filterTeachersForSubject(val: string, update: (fn: () => void) => void,
   })
 }
 
-function filterAllTeachersFn(val: string, update: (fn: () => void) => void) {
-  update(() => {
-    const txt = val.toLowerCase()
-    filteredTeacherOpts.value = teachersStore.teachers
-      .filter((t) => !txt || t.name.toLowerCase().includes(txt))
-      .map(makeTeacherOpt)
-      .sort((a, b) => b.remaining - a.remaining)
-  })
-}
-
-function filterSubjectsFn(val: string, update: (fn: () => void) => void) {
-  update(() => {
-    const txt = val.toLowerCase()
-    const usedIds = new Set(selectedEntries.value.map((e) => e.subject_id))
-    availableSubjectOptions.value = subjectsStore.subjects
-      .filter((s) => !usedIds.has(s.id) && (!txt || s.name.toLowerCase().includes(txt)))
-      .map((s) => ({ label: s.name, value: s.id }))
-  })
-}
-
 // ── Actions ────────────────────────────────────────────────────────────────
 function toggleSchool(id: number) {
   if (selectedSchoolIds.has(id)) selectedSchoolIds.delete(id)
@@ -502,7 +443,7 @@ async function load() {
       id: e.id,
       class_id: e.class_id,
       subject_id: e.subject_id,
-      subject_name: e.subject_name ?? subjectsStore.subjects.find((s) => s.id === e.subject_id)?.name ?? `ID:${e.subject_id}`,
+      subject_name: e.subject_name ?? `ID:${e.subject_id}`,
       hours_per_week: e.hours_per_week,
       teacher_id: e.teacher_id ?? null,
       teacher_name: e.teacher_name ?? null,
@@ -529,58 +470,21 @@ async function assignTeacher(entry: Entry, teacherId: number | null) {
   }
 }
 
-async function deleteEntry(entry: Entry) {
-  $q.dialog({
-    title: 'Remover disciplina',
-    message: `Remover "${entry.subject_name}" da turma?`,
-    ok: { label: 'Remover', color: 'negative' },
-    cancel: true,
-  }).onOk(async () => {
-    try {
-      await api.delete(`/classes/curriculum/${entry.id}`)
-      allEntries.value = allEntries.value.filter((e) => e.id !== entry.id)
-      $q.notify({ type: 'positive', message: 'Disciplina removida' })
-    } catch {
-      $q.notify({ type: 'negative', message: 'Erro ao remover' })
-    }
-  })
-}
-
-function openAddSubject() {
-  newSubjectId.value = null
-  newHours.value = 2
-  newTeacherId.value = null
-  const usedIds = new Set(selectedEntries.value.map((e) => e.subject_id))
-  availableSubjectOptions.value = subjectsStore.subjects
-    .filter((s) => !usedIds.has(s.id))
-    .map((s) => ({ label: s.name, value: s.id }))
-  filteredTeacherOpts.value = teachersStore.teachers.map(makeTeacherOpt).sort((a, b) => b.remaining - a.remaining)
-  showAddSubject.value = true
-}
-
-async function addSubject() {
-  if (!selectedClassId.value || !newSubjectId.value || !newHours.value) return
+async function syncFromPlans() {
+  if (!clusterId.value || !selectedYearId.value) return
+  syncing.value = true
   try {
-    const { data } = await api.post<{ id: number }>(`/classes/${selectedClassId.value}/curriculum`, {
-      subject_id: newSubjectId.value,
-      hours_per_week: newHours.value,
-      teacher_id: newTeacherId.value ?? null,
+    const res = await api.post('/curriculum-plans/apply', {
+      cluster_id: clusterId.value,
+      academic_year_id: selectedYearId.value,
+      overwrite: false,
     })
-    const subj = subjectsStore.subjects.find((s) => s.id === newSubjectId.value)
-    const teacher = teachersStore.teachers.find((t) => t.id === newTeacherId.value)
-    allEntries.value = [...allEntries.value, {
-      id: data.id,
-      class_id: selectedClassId.value!,
-      subject_id: newSubjectId.value!,
-      subject_name: subj?.name ?? '',
-      hours_per_week: newHours.value,
-      teacher_id: newTeacherId.value ?? null,
-      teacher_name: teacher?.name ?? null,
-    }]
-    showAddSubject.value = false
-    $q.notify({ type: 'positive', message: 'Disciplina adicionada' })
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao adicionar disciplina' })
+    await load()
+    $q.notify({ type: 'positive', message: res.data.message ?? 'Disciplinas sincronizadas' })
+  } catch (e: any) {
+    $q.notify({ type: 'negative', message: e.response?.data?.detail ?? 'Erro ao sincronizar' })
+  } finally {
+    syncing.value = false
   }
 }
 
@@ -589,7 +493,6 @@ onMounted(async () => {
     clustersStore.fetchAll(),
     yearsStore.fetchAll(),
     teachersStore.fetchAll(),
-    subjectsStore.fetchAll(),
     schoolsStore.fetchAll(),
   ])
   selectedYearId.value = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null

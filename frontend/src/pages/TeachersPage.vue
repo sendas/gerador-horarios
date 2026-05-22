@@ -826,16 +826,16 @@ async function assignSchoolClasses(classes: SchoolClass[]) {
 // Availability
 const availabilityDialog = ref(false)
 const availYear = ref<number | null>(null)
-const availabilityMap = ref<Map<string, boolean>>(new Map())
+const availabilityMap = reactive<Record<string, boolean>>({})
 const uniqueSlots = ref<number[]>([])
 
 function isAvailable(day: number, slot: number) {
-  return availabilityMap.value.get(`${day}_${slot}`) !== false
+  return availabilityMap[`${day}_${slot}`] !== false
 }
 
 function toggleAvailability(day: number, slot: number) {
   const key = `${day}_${slot}`
-  availabilityMap.value.set(key, !isAvailable(day, slot))
+  availabilityMap[key] = !isAvailable(day, slot)
 }
 
 onMounted(async () => {
@@ -991,15 +991,16 @@ async function loadAvailability() {
   uniqueSlots.value = slotNums
 
   const avail = await teachersStore.fetchAvailability(selectedTeacher.value.id, availYear.value)
-  availabilityMap.value = new Map()
-  // default all available
+  // Clear previous state
+  Object.keys(availabilityMap).forEach((k) => delete availabilityMap[k])
+  // Default all available
   for (let d = 0; d < 5; d++) {
     for (const s of slotNums) {
-      availabilityMap.value.set(`${d}_${s}`, true)
+      availabilityMap[`${d}_${s}`] = true
     }
   }
   for (const a of avail) {
-    availabilityMap.value.set(`${a.day_of_week}_${a.slot_number}`, a.is_available)
+    availabilityMap[`${a.day_of_week}_${a.slot_number}`] = a.is_available
   }
 }
 
