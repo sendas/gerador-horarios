@@ -328,7 +328,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     max_per_day_teacher = rules_obj.max_periods_per_day_teacher if rules_obj else 6
     max_consec_class = rules_obj.max_consecutive_periods_class if rules_obj else 2
     max_consec_teacher = rules_obj.max_consecutive_periods_teacher if rules_obj else 4
-    avoid_isolated = rules_obj.avoid_isolated_teacher if rules_obj else False
+    avoid_isolated = rules_obj.avoid_isolated_teacher if rules_obj else True
 
     # opts override DB rules; fall back to DB rules, then hard defaults
     if rules_obj and "students_start_slot_1" not in opts:
@@ -1042,32 +1042,14 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                             if (eid, occ, si) in x:
                                 penalty_terms.append(x[(eid, occ, si)])
 
-        # Avoid isolated periods (fixed mode)
-        if avoid_isolated:
-            for tid, my_occs in occ_by_teacher.items():
-                for day in DAYS:
-                    day_slots_sorted = sorted(
-                        [si for si in range(n_slots) if slot_day_of[si] == day],
-                        key=lambda si: slot_num_of[si]
-                    )
-                    for k, si in enumerate(day_slots_sorted):
-                        here = _teacher_at_var(tid, my_occs, si, f"iso_h_{tid}_{day}_{si}")
-                        if isinstance(here, int) and here == 0:
-                            continue
-                        adj_vs = []
-                        for adj_k in [k - 1, k + 1]:
-                            if 0 <= adj_k < len(day_slots_sorted):
-                                adj_v = _teacher_at_var(tid, my_occs, day_slots_sorted[adj_k],
-                                                        f"iso_a_{tid}_{day}_{si}_{adj_k}")
-                                if not (isinstance(adj_v, int) and adj_v == 0):
-                                    adj_vs.append(adj_v)
-                        if adj_vs:
-                            is_iso = model.NewBoolVar(f"iso_{tid}_{day}_{si}")
-                            model.AddBoolAnd([here] + [v.Not() for v in adj_vs]).OnlyEnforceIf(is_iso)
-                            model.AddBoolOr([here.Not()] + adj_vs).OnlyEnforceIf(is_iso.Not())
-                            penalty_terms.append(is_iso)
-
-        # Minimize teacher gaps (fixed mode)
+        # Maximize consecutive lessons (fixed mode):
+        # For each pair of consecutive available slots (prev, curr) on the same day,
+        # penalise "block-gap" = teacher teaches at curr but NOT at prev.
+        # Each new lesson block costs opt_teacher_gap_weight.
+        # Isolated periods (no adjacent lessons either side) cost 2× because they
+        # also trigger the avoid_isolated penalty below, making them doubly unattractive.
+        # This O(n) formulation replaces the previous O(n³) gap approach:
+        # same optimisation direction, far fewer BoolVars, cleaner signal.
         if opt_minimize_teacher_gaps and opt_teacher_gap_weight > 0:
             for tid, my_occs in occ_by_teacher.items():
                 for day in DAYS:
@@ -1075,21 +1057,52 @@ def _run_solver(db, timetable_id: int, options: dict = None):
                         [si for si in range(n_slots) if slot_day_of[si] == day],
                         key=lambda si: slot_num_of[si]
                     )
-                    if len(day_slots_sorted) < 3:
+                    if len(day_slots_sorted) < 2:
                         continue
                     teacher_at = {si: _teacher_at_var(tid, my_occs, si, f"tg_{tid}_{day}_{si}")
                                   for si in day_slots_sorted}
-                    n_day = len(day_slots_sorted)
-                    for ji in range(n_day):
-                        for ki in range(ji + 2, n_day):
-                            for ii in range(ji + 1, ki):
-                                sj, sk, sm = day_slots_sorted[ji], day_slots_sorted[ki], day_slots_sorted[ii]
-                                gv = model.NewBoolVar(f"gp_{tid}_{day}_{ji}_{ii}_{ki}")
-                                model.AddBoolAnd([teacher_at[sj], teacher_at[sk],
-                                                  teacher_at[sm].Not()]).OnlyEnforceIf(gv)
-                                model.AddBoolOr([teacher_at[sj].Not(), teacher_at[sk].Not(),
-                                                 teacher_at[sm]]).OnlyEnforceIf(gv.Not())
-                                penalty_terms.append(LinearExpr.Term(gv, opt_teacher_gap_weight))
+                    for k in range(1, len(day_slots_sorted)):
+                        si_prev = day_slots_sorted[k - 1]
+                        si_curr = day_slots_sorted[k]
+                        at_prev = teacher_at[si_prev]
+                        at_curr = teacher_at[si_curr]
+                        # If teacher can never teach at either slot it's structurally fixed — skip
+                        if isinstance(at_curr, int) or isinstance(at_prev, int):
+                            continue
+                        # block_gap = 1 iff teaches at si_curr but not at si_prev
+                        block_gap = model.NewBoolVar(f"bgap_{tid}_{day}_{k}")
+                        model.AddBoolAnd([at_curr, at_prev.Not()]).OnlyEnforceIf(block_gap)
+                        model.AddBoolOr([at_curr.Not(), at_prev]).OnlyEnforceIf(block_gap.Not())
+                        penalty_terms.append(LinearExpr.Term(block_gap, opt_teacher_gap_weight))
+
+        # Avoid isolated periods (fixed mode):
+        # penalise a slot where teacher has a lesson but NEITHER adjacent slot is used.
+        # Together with block_gap this makes isolated periods cost 2× the weight.
+        # Enabled when minimize_teacher_gaps is on (avoid_isolated is the DB default).
+        if (opt_minimize_teacher_gaps and opt_teacher_gap_weight > 0 and avoid_isolated):
+            for tid, my_occs in occ_by_teacher.items():
+                for day in DAYS:
+                    day_slots_sorted = sorted(
+                        [si for si in range(n_slots) if slot_day_of[si] == day],
+                        key=lambda si: slot_num_of[si]
+                    )
+                    teacher_at = {si: _teacher_at_var(tid, my_occs, si, f"iso_h_{tid}_{day}_{si}")
+                                  for si in day_slots_sorted}
+                    for k, si in enumerate(day_slots_sorted):
+                        here = teacher_at[si]
+                        if isinstance(here, int) and here == 0:
+                            continue
+                        adj_vs = []
+                        for adj_k in [k - 1, k + 1]:
+                            if 0 <= adj_k < len(day_slots_sorted):
+                                adj_v = teacher_at[day_slots_sorted[adj_k]]
+                                if not (isinstance(adj_v, int) and adj_v == 0):
+                                    adj_vs.append(adj_v)
+                        if adj_vs:
+                            is_iso = model.NewBoolVar(f"iso_{tid}_{day}_{si}")
+                            model.AddBoolAnd([here] + [v.Not() for v in adj_vs]).OnlyEnforceIf(is_iso)
+                            model.AddBoolOr([here.Not()] + adj_vs).OnlyEnforceIf(is_iso.Not())
+                            penalty_terms.append(LinearExpr.Term(is_iso, opt_teacher_gap_weight))
 
     else:
         # ── Variable-teacher soft constraints (original aux-variable approach) ─

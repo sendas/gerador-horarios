@@ -90,8 +90,15 @@
         <q-separator />
 
         <div class="text-subtitle2">Professores</div>
-        <q-toggle v-model="opts.minimize_teacher_gaps" label="Minimizar furos nos horários dos professores" />
-        <q-slider v-if="opts.minimize_teacher_gaps" v-model="opts.teacher_gap_weight" :min="1" :max="50" label :label-value="'Peso: ' + opts.teacher_gap_weight" />
+        <q-toggle v-model="opts.minimize_teacher_gaps" label="Maximizar tempos consecutivos dos professores" />
+        <div v-if="opts.minimize_teacher_gaps" class="row items-center q-gutter-sm q-ml-lg">
+          <span class="text-caption text-grey-7">Intensidade:</span>
+          <q-btn-toggle
+            v-model="opts.teacher_gap_weight"
+            :options="[{label:'Suave',value:5},{label:'Médio',value:15},{label:'Forte',value:30},{label:'Máximo',value:60}]"
+            color="primary" outline dense size="sm"
+          />
+        </div>
 
         <q-separator />
 
@@ -158,7 +165,7 @@ const opts = reactive({
   students_start_slot_1: true,
   no_pe_after_lunch: true,
   minimize_teacher_gaps: true,
-  teacher_gap_weight: 10,
+  teacher_gap_weight: 15,
   no_same_subject_twice_per_day: true,
   distribute_subjects_weight: 5,
   max_time_seconds: 300,

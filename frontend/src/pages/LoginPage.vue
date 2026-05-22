@@ -26,8 +26,9 @@
 
           <div class="brand-title">Sinaptik</div>
           <div class="brand-tagline">
-            Horários escolares inteligentes.<br>
-            <span class="tagline-accent">Sem compromissos.</span>
+            Plataforma inteligente de horários escolares.<br>
+            <span class="tagline-accent">O sistema mais completo para criação automática de horários para agrupamentos escolares</span>
+            — define professores, disciplinas, restrições e obtém horários otimizados em minutos.
           </div>
 
           <div class="feature-list">
@@ -283,9 +284,9 @@ async function handleDemo() {
 }
 
 .brand-tagline {
-  font-size: 1.45rem;
-  line-height: 1.5;
-  opacity: 0.92;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  opacity: 0.9;
   margin-bottom: 40px;
   font-weight: 300;
 }
