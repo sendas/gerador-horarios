@@ -40,37 +40,78 @@
     </div>
 
     <q-table :rows="filteredTeachers" :columns="columns" row-key="id" :loading="teachersStore.loading" :filter="search" sort-by="name">
-      <template #body-cell-primary_school="props">
-        <q-td :props="props">
-          <span v-if="props.row.primary_school_name">
-            <q-icon name="star" color="amber-7" size="xs" class="q-mr-xs" />{{ props.row.primary_school_name }}
-          </span>
-          <span v-else-if="props.row.school_ids?.length" class="text-caption text-grey-6">
-            {{ props.row.school_ids.length }} escola(s) — sem base
-          </span>
-          <span v-else class="text-caption text-orange-7">
-            <q-icon name="warning" size="xs" /> sem escola
-          </span>
-        </q-td>
-      </template>
-      <template #body-cell-subject_names="props">
-        <q-td :props="props">
-          <q-chip v-for="s in props.row.subject_names" :key="s" size="sm" :label="s" color="blue-2" text-color="dark" class="q-mr-xs" />
-          <span v-if="!props.row.subject_names?.length" class="text-grey-5">—</span>
-        </q-td>
-      </template>
-      <template #body-cell-preferred_free_day="props">
-        <q-td :props="props">{{ props.row.preferred_free_day !== null && props.row.preferred_free_day !== undefined ? DAYS[props.row.preferred_free_day] : '—' }}</q-td>
-      </template>
-      <template #body-cell-actions="props">
-        <q-td :props="props">
-          <q-btn unelevated size="sm" color="info" icon="school" label="Escolas" @click="openSchools(props.row)" class="q-mr-xs" />
-          <q-btn unelevated size="sm" color="secondary" icon="book" label="Disciplinas" @click="openSubjects(props.row)" class="q-mr-xs" />
-          <q-btn unelevated size="sm" color="teal" icon="groups" label="Turmas" @click="openCurriculum(props.row)" class="q-mr-xs" />
-          <q-btn unelevated size="sm" color="positive" icon="event_available" label="Disponibilidade" @click="openAvailability(props.row)" class="q-mr-xs" />
-          <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
-          <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
-        </q-td>
+      <template #body="props">
+        <q-tr :props="props">
+          <q-td key="name" :props="props" class="cursor-pointer" style="white-space:nowrap" @click="toggleTeacherExpand(props.row)">
+            <q-icon :name="expandedTeacherId === props.row.id ? 'expand_less' : 'expand_more'" size="xs" color="grey-6" class="q-mr-xs" />
+            {{ props.row.name }}
+          </q-td>
+          <q-td key="primary_school" :props="props">
+            <span v-if="props.row.primary_school_name">
+              <q-icon name="star" color="amber-7" size="xs" class="q-mr-xs" />{{ props.row.primary_school_name }}
+            </span>
+            <span v-else-if="props.row.school_ids?.length" class="text-caption text-grey-6">
+              {{ props.row.school_ids.length }} escola(s) — sem base
+            </span>
+            <span v-else class="text-caption text-orange-7">
+              <q-icon name="warning" size="xs" /> sem escola
+            </span>
+          </q-td>
+          <q-td key="subject_names" :props="props">
+            <q-chip v-for="s in props.row.subject_names" :key="s" size="sm" :label="s" color="blue-2" text-color="dark" class="q-mr-xs" />
+            <span v-if="!props.row.subject_names?.length" class="text-grey-5">—</span>
+          </q-td>
+          <q-td key="teaching_component" :props="props" class="text-center">{{ props.row.teaching_component ?? '—' }}</q-td>
+          <q-td key="max_daily_lessons" :props="props" class="text-center">{{ props.row.max_daily_lessons ?? '—' }}</q-td>
+          <q-td key="preferred_free_day" :props="props" class="text-center">
+            {{ props.row.preferred_free_day !== null && props.row.preferred_free_day !== undefined ? DAYS[props.row.preferred_free_day] : '—' }}
+          </q-td>
+          <q-td key="actions" :props="props">
+            <q-btn unelevated size="sm" color="info" icon="school" label="Escolas" @click="openSchools(props.row)" class="q-mr-xs" />
+            <q-btn unelevated size="sm" color="secondary" icon="book" label="Disciplinas" @click="openSubjects(props.row)" class="q-mr-xs" />
+            <q-btn unelevated size="sm" color="teal" icon="groups" label="Turmas" @click="openCurriculum(props.row)" class="q-mr-xs" />
+            <q-btn unelevated size="sm" color="positive" icon="event_available" label="Disponibilidade" @click="openAvailability(props.row)" class="q-mr-xs" />
+            <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
+            <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
+          </q-td>
+        </q-tr>
+        <q-tr v-show="expandedTeacherId === props.row.id" :props="props">
+          <q-td :colspan="columns.length" class="q-pa-sm bg-blue-grey-1">
+            <div v-if="expandLoading" class="text-grey-6 text-caption q-pa-xs">A carregar...</div>
+            <div v-else class="row q-gutter-md items-start q-pl-sm">
+              <div>
+                <div class="text-caption text-grey-7 q-mb-xs">Escolas</div>
+                <template v-if="props.row.school_ids?.length">
+                  <q-chip
+                    v-for="sid in props.row.school_ids"
+                    :key="sid"
+                    dense
+                    :icon="sid === props.row.primary_school_id ? 'star' : 'school'"
+                    :color="sid === props.row.primary_school_id ? 'amber-7' : 'blue-grey-3'"
+                    :text-color="sid === props.row.primary_school_id ? 'white' : 'dark'"
+                    :label="schoolName(sid)"
+                  />
+                </template>
+                <span v-else class="text-caption text-grey-5">sem escola</span>
+              </div>
+              <q-separator vertical />
+              <div>
+                <div class="text-caption text-grey-7 q-mb-xs">Turmas atribuídas</div>
+                <template v-if="expandedTeacherId === props.row.id && expandedClasses.length">
+                  <q-chip
+                    v-for="cls in expandedClasses"
+                    :key="cls.class_id"
+                    dense
+                    color="teal-2"
+                    text-color="dark"
+                    :label="`${cls.class_name} (${cls.year_level}º)`"
+                  />
+                </template>
+                <span v-else-if="expandedTeacherId === props.row.id" class="text-caption text-grey-5">sem turmas atribuídas</span>
+              </div>
+            </div>
+          </q-td>
+        </q-tr>
       </template>
     </q-table>
 
@@ -568,6 +609,43 @@ const form = ref({
   max_consecutive_lessons: null as number | null,
   teaching_component: null as number | null,
 })
+
+// Row expansion
+const expandedTeacherId = ref<number | null>(null)
+const expandedClasses = ref<{ class_id: number; class_name: string; year_level: number }[]>([])
+const expandLoading = ref(false)
+const expandCache = reactive<Record<number, { class_id: number; class_name: string; year_level: number }[]>>({})
+
+async function toggleTeacherExpand(teacher: Teacher) {
+  if (expandedTeacherId.value === teacher.id) {
+    expandedTeacherId.value = null
+    return
+  }
+  expandedTeacherId.value = teacher.id
+  if (expandCache[teacher.id]) {
+    expandedClasses.value = expandCache[teacher.id]
+    return
+  }
+  expandLoading.value = true
+  try {
+    const activeYearId = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id
+    const params: Record<string, unknown> = {}
+    if (activeYearId) params.academic_year_id = activeYearId
+    const { data } = await api.get<{ class_id: number; class_name: string; year_level: number }[]>(
+      `/teachers/${teacher.id}/curriculum`,
+      { params }
+    )
+    const seen = new Map<number, { class_id: number; class_name: string; year_level: number }>()
+    for (const e of data) {
+      if (!seen.has(e.class_id)) seen.set(e.class_id, e)
+    }
+    const deduped = [...seen.values()].sort((a, b) => a.year_level - b.year_level || a.class_name.localeCompare(b.class_name))
+    expandCache[teacher.id] = deduped
+    expandedClasses.value = deduped
+  } finally {
+    expandLoading.value = false
+  }
+}
 
 // School filter
 const selectedSchoolIds = reactive(new Set<number>())

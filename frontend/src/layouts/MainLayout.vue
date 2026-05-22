@@ -128,13 +128,13 @@
           <q-item-section>Serviço Não Letivo</q-item-section>
         </q-item>
 
+        <q-item clickable v-ripple :to="'/service-distribution'">
+          <q-item-section avatar><q-icon name="schedule" color="teal-8" /></q-item-section>
+          <q-item-section>Definição de horas por docente</q-item-section>
+        </q-item>
+
         <q-separator />
         <q-item-label header caption>Horários</q-item-label>
-
-        <q-item clickable v-ripple :to="'/service-distribution'">
-          <q-item-section avatar><q-icon name="assignment_ind" color="teal-8" /></q-item-section>
-          <q-item-section>Distribuição de Serviço</q-item-section>
-        </q-item>
 
         <q-item clickable v-ripple :to="'/timetables'">
           <q-item-section avatar><q-icon name="table_chart" color="green-8" /></q-item-section>
