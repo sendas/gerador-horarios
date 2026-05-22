@@ -24,6 +24,34 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="build" color="deep-purple-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="deep-purple-7" class="version-badge">v1.20.0</q-badge>
+                  Atribuição de Professores — Correções e Melhorias
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="sync" size="xs" color="deep-purple-7" />
+                  Botão <strong>Sincronizar disciplinas</strong> sem preencher automaticamente — aplica o plano curricular à turma sem sobrepor atribuições existentes
+                </div>
+                <div class="feature-item">
+                  <q-icon name="notifications_off" size="xs" color="deep-purple-7" />
+                  Corrigida notificação de erro ao sincronizar que mostrava <em>[object Object]</em> em vez de mensagem legível
+                </div>
+                <div class="feature-item">
+                  <q-icon name="block" size="xs" color="deep-purple-7" />
+                  Corrigida gravação de blocos indisponíveis na página de Professores (problema de reatividade Vue 3 com Map)
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="analytics" color="teal-7">
               <template #title>
                 <span class="version-title">

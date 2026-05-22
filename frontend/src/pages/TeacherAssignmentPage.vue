@@ -480,9 +480,12 @@ async function syncFromPlans() {
       overwrite: false,
     })
     await load()
-    $q.notify({ type: 'positive', message: res.data.message ?? 'Disciplinas sincronizadas' })
+    const msg = typeof res.data?.message === 'string' ? res.data.message : 'Disciplinas sincronizadas'
+    $q.notify({ type: 'positive', message: msg })
   } catch (e: any) {
-    $q.notify({ type: 'negative', message: e.response?.data?.detail ?? 'Erro ao sincronizar' })
+    const detail = e?.response?.data?.detail
+    const msg = typeof detail === 'string' ? detail : 'Erro ao sincronizar disciplinas'
+    $q.notify({ type: 'negative', message: msg })
   } finally {
     syncing.value = false
   }
