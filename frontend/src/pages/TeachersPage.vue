@@ -93,7 +93,7 @@
               label="Ano letivo"
               emit-value map-options dense outlined
               style="min-width:180px"
-              @update:model-value="loadBulkSlots"
+              @update:model-value="() => { clearBulkSlots(); loadBulkSlots() }"
             />
             <q-chip v-if="bulkBlockedCount > 0" color="negative" text-color="white" icon="block" :label="`${bulkBlockedCount} bloco(s) bloqueado(s)`" />
             <q-btn v-if="bulkBlockedCount > 0" flat dense size="sm" icon="clear" label="Limpar tudo" color="grey-6" @click="clearBulkSlots()" />
@@ -1066,7 +1066,6 @@ function clearBulkSlots() {
 
 async function openBulkAvail() {
   bulkAvailYear.value = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null
-  clearBulkSlots()
   bulkAvailDialog.value = true
   if (bulkAvailYear.value) await loadBulkSlots()
 }
@@ -1097,7 +1096,6 @@ async function applyBulkAvail() {
         return { day_of_week: d, slot_number: s }
       })
     const res = await teachersStore.bulkAvailability(clusterId, bulkAvailYear.value, blocked)
-    bulkAvailDialog.value = false
     $q.notify({ type: 'positive', message: res.message })
   } catch {
     $q.notify({ type: 'negative', message: 'Erro ao aplicar disponibilidade.' })
