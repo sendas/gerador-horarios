@@ -229,7 +229,6 @@ def apply_plan(req: ApplyRequest, db: Session = Depends(get_db)):
             if exists:
                 if req.overwrite:
                     exists.hours_per_week = plan.hours_per_week
-                    exists.weekly_structure = plan.weekly_structure
                     sc, cp, is_split = _parse_structure(plan.weekly_structure)
                     exists.is_split = is_split
                     exists.split_count = sc
@@ -245,7 +244,6 @@ def apply_plan(req: ApplyRequest, db: Session = Depends(get_db)):
                 class_id=cls.id,
                 subject_id=plan.subject_id,
                 hours_per_week=plan.hours_per_week,
-                weekly_structure=plan.weekly_structure,
                 is_split=is_split,
                 split_count=sc,
                 consecutive_pairs=cp,
