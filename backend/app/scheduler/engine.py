@@ -497,7 +497,15 @@ def _run_solver(db, timetable_id: int, options: dict = None):
 
     # 1. Each occurrence is scheduled exactly once
     for (eid, occ) in occurrences:
-        model.AddExactlyOne([x[(eid, occ, si)] for si in range(n_slots)])
+        allowed_vars = [x[(eid, occ, si)] for si in _allowed[(eid, occ)] if (eid, occ, si) in x]
+        if not allowed_vars:
+            tt.status = "error"
+            tt.solver_status = f"Sem slots disponíveis para entrada {eid} (ocorrência {occ}) — verifique disponibilidade do professor."
+            tt.updated_at = datetime.utcnow()
+            db.commit()
+            _log(db, tt, f"Erro: nenhum slot permitido para entrada {eid}. Verifique disponibilidade do professor.")
+            return
+        model.AddExactlyOne(allowed_vars)
 
     # 2. Each occurrence has exactly one teacher (variable-teacher mode only)
     if not all_fixed:
