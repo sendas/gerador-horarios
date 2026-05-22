@@ -410,7 +410,7 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     # ── CP-SAT model ─────────────────────────────────────────────────────────
     model = cp_model.CpModel()
 
-    # slot_var[(entry_id, occ)] = (day, slot) as index into all_slots
+    # slot_indices[(day, slot)] = integer index into all_slots list
     slot_indices = {ds: i for i, ds in enumerate(all_slots)}
     n_slots = len(all_slots)
 
@@ -454,6 +454,23 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     for (eid, occ) in occurrences:
         for si in _allowed[(eid, occ)]:
             x[(eid, occ, si)] = model.NewBoolVar(f"x_{eid}_{occ}_{si}")
+
+    # ── slot_var: channeled IntVar per occurrence (fixed-teacher mode only) ────
+    # slot_var[(eid, occ)] = slot index chosen for this occurrence.
+    # Channeled via: slot_var == Σ si * x[(eid, occ, si)]
+    # Enables AddAllDifferent per teacher/class — much stronger propagation
+    # than per-slot AddAtMostOne (Hall's theorem reasoning across all occurrences).
+    slot_var: dict[tuple, cp_model.IntVar] = {}
+    if all_fixed:
+        for (eid, occ) in occurrences:
+            allowed = sorted(_allowed[(eid, occ)])
+            if not allowed:
+                continue
+            sv = model.NewIntVarFromDomain(
+                cp_model.Domain.FromValues(allowed), f"sv_{eid}_{occ}"
+            )
+            slot_var[(eid, occ)] = sv
+            model.Add(sv == sum(si * x[(eid, occ, si)] for si in allowed if (eid, occ, si) in x))
 
     # t[(entry_id, occ, teacher_id)] = BoolVar: is this teacher assigned?
     # In fixed-teacher mode these are not needed; we use x directly.
@@ -677,9 +694,13 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     # 4. No teacher double-booking: for each (teacher, slot), at most one lesson
     all_teacher_ids = list(teachers.keys())
     if all_fixed:
-        # Direct AddAtMostOne on x vars — no auxiliary variables needed.
-        # This alone eliminates ~N_OCC * N_SLOTS implicit aux vars from the model.
+        # AddAllDifferent on slot_var per teacher (global Hall-theorem propagation) +
+        # AddAtMostOne on x-vars per slot (direct binary implication, 1-hop propagation).
+        # Both together are strictly stronger than either alone.
         for tid, my_occs in occ_by_teacher.items():
+            svars = [slot_var[(eid, occ)] for (eid, occ) in my_occs if (eid, occ) in slot_var]
+            if len(svars) > 1:
+                model.AddAllDifferent(svars)
             for si in range(n_slots):
                 at_si = [x[(eid, occ, si)] for (eid, occ) in my_occs if (eid, occ, si) in x]
                 if len(at_si) > 1:
@@ -1210,24 +1231,28 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     import threading
 
     n_bool_vars = len(x) + len(t)
+    n_int_vars  = len(slot_var)
     _w = int(os.environ.get("SOLVER_WORKERS", "0"))
     n_workers = _w if _w > 0 else min(multiprocessing.cpu_count(), 16)
     max_mem   = int(os.environ.get("SOLVER_MAX_MEMORY_MB", 2048))
 
     logger.info(
-        "Timetable %d: CP-SAT %d BoolVars, limite=%ds, workers=%d, mem=%dMB",
-        timetable_id, n_bool_vars, max_time, n_workers, max_mem,
+        "Timetable %d: CP-SAT %d BoolVars + %d IntVars (AllDiff), limite=%ds, workers=%d, mem=%dMB",
+        timetable_id, n_bool_vars, n_int_vars, max_time, n_workers, max_mem,
     )
-    _log(db, tt, f"Modelo criado: {n_bool_vars} variáveis booleanas. A resolver... (limite: {max_time}s, workers: {n_workers})")
+    _log(db, tt, f"Modelo criado: {n_bool_vars} BoolVars + {n_int_vars} IntVars (AllDifferent). A resolver... (limite: {max_time}s, workers: {n_workers})")
 
-    # ── Phase 1: find ANY feasible solution quickly (no objective, PORTFOLIO) ─
-    # Allocate up to 40% of total time (min 60s, max 300s) to find a first solution.
+    # ── Phase 1: find ANY feasible solution quickly ────────────────────────────
+    # Strategy: PORTFOLIO_WITH_QUICK_RESTART with no LP overhead (linearization=0).
+    # Allocate up to 40% of total time (min 60s, max 300s) for feasibility.
     phase1_time = max(60, min(int(max_time * 0.4), 300))
     solver1 = cp_model.CpSolver()
     solver1.parameters.max_time_in_seconds = float(phase1_time)
     solver1.parameters.num_workers = n_workers
     solver1.parameters.max_memory_in_mb = max_mem
-    solver1.parameters.search_branching = 6  # PORTFOLIO_WITH_QUICK_RESTART
+    solver1.parameters.search_branching = 6   # PORTFOLIO_WITH_QUICK_RESTART
+    solver1.parameters.linearization_level = 0  # skip LP in feasibility phase — faster search
+    solver1.parameters.symmetry_level = 2       # default
 
     # Temporarily remove objective to find feasibility fast
     has_objective = bool(penalty_terms)
@@ -1267,24 +1292,33 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         remaining = max_time - phase1_wall
         solver = solver1  # already has result; use for extraction below
         if remaining > 10 and has_objective and status != cp_model.OPTIMAL:
-            # Phase 2: optimize from the feasible solution found in phase 1
+            # Phase 2: optimize from the feasible solution found in phase 1.
+            # Provide warm-start hints for all decision vars (x, t, slot_var).
             hints = {}
             for k, v in x.items():
                 hints[v] = solver1.Value(v)
             for k, v in t.items():
                 hints[v] = solver1.Value(v)
+            for k, v in slot_var.items():
+                hints[v] = solver1.Value(v)
+            for var, val in hints.items():
+                model.AddHint(var, val)
             solver2 = cp_model.CpSolver()
             solver2.parameters.max_time_in_seconds = float(remaining)
             solver2.parameters.num_workers = n_workers
             solver2.parameters.max_memory_in_mb = max_mem
-            # Provide hint (warm start)
-            for var, val in hints.items():
-                model.AddHint(var, val)
+            # Quality-maximising parameters for phase 2:
+            solver2.parameters.linearization_level = 2    # strong LP relaxation → tighter bounds
+            solver2.parameters.symmetry_level = 4         # aggressive symmetry breaking
+            solver2.parameters.repair_hint = True         # repair phase-1 solution first (fast warm-start)
+            solver2.parameters.search_branching = 0       # AUTOMATIC — best for multi-phase optimization
+            solver2.parameters.interleave_search = True   # diversify LNS workers
+            solver2.parameters.min_num_lns_workers = max(2, n_workers // 4)
             status2 = solver2.Solve(model)
             if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 solver = solver2
                 status = status2
-                _log(db, tt, f"Fase 2: {solver2.StatusName(status2)} em {solver2.WallTime():.1f}s adicionais")
+                _log(db, tt, f"Fase 2: {solver2.StatusName(status2)} em {solver2.WallTime():.1f}s adicionais (obj={solver2.ObjectiveValue():.0f})")
             else:
                 _log(db, tt, f"Fase 2: sem melhoria ({solver2.StatusName(status2)}) — a usar solução da fase 1")
     else:
@@ -1297,6 +1331,9 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             solver2.parameters.num_workers = n_workers
             solver2.parameters.max_memory_in_mb = max_mem
             solver2.parameters.random_seed = 42
+            solver2.parameters.linearization_level = 2
+            solver2.parameters.symmetry_level = 4
+            solver2.parameters.interleave_search = True
             status2 = solver2.Solve(model)
             if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 solver = solver2
