@@ -1006,20 +1006,38 @@ async function loadAvailability() {
 
 async function saveAvailability() {
   if (!selectedTeacher.value || !availYear.value) return
-  const availabilities = []
+  const teacherId = selectedTeacher.value.id
+  const yearId = availYear.value
+  const availabilities: { teacher_id: number; academic_year_id: number; day_of_week: number; slot_number: number; is_available: boolean }[] = []
   for (let d = 0; d < 5; d++) {
     for (const s of uniqueSlots.value) {
       availabilities.push({
-        teacher_id: selectedTeacher.value.id,
-        academic_year_id: availYear.value,
+        teacher_id: teacherId,
+        academic_year_id: yearId,
         day_of_week: d,
         slot_number: s,
         is_available: isAvailable(d, s),
       })
     }
   }
-  await teachersStore.setAvailabilityBulk(selectedTeacher.value.id, availYear.value, availabilities)
-  $q.notify({ type: 'positive', message: 'Disponibilidade guardada' })
+  try {
+    await teachersStore.setAvailabilityBulk(teacherId, yearId, availabilities)
+    const blocked = availabilities.filter((a) => !a.is_available).length
+    $q.notify({
+      type: 'positive',
+      message: blocked
+        ? `Disponibilidade guardada — ${blocked} bloco(s) indisponível(eis)`
+        : 'Disponibilidade guardada — todos os blocos disponíveis',
+    })
+    await loadAvailability()
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail
+    const status = e?.response?.status as number | undefined
+    const msg = typeof detail === 'string' ? detail
+      : status ? `Erro ${status} ao guardar disponibilidade`
+      : 'Erro ao guardar disponibilidade'
+    $q.notify({ type: 'negative', message: msg })
+  }
 }
 
 const bulkUniqueSlots = computed(() => {

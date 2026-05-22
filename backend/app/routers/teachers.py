@@ -319,9 +319,15 @@ def set_availability_bulk(id: int, data: TeacherAvailabilityBulk, db: Session = 
     db.query(TeacherAvailability).filter(
         TeacherAvailability.teacher_id == id,
         TeacherAvailability.academic_year_id == data.academic_year_id
-    ).delete()
+    ).delete(synchronize_session=False)
     objs = [
-        TeacherAvailability(**{**a.model_dump(), "teacher_id": id})
+        TeacherAvailability(
+            teacher_id=id,
+            academic_year_id=data.academic_year_id,
+            day_of_week=a.day_of_week,
+            slot_number=a.slot_number,
+            is_available=a.is_available,
+        )
         for a in data.availabilities
     ]
     db.add_all(objs)
