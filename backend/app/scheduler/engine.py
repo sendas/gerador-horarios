@@ -305,8 +305,16 @@ def _run_solver(db, timetable_id: int, options: dict = None):
     for room in db.query(Room).all():
         rooms_by_school[room.school_id].append(room.id)
 
-    # Teacher info
-    teachers = {t.id: t for t in db.query(Teacher).all()}
+    # Teacher info — only load teachers that are actually involved in the occurrences
+    # being scheduled (directly assigned or candidates). Loading all teachers causes
+    # misleading diagnostics and unnecessary soft-constraint variables in the solver.
+    relevant_teacher_ids: set[int] = set()
+    for tid_list in entry_teachers.values():
+        relevant_teacher_ids.update(tid_list)
+    teachers = {
+        t.id: t
+        for t in db.query(Teacher).filter(Teacher.id.in_(relevant_teacher_ids)).all()
+    }
 
     # Load scheduling rules for this academic year / cluster
     academic_year = db.query(AcademicYear).filter(AcademicYear.id == academic_year_id).first()
@@ -637,13 +645,10 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         logger.warning("Timetable %d: professores sobrecarregados: %d", timetable_id, len(teacher_overload))
 
     # D. Complexity warning: many teachers with very few lessons makes "no gaps" very hard.
-    # With N teachers × few lessons each, the solver has enormous freedom in assigning slots
-    # but must still pack student schedules contiguously — a combinatorial explosion.
-    active_teachers_with_occs = [(tid, sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, [])))
-                                  for tid in teachers if sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, [])) > 0]
-    n_active = len(active_teachers_with_occs)
-    avg_occ_per_teacher = sum(c for _, c in active_teachers_with_occs) / n_active if n_active else 0
-    if n_active > 30 and avg_occ_per_teacher < 5 and (opt_no_student_gaps or opts.get("students_start_slot_1", True)):
+    # teachers dict is already filtered to relevant teachers only; compute per-teacher occ count.
+    n_active = len(teachers)
+    avg_occ_per_teacher = len(occurrences) / n_active if n_active else 0
+    if n_active > 20 and avg_occ_per_teacher < 5 and (opt_no_student_gaps or opts.get("students_start_slot_1", True)):
         _log(db, tt, (
             f"⚠ Aviso de complexidade: {n_active} professores ativos com média de {avg_occ_per_teacher:.1f} aulas/semana. "
             "Com muitos professores e poucas aulas cada, a restrição 'sem furos nos alunos' torna-se "

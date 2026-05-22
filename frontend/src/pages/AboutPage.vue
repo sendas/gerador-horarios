@@ -24,6 +24,30 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="group" color="indigo-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="indigo-7" class="version-badge">v1.16.0</q-badge>
+                  Contagem Correta de Professores no Solver
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="bug_report" size="xs" color="indigo-7" />
+                  O solver carregava todos os professores da base de dados em vez de apenas os relevantes para as turmas selecionadas — o log mostrava 115 professores para a VG quando eram muito menos
+                </div>
+                <div class="feature-item">
+                  <q-icon name="speed" size="xs" color="indigo-7" />
+                  Melhoria de desempenho: variáveis de soft constraints (turnos preferidos, dias livres, aulas diárias) agora criadas apenas para os professores com ocorrências no âmbito da geração
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="build" color="red-8">
               <template #title>
                 <span class="version-title">
