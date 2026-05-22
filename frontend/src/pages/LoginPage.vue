@@ -54,7 +54,7 @@
             </div>
           </div>
 
-          <div class="brand-version">v1.13.0</div>
+          <div class="brand-version">v{{ appVersion }}</div>
         </div>
       </div>
 
@@ -133,6 +133,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'stores/auth'
+
+const appVersion = process.env.APP_VERSION ?? '?'
 
 const router = useRouter()
 const auth = useAuthStore()

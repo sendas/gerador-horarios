@@ -6,7 +6,7 @@
         <q-icon name="hub" size="48px" color="white" />
       </div>
       <div class="hero__title">Sinaptik</div>
-      <q-badge class="hero__badge">v1.10.8</q-badge>
+      <q-badge class="hero__badge">v{{ appVersion }}</q-badge>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -23,6 +23,50 @@
           </div>
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
+
+            <q-timeline-entry icon="auto_awesome" color="teal-7">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="teal-7" class="version-badge">v1.14.0</q-badge>
+                  Blocos Indisponíveis, Solver Otimizado e Melhorias Visuais
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="event_busy" size="xs" color="teal-7" />
+                  Blocos indisponíveis: substituída seleção de dia por grelha visual interativa — clique para bloquear/desbloquear slots por dia e tempo, aplica a todos os docentes
+                </div>
+                <div class="feature-item">
+                  <q-icon name="timer" size="xs" color="teal-7" />
+                  Geração de horários: novos tempos máximos de cálculo — 30 min, 1h, 2h, 3h, 5h, 10h
+                </div>
+                <div class="feature-item">
+                  <q-icon name="calculate" size="xs" color="teal-7" />
+                  Solver CP-SAT: penalização O(n) por blocos não consecutivos (substituiu O(n³)), AllDifferent + AtMostOne para dupla propagação, parâmetros de Fase 1/2 otimizados
+                </div>
+                <div class="feature-item">
+                  <q-icon name="warning" size="xs" color="orange-8" />
+                  Aviso visível na página de horários quando a Fase 3 removeu restrições (ex: "sem furos") para obter solução
+                </div>
+                <div class="feature-item">
+                  <q-icon name="login" size="xs" color="teal-7" />
+                  Página de login redesenhada: painel duplo, blobs animados, lista de funcionalidades colorida e versão dinâmica
+                </div>
+                <div class="feature-item">
+                  <q-icon name="bug_report" size="xs" color="red-7" />
+                  Correção: blocos indisponíveis não eram guardados (problema de reatividade Vue 3 com Set dentro de ref)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="build" size="xs" color="teal-7" />
+                  Versão centralizada no package.json — atualiza automaticamente em todos os ecrãs da aplicação
+                </div>
+              </div>
+            </q-timeline-entry>
 
             <q-timeline-entry icon="analytics" color="orange-8">
               <template #title>
@@ -752,6 +796,8 @@
 </template>
 
 <script setup lang="ts">
+const appVersion = process.env.APP_VERSION ?? '?'
+
 const techs = [
   { name: 'FastAPI', desc: 'API REST', icon: 'bolt', color: 'teal-6' },
   { name: 'SQLite', desc: 'Base de dados', icon: 'storage', color: 'brown-6' },

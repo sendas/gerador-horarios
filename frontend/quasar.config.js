@@ -1,5 +1,6 @@
 /* eslint-env node */
 const { configure } = require('quasar/wrappers')
+const { version } = require('./package.json')
 
 module.exports = configure(function (/* ctx */) {
   return {
@@ -7,6 +8,9 @@ module.exports = configure(function (/* ctx */) {
     css: ['app.scss'],
     extras: ['roboto-font', 'material-icons'],
     build: {
+      env: {
+        APP_VERSION: version,
+      },
       target: {
         browser: ['es2019', 'edge88', 'firefox78', 'chrome87', 'safari13.1'],
         node: 'node20',
