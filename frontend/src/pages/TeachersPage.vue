@@ -96,7 +96,7 @@
               @update:model-value="loadBulkSlots"
             />
             <q-chip v-if="bulkBlockedCount > 0" color="negative" text-color="white" icon="block" :label="`${bulkBlockedCount} bloco(s) bloqueado(s)`" />
-            <q-btn v-if="bulkBlockedCount > 0" flat dense size="sm" icon="clear" label="Limpar tudo" color="grey-6" @click="bulkBlockedSlots.clear()" />
+            <q-btn v-if="bulkBlockedCount > 0" flat dense size="sm" icon="clear" label="Limpar tudo" color="grey-6" @click="clearBulkSlots()" />
           </div>
 
           <div v-if="bulkAvailLoading" class="text-center q-py-lg text-grey-6">A carregar tempos letivos...</div>
@@ -530,7 +530,7 @@ const bulkAvailDialog = ref(false)
 const bulkAvailYear = ref<number | null>(null)
 const bulkAvailLoading = ref(false)
 const bulkAvailSaving = ref(false)
-const bulkBlockedSlots = ref(new Set<string>())
+const bulkBlockedMap = reactive<Record<string, boolean>>({})
 const bulkAvailRawSlots = ref<{ slot_number: number; start_time: string; end_time: string }[]>([])
 const selectedClusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
 const schoolsStore = useSchoolsStore()
@@ -1029,23 +1029,25 @@ const bulkUniqueSlots = computed(() => {
   return [...seen.values()].sort((a, b) => a.slot_number - b.slot_number)
 })
 
-const bulkBlockedCount = computed(() => bulkBlockedSlots.value.size)
+const bulkBlockedCount = computed(() => Object.values(bulkBlockedMap).filter(Boolean).length)
 
 function isBulkBlocked(day: number, slot: number) {
-  return bulkBlockedSlots.value.has(`${day}_${slot}`)
+  return bulkBlockedMap[`${day}_${slot}`] === true
 }
 
 function toggleBulkSlot(day: number, slot: number) {
   const key = `${day}_${slot}`
-  if (bulkBlockedSlots.value.has(key)) bulkBlockedSlots.value.delete(key)
-  else bulkBlockedSlots.value.add(key)
-  // trigger reactivity
-  bulkBlockedSlots.value = new Set(bulkBlockedSlots.value)
+  if (bulkBlockedMap[key]) delete bulkBlockedMap[key]
+  else bulkBlockedMap[key] = true
+}
+
+function clearBulkSlots() {
+  Object.keys(bulkBlockedMap).forEach((k) => delete bulkBlockedMap[k])
 }
 
 async function openBulkAvail() {
   bulkAvailYear.value = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null
-  bulkBlockedSlots.value = new Set()
+  clearBulkSlots()
   bulkAvailDialog.value = true
   if (bulkAvailYear.value) await loadBulkSlots()
 }
@@ -1069,10 +1071,12 @@ async function applyBulkAvail() {
   }
   bulkAvailSaving.value = true
   try {
-    const blocked = [...bulkBlockedSlots.value].map((key) => {
-      const [d, s] = key.split('_').map(Number)
-      return { day_of_week: d, slot_number: s }
-    })
+    const blocked = Object.entries(bulkBlockedMap)
+      .filter(([, v]) => v)
+      .map(([key]) => {
+        const [d, s] = key.split('_').map(Number)
+        return { day_of_week: d, slot_number: s }
+      })
     const res = await teachersStore.bulkAvailability(clusterId, bulkAvailYear.value, blocked)
     bulkAvailDialog.value = false
     $q.notify({ type: 'positive', message: res.message })
