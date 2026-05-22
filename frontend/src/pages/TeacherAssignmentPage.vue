@@ -448,6 +448,8 @@ async function load() {
       teacher_id: e.teacher_id ?? null,
       teacher_name: e.teacher_name ?? null,
     }))
+  } catch {
+    // silently keep entries empty on load failure
   } finally {
     loading.value = false
   }
@@ -473,22 +475,35 @@ async function assignTeacher(entry: Entry, teacherId: number | null) {
 async function syncFromPlans() {
   if (!clusterId.value || !selectedYearId.value) return
   syncing.value = true
+  let ok = false
   try {
     const res = await api.post('/curriculum-plans/apply', {
       cluster_id: clusterId.value,
       academic_year_id: selectedYearId.value,
       overwrite: false,
     })
-    await load()
+    ok = true
     const msg = typeof res.data?.message === 'string' ? res.data.message : 'Disciplinas sincronizadas'
     $q.notify({ type: 'positive', message: msg })
   } catch (e: any) {
     const detail = e?.response?.data?.detail
-    const msg = typeof detail === 'string' ? detail : 'Erro ao sincronizar disciplinas'
+    const status = e?.response?.status as number | undefined
+    let msg: string
+    if (typeof detail === 'string') {
+      msg = detail
+    } else if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0]
+      const field = Array.isArray(first?.loc) ? (first.loc as string[]).slice(1).join('.') : ''
+      const errMsg = typeof first?.msg === 'string' ? first.msg : 'Erro de validação'
+      msg = field ? `${field}: ${errMsg}` : errMsg
+    } else {
+      msg = status ? `Erro ${status} ao sincronizar disciplinas` : 'Erro ao sincronizar disciplinas'
+    }
     $q.notify({ type: 'negative', message: msg })
   } finally {
     syncing.value = false
   }
+  if (ok) await load()
 }
 
 onMounted(async () => {
