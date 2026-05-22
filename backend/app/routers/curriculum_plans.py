@@ -74,6 +74,13 @@ class CopyYearLevelRequest(BaseModel):
     overwrite: bool = True
 
 
+class SyncFromEntriesRequest(BaseModel):
+    cluster_id: int
+    academic_year_id: int
+    year_levels: Optional[List[int]] = None  # None = all
+    overwrite: bool = True
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _parse_structure(ws: str):
@@ -87,6 +94,22 @@ def _parse_structure(ws: str):
     split_count = sum(parts)
     consecutive_pairs = sum(1 for p in parts if p >= 2)
     return split_count, consecutive_pairs, split_count > 1
+
+
+def _hours_to_structure(hours: float, subject_ws: Optional[str] = None) -> str:
+    """Pick a sensible weekly structure. Prefer subject default if set."""
+    if subject_ws and subject_ws != "1+1":
+        return subject_ws
+    h = round(hours * 2) / 2  # round to 0.5
+    if h <= 1:
+        return "1"
+    if h <= 2:
+        return "1+1"
+    if h <= 3:
+        return "2+1"
+    if h <= 4:
+        return "2+2"
+    return "1+1"
 
 
 def _plan_to_dict(p: CurriculumPlan) -> dict:
@@ -383,6 +406,113 @@ def copy_year_level(req: CopyYearLevelRequest, db: Session = Depends(get_db)):
             f"{copied} disciplina(s) copiada(s) do {req.from_year_level}.º ano "
             f"para o {req.to_year_level}.º ano."
             + (f" {skipped} já existiam (ignoradas)." if skipped else "")
+        ),
+    }
+
+
+@router.post("/sync-from-entries")
+def sync_from_entries(req: SyncFromEntriesRequest, db: Session = Depends(get_db)):
+    """Reverse-sync CurriculumPlan templates from actual CurriculumEntry records of the classes."""
+    from collections import Counter, defaultdict
+
+    school_ids = [s.id for s in db.query(School).filter(School.cluster_id == req.cluster_id).all()]
+    class_q = db.query(Class).filter(
+        Class.school_id.in_(school_ids),
+        Class.academic_year_id == req.academic_year_id,
+    )
+    if req.year_levels:
+        class_q = class_q.filter(Class.year_level.in_(req.year_levels))
+    classes = class_q.all()
+
+    if not classes:
+        return {"created": 0, "updated": 0, "message": "Nenhuma turma encontrada."}
+
+    class_ids = [c.id for c in classes]
+    class_yl = {c.id: c.year_level for c in classes}
+
+    entries = db.query(CurriculumEntry).filter(CurriculumEntry.class_id.in_(class_ids)).all()
+
+    if not entries:
+        return {"created": 0, "updated": 0, "message": "Nenhuma entrada curricular encontrada nas turmas."}
+
+    # Group by (year_level, subject_id)
+    groups: dict = defaultdict(list)
+    for e in entries:
+        yl = class_yl[e.class_id]
+        groups[(yl, e.subject_id)].append(e)
+
+    # Load subjects for weekly_structure defaults
+    subject_ids = {sid for (_, sid) in groups}
+    subjects_map = {
+        s.id: s
+        for s in db.query(Subject).filter(Subject.id.in_(subject_ids)).all()
+    }
+
+    created = updated = skipped = 0
+    for (yl, subject_id), group_entries in groups.items():
+        hours_list = [e.hours_per_week for e in group_entries]
+        most_common_hours = Counter(hours_list).most_common(1)[0][0]
+
+        subj_ws = subjects_map.get(subject_id, None)
+        ws = _hours_to_structure(most_common_hours, subj_ws.weekly_structure if subj_ws else None)
+
+        all_semestral = all(e.is_semestral for e in group_entries)
+        semester = None
+        paired_subject_id = None
+        if all_semestral:
+            semesters = [e.semester for e in group_entries if e.semester]
+            semester = Counter(semesters).most_common(1)[0][0] if semesters else None
+            paired_ids = []
+            for e in group_entries:
+                if e.paired_entry_id:
+                    pe = db.query(CurriculumEntry).filter(CurriculumEntry.id == e.paired_entry_id).first()
+                    if pe:
+                        paired_ids.append(pe.subject_id)
+            if paired_ids:
+                paired_subject_id = Counter(paired_ids).most_common(1)[0][0]
+
+        existing = db.query(CurriculumPlan).filter(
+            CurriculumPlan.cluster_id == req.cluster_id,
+            CurriculumPlan.academic_year_id == req.academic_year_id,
+            CurriculumPlan.year_level == yl,
+            CurriculumPlan.subject_id == subject_id,
+        ).first()
+
+        if existing:
+            if req.overwrite:
+                existing.hours_per_week = most_common_hours
+                existing.weekly_structure = ws
+                existing.is_semestral = all_semestral
+                existing.semester = semester if all_semestral else None
+                existing.paired_subject_id = paired_subject_id
+                updated += 1
+            else:
+                skipped += 1
+        else:
+            db.add(CurriculumPlan(
+                cluster_id=req.cluster_id,
+                academic_year_id=req.academic_year_id,
+                year_level=yl,
+                subject_id=subject_id,
+                hours_per_week=most_common_hours,
+                weekly_structure=ws,
+                is_semestral=all_semestral,
+                semester=semester if all_semestral else None,
+                paired_subject_id=paired_subject_id,
+            ))
+            created += 1
+
+    db.commit()
+    total = created + updated
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "message": (
+            f"{total} entrada(s) sincronizada(s) no plano curricular "
+            f"({created} nova(s), {updated} atualizada(s)"
+            + (f", {skipped} ignorada(s))" if skipped else ")")
+            + "."
         ),
     }
 

@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center q-mb-md">
+    <div class="row items-center q-mb-sm">
       <div class="text-h5 col">Turmas</div>
       <q-space />
       <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
@@ -8,6 +8,29 @@
       </q-input>
       <q-btn color="primary" icon="add" label="Nova" @click="openCreate" class="q-ml-sm" />
       <q-btn color="secondary" icon="upload" label="Importar Turmas" @click="showImport = true" class="q-ml-sm" />
+    </div>
+
+    <!-- Filters: school and year level -->
+    <div class="row items-center q-mb-md q-gutter-xs">
+      <div class="text-caption text-grey-6 q-mr-xs">Escola:</div>
+      <q-chip
+        v-for="school in schoolsStore.schools" :key="school.id"
+        clickable
+        :color="filterSchoolId === school.id ? 'primary' : 'grey-3'"
+        :text-color="filterSchoolId === school.id ? 'white' : 'dark'"
+        dense
+        @click="filterSchoolId = filterSchoolId === school.id ? null : school.id"
+      >{{ school.name }}</q-chip>
+      <q-separator vertical class="q-mx-sm" />
+      <div class="text-caption text-grey-6 q-mr-xs">Ano:</div>
+      <q-chip
+        v-for="yl in availableYearLevels" :key="yl"
+        clickable
+        :color="filterYearLevel === yl ? 'secondary' : 'grey-3'"
+        :text-color="filterYearLevel === yl ? 'white' : 'dark'"
+        dense
+        @click="filterYearLevel = filterYearLevel === yl ? null : yl"
+      >{{ yl }}.º</q-chip>
     </div>
 
     <ImportDialog
@@ -19,7 +42,7 @@
       @done="classesStore.fetchAll()"
     />
 
-    <q-table :rows="classesStore.classes" :columns="columns" row-key="id" :loading="classesStore.loading" :filter="search" sort-by="name">
+    <q-table :rows="filteredClasses" :columns="columns" row-key="id" :loading="classesStore.loading" :filter="search" sort-by="name">
       <template #body-cell-notes="props">
         <q-td :props="props">
           <span v-if="props.row.notes" class="text-caption text-grey-8">
@@ -162,8 +185,23 @@ const subjectsStore = useSubjectsStore()
 
 const search = ref('')
 const showImport = ref(false)
+const filterSchoolId = ref<number | null>(null)
+const filterYearLevel = ref<number | null>(null)
 const selectedSchoolId = computed(() => schoolsStore.schools[0]?.id ?? null)
 const selectedYearId = computed(() => yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null)
+
+const availableYearLevels = computed(() => {
+  const yls = new Set(classesStore.classes.map((c) => c.year_level))
+  return Array.from(yls).sort((a, b) => a - b)
+})
+
+const filteredClasses = computed(() => {
+  return classesStore.classes.filter((c) => {
+    if (filterSchoolId.value !== null && c.school_id !== filterSchoolId.value) return false
+    if (filterYearLevel.value !== null && c.year_level !== filterYearLevel.value) return false
+    return true
+  })
+})
 
 const columns = [
   { name: 'name', label: 'Nome', field: 'name', align: 'left' as const, sortable: true },

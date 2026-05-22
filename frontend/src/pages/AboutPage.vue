@@ -24,6 +24,30 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="sync" color="orange-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="orange-8" class="version-badge">v1.18.0</q-badge>
+                  Sincronização do Plano Curricular + Filtros de Turmas
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="sync" size="xs" color="orange-8" />
+                  Novo botão <strong>Sincronizar das turmas</strong> em Planos Curriculares: preenche o plano com base nas disciplinas já atribuídas às turmas (inverso do "Aplicar às turmas") — resolve o desfasamento entre plano e currículo real das turmas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="filter_list" size="xs" color="orange-8" />
+                  Em <strong>Turmas</strong>, novos filtros rápidos por escola e por ano de escolaridade para encontrar turmas facilmente em agrupamentos grandes
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="call_split" color="secondary">
               <template #title>
                 <span class="version-title">

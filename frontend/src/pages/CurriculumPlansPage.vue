@@ -40,6 +40,17 @@
         />
         <q-space />
         <q-btn
+          icon="sync"
+          label="Sincronizar das turmas"
+          color="orange-8"
+          outline
+          :disable="!selectedCluster || !selectedYear"
+          :loading="syncing"
+          @click="syncFromEntries"
+        >
+          <q-tooltip>Preenche o plano curricular com base nas disciplinas já atribuídas às turmas</q-tooltip>
+        </q-btn>
+        <q-btn
           icon="content_copy"
           label="Copiar para outro ano"
           color="teal-7"
@@ -404,6 +415,7 @@ const copyingYL = ref(false)
 
 const applyResultDialog = ref(false)
 const applyResultMsg = ref('')
+const syncing = ref(false)
 
 const entryForm = ref({
   subject_id: null as number | null,
@@ -619,6 +631,31 @@ async function applyPlan(yl: number) {
       applyResultDialog.value = true
     } catch (e: any) {
       $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Erro ao aplicar plano.' })
+    }
+  })
+}
+
+async function syncFromEntries() {
+  $q.dialog({
+    title: 'Sincronizar plano das turmas',
+    message: 'Isto vai preencher (ou atualizar) o plano curricular com base nas disciplinas já atribuídas às turmas. Entradas existentes no plano serão atualizadas. Continuar?',
+    cancel: true,
+    ok: { label: 'Sincronizar', color: 'orange-8' },
+  }).onOk(async () => {
+    syncing.value = true
+    try {
+      const res = await axios.post(`${API}/curriculum-plans/sync-from-entries`, {
+        cluster_id: selectedCluster.value,
+        academic_year_id: selectedYear.value,
+        overwrite: true,
+      }, { headers: headers() })
+      await loadPlans()
+      applyResultMsg.value = res.data.message
+      applyResultDialog.value = true
+    } catch (e: any) {
+      $q.notify({ type: 'negative', message: e.response?.data?.detail || 'Erro ao sincronizar.' })
+    } finally {
+      syncing.value = false
     }
   })
 }
