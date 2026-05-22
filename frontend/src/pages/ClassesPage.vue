@@ -29,7 +29,9 @@
       </template>
       <template #body-cell-actions="props">
         <q-td :props="props">
-          <q-btn unelevated size="sm" color="primary" icon="menu_book" label="Currículo" @click="openCurriculum(props.row)" class="q-mr-xs" />
+          <q-btn unelevated size="sm" color="secondary" icon="call_split" label="Turnos" @click="openGroups(props.row)" class="q-mr-xs">
+            <q-tooltip>Gerir grupos/turnos de disciplinas simultâneas desta turma</q-tooltip>
+          </q-btn>
           <q-btn unelevated size="sm" color="grey-6" icon="edit" label="Editar" @click="openEdit(props.row)" class="q-mr-xs" />
           <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="confirmDelete(props.row)" />
         </q-td>
@@ -57,61 +59,70 @@
       </q-card>
     </q-dialog>
 
-    <!-- Curriculum dialog -->
-    <q-dialog v-model="curriculumDialog" full-width>
-      <q-card>
-        <q-card-section class="row items-center">
-          <div class="text-h6">Currículo: {{ selectedClass?.name }}</div>
+    <!-- Groups/Turnos dialog -->
+    <q-dialog v-model="groupsDialog" full-width>
+      <q-card style="max-width:860px;width:100%">
+        <q-card-section class="row items-center bg-secondary text-white">
+          <div>
+            <div class="text-h6"><q-icon name="call_split" class="q-mr-sm" />Turnos e Grupos — {{ selectedClass?.name }}</div>
+            <div class="text-caption opacity-80">Disciplinas que ocorrem em simultâneo para subgrupos da turma</div>
+          </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-card-section>
-          <q-table :rows="curriculumEntries" :columns="currColumns" row-key="id" dense flat>
-            <template #top>
-              <q-btn color="primary" icon="add" label="Adicionar disciplina" @click="openAddEntry" />
-            </template>
-            <template #body-cell-subject="props">
-              <q-td :props="props">{{ subjectName(props.row.subject_id) }}</q-td>
-            </template>
-            <template #body-cell-semestral="props">
-              <q-td :props="props">
-                <q-badge v-if="props.row.is_semestral" :color="props.row.semester === 1 ? 'blue-7' : 'orange-7'" :label="props.row.semester === 1 ? '1.º Sem' : '2.º Sem'" />
-              </q-td>
-            </template>
-            <template #body-cell-paired="props">
-              <q-td :props="props">
-                <span v-if="props.row.paired_entry_id" class="text-caption text-positive">
-                  ⇄ {{ pairedSubjectName(props.row.paired_entry_id) }}
-                </span>
-              </q-td>
-            </template>
-            <template #body-cell-actions="props">
-              <q-td :props="props">
-                <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="removeEntry(props.row.id)" />
-              </q-td>
-            </template>
-          </q-table>
 
-          <q-separator class="q-my-md" />
-          <div class="row items-center q-mb-sm">
-            <div class="text-subtitle2 col">Turnos (Grupos de Disciplinas Simultâneas)</div>
-            <q-btn color="secondary" icon="call_split" size="sm" label="Novo Turno" @click="openAddGroup" />
+        <q-card-section>
+          <!-- Curriculum read-only — redirects to plans for editing -->
+          <q-banner dense rounded class="bg-blue-1 text-blue-10 q-mb-md">
+            <template #avatar><q-icon name="menu_book" color="blue-7" /></template>
+            Para adicionar, editar ou remover disciplinas desta turma, usa
+            <router-link to="/curriculum-plans" class="text-blue-9 text-weight-medium" @click="groupsDialog = false">
+              Planos Curriculares
+            </router-link>.
+            A lista abaixo é apenas de consulta.
+          </q-banner>
+
+          <div class="text-subtitle2 q-mb-xs text-grey-8">Disciplinas desta turma</div>
+          <div v-if="curriculumEntries.length === 0" class="text-caption text-grey-5 q-mb-md q-py-sm">
+            Nenhuma disciplina atribuída — aplica um plano curricular primeiro.
           </div>
-          <div v-if="subjectGroups.length === 0" class="text-caption text-grey-6 q-mb-sm">
+          <div v-else class="row q-gutter-xs q-mb-md flex-wrap">
+            <q-chip
+              v-for="e in curriculumEntries" :key="e.id"
+              dense square size="sm"
+              color="grey-2" text-color="dark"
+            >
+              {{ subjectName(e.subject_id) }}
+              <span class="text-grey-6 q-ml-xs">{{ e.hours_per_week }}h</span>
+              <q-badge v-if="e.is_semestral" :color="e.semester === 1 ? 'blue-7' : 'orange-7'"
+                class="q-ml-xs" :label="e.semester === 1 ? '1.ºS' : '2.ºS'" />
+            </q-chip>
+          </div>
+
+          <q-separator class="q-mb-md" />
+
+          <!-- Subject groups / turnos -->
+          <div class="row items-center q-mb-sm">
+            <div class="text-subtitle2 col">Turnos (grupos de disciplinas simultâneas)</div>
+            <q-btn color="secondary" icon="add" size="sm" label="Novo turno" unelevated @click="openAddGroup" />
+          </div>
+          <div v-if="subjectGroups.length === 0" class="text-caption text-grey-6 q-py-sm">
             Nenhum turno definido. Use turnos quando metade da turma tem uma disciplina e a outra metade tem outra ao mesmo tempo (ex: CN e FQ em laboratório).
           </div>
-          <div v-for="group in subjectGroups" :key="group.id" class="q-mb-xs">
-            <div class="row items-center">
-              <q-icon name="call_split" class="q-mr-xs text-secondary" />
-              <span class="text-body2 q-mr-sm">{{ group.name }}</span>
-              <q-chip v-for="ge in group.entries" :key="ge.id" dense removable @remove="removeGroupEntry(group.id, ge.id)"
-                color="secondary" text-color="white" size="sm">
-                {{ entrySubjectName(ge.curriculum_entry_id) }}
-              </q-chip>
-              <q-btn unelevated size="sm" color="secondary" icon="add_circle" label="Adicionar" @click="openAddEntryToGroup(group)" />
-              <q-space />
-              <q-btn unelevated size="sm" color="negative" icon="delete" label="Apagar" @click="deleteGroup(group.id)" />
-            </div>
+          <div v-for="group in subjectGroups" :key="group.id" class="q-mb-xs row items-center">
+            <q-icon name="call_split" class="q-mr-xs text-secondary" />
+            <span class="text-body2 q-mr-sm">{{ group.name }}</span>
+            <q-chip
+              v-for="ge in group.entries" :key="ge.id"
+              dense removable
+              @remove="removeGroupEntry(group.id, ge.id)"
+              color="secondary" text-color="white" size="sm"
+            >
+              {{ entrySubjectName(ge.curriculum_entry_id) }}
+            </q-chip>
+            <q-btn unelevated size="sm" color="secondary" icon="add_circle" label="Adicionar" @click="openAddEntryToGroup(group)" class="q-ml-xs" />
+            <q-space />
+            <q-btn flat size="sm" color="negative" icon="delete" label="Apagar turno" @click="deleteGroup(group.id)" />
           </div>
         </q-card-section>
       </q-card>
@@ -127,83 +138,6 @@
             <q-btn flat label="Cancelar" v-close-popup />
             <q-btn color="secondary" label="Adicionar" @click="addEntryToGroup" />
           </div>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
-
-    <!-- Add curriculum entry dialog -->
-    <q-dialog v-model="addEntryDialog">
-      <q-card style="min-width: 350px">
-        <q-card-section><div class="text-h6">Adicionar Disciplina</div></q-card-section>
-        <q-card-section>
-          <q-form @submit="addEntry">
-            <q-select
-              v-model="entryForm.subject_id"
-              :options="subjectOptions"
-              label="Disciplina *"
-              emit-value map-options
-              :rules="[v => !!v || 'Obrigatório']"
-              @update:model-value="onSubjectChange"
-            />
-            <q-input v-model.number="entryForm.hours_per_week" label="Horas/semana *" type="number" step="0.5" min="0.5" :rules="[v => v > 0 || 'Obrigatório']" />
-            <q-checkbox v-model="entryForm.is_split" label="Aula dividida?" />
-            <q-input v-if="entryForm.is_split" v-model.number="entryForm.split_count" label="Nº de partes" type="number" min="2" />
-            <q-input
-              v-if="entryForm.is_split && entryForm.split_count > 1"
-              v-model.number="entryForm.consecutive_pairs"
-              label="Pares consecutivos (blocos de 2)"
-              type="number"
-              min="0"
-              :max="Math.floor(entryForm.split_count / 2)"
-              hint="Quantas das partes devem ser dadas em bloco (2 tempos consecutivos)."
-            />
-            <q-separator class="q-my-sm" />
-            <div class="text-caption text-weight-medium q-mb-xs">
-              <q-icon name="event" class="q-mr-xs" />Regime Semestral
-            </div>
-            <q-checkbox v-model="entryForm.is_semestral" label="Disciplina semestral?" />
-            <template v-if="entryForm.is_semestral">
-              <q-select
-                v-model="entryForm.semester"
-                :options="semesterOptions"
-                label="Semestre *"
-                emit-value
-                map-options
-                class="q-mt-sm"
-              />
-              <q-banner
-                v-if="entryForm.semester"
-                dense
-                rounded
-                :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1 text-blue-10'" class="q-mt-sm q-mb-xs"
-              >
-                <template #avatar><q-icon name="info" color="blue-7" /></template>
-                Disciplina semestral: ocorre apenas no {{ entryForm.semester === 1 ? '1.º' : '2.º' }} semestre. Para emparelhamento, selecione a disciplina que ocorre no outro semestre no mesmo horário.
-              </q-banner>
-              <q-select
-                v-model="entryForm.paired_entry_id"
-                :options="semestralEntryOptions"
-                label="Emparelhar com (outro semestre no mesmo horário)"
-                emit-value
-                map-options
-                clearable
-                class="q-mt-sm"
-                hint="Selecione a disciplina que ocorre no outro semestre no mesmo horário."
-              />
-            </template>
-            <q-separator class="q-my-sm" />
-            <div class="text-caption text-weight-medium q-mb-xs">
-              <q-icon name="call_split" class="q-mr-xs" />Turno / Desdobramento
-            </div>
-            <q-banner dense rounded :class="$q.dark.isActive ? 'bg-blue-9' : 'bg-blue-1 text-blue-10'" class="q-mb-sm" v-if="entryForm.is_split">
-              <template #avatar><q-icon name="info" color="blue-7" /></template>
-              Para turnos (ex: metade da turma em CN, outra em FQ ao mesmo tempo), configure o emparelhamento semestral acima ou use os Grupos de Disciplinas.
-            </q-banner>
-            <div class="row justify-end q-mt-md q-gutter-sm">
-              <q-btn flat label="Cancelar" v-close-popup />
-              <q-btn type="submit" color="primary" label="Adicionar" />
-            </div>
-          </q-form>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -239,77 +173,19 @@ const columns = [
   { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
 ]
 
-const currColumns = [
-  { name: 'subject', label: 'Disciplina', field: 'subject_id', align: 'left' as const },
-  { name: 'hours_per_week', label: 'Horas/sem', field: 'hours_per_week', align: 'center' as const },
-  { name: 'split_count', label: 'Partes', field: 'split_count', align: 'center' as const },
-  { name: 'semestral', label: 'Semestre', field: 'semester', align: 'center' as const },
-  { name: 'paired', label: 'Par c/ semestre oposto', field: 'paired_entry_id', align: 'left' as const },
-  { name: 'actions', label: 'Ações', field: 'actions', align: 'center' as const },
-]
-
 const dialog = ref(false)
 const editing = ref<null | SchoolClass>(null)
 const form = ref({ school_id: null as number | null, academic_year_id: null as number | null, name: '', year_level: 5, num_students: 25, notes: '' })
 
-const curriculumDialog = ref(false)
-const addEntryDialog = ref(false)
+const groupsDialog = ref(false)
 const selectedClass = ref<SchoolClass | null>(null)
 const curriculumEntries = ref<CurriculumEntry[]>([])
-const entryForm = ref({
-  subject_id: null as number | null,
-  hours_per_week: 2,
-  is_split: false,
-  split_count: 2,
-  consecutive_pairs: 0,
-  is_semestral: false,
-  semester: null as number | null,
-  paired_entry_id: null as number | null,
-  _editingId: undefined as number | undefined,
-})
 
 const schoolOptions = computed(() => schoolsStore.schools.map((s) => ({ label: s.name, value: s.id })))
 const yearOptions = computed(() => yearsStore.years.map((y) => ({ label: y.name, value: y.id })))
-const subjectOptions = computed(() => subjectsStore.subjects.map((s) => ({ label: s.name, value: s.id })))
-
-const STRUCT_DEFAULTS: Record<string, { split_count: number; consecutive_pairs: number }> = {
-  '1':     { split_count: 1, consecutive_pairs: 0 },
-  '1+1':   { split_count: 2, consecutive_pairs: 0 },
-  '2':     { split_count: 2, consecutive_pairs: 1 },
-  '2+1':   { split_count: 3, consecutive_pairs: 1 },
-  '1+1+1': { split_count: 3, consecutive_pairs: 0 },
-}
-
-function onSubjectChange(subjectId: number | null) {
-  const subj = subjectsStore.subjects.find((s) => s.id === subjectId)
-  if (!subj) return
-  const d = STRUCT_DEFAULTS[subj.weekly_structure] ?? { split_count: 2, consecutive_pairs: 0 }
-  entryForm.value.split_count = d.split_count
-  entryForm.value.consecutive_pairs = d.consecutive_pairs
-  entryForm.value.is_split = d.split_count > 1
-  entryForm.value.is_semestral = subj.regime === 'semestral'
-  entryForm.value.semester = subj.default_semester ?? null
-}
-
-const semesterOptions = [
-  { label: '1.º Semestre', value: 1 },
-  { label: '2.º Semestre', value: 2 },
-]
-
-// Semestral entries of the selected class that can be paired
-const semestralEntryOptions = computed(() =>
-  curriculumEntries.value
-    .filter((e) => e.is_semestral && e.id !== undefined && e.id !== entryForm.value._editingId)
-    .map((e) => ({ label: subjectName(e.subject_id), value: e.id }))
-)
 
 function subjectName(id: number) {
   return subjectsStore.subjects.find((s) => s.id === id)?.name ?? '—'
-}
-
-function pairedSubjectName(entryId: number) {
-  const e = curriculumEntries.value.find(e => e.id === entryId)
-  return e ? subjectName(e.subject_id) : '?'
 }
 
 // Subject groups (turnos)
@@ -415,68 +291,11 @@ async function save() {
   }
 }
 
-async function openCurriculum(row: SchoolClass) {
+async function openGroups(row: SchoolClass) {
   selectedClass.value = row
   curriculumEntries.value = await classesStore.fetchCurriculum(row.id)
   await loadSubjectGroups()
-  curriculumDialog.value = true
-}
-
-function openAddEntry() {
-  entryForm.value = {
-    subject_id: null,
-    hours_per_week: 2,
-    is_split: false,
-    split_count: 2,
-    consecutive_pairs: 0,
-    is_semestral: false,
-    semester: null,
-    paired_entry_id: null,
-    _editingId: undefined,
-  }
-  addEntryDialog.value = true
-}
-
-async function addEntry() {
-  if (!selectedClass.value || !entryForm.value.subject_id) return
-  try {
-    const payload = {
-      subject_id: entryForm.value.subject_id,
-      hours_per_week: entryForm.value.hours_per_week,
-      is_split: entryForm.value.is_split,
-      split_count: entryForm.value.split_count,
-      consecutive_pairs: entryForm.value.consecutive_pairs,
-      is_semestral: entryForm.value.is_semestral,
-      semester: entryForm.value.is_semestral ? entryForm.value.semester : null,
-      paired_entry_id: entryForm.value.is_semestral ? entryForm.value.paired_entry_id : null,
-      class_id: selectedClass.value.id,
-    }
-    const entry = await classesStore.addCurriculumEntry(selectedClass.value.id, payload)
-    curriculumEntries.value.push(entry)
-    // Bidirectional pairing: also set paired_entry_id on the other entry
-    if (payload.paired_entry_id) {
-      const updated = await classesStore.updateCurriculumEntry(payload.paired_entry_id, { paired_entry_id: entry.id })
-      const idx = curriculumEntries.value.findIndex(e => e.id === payload.paired_entry_id)
-      if (idx !== -1) curriculumEntries.value[idx] = updated
-    }
-    addEntryDialog.value = false
-    $q.notify({ type: 'positive', message: 'Disciplina adicionada' })
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao adicionar' })
-  }
-}
-
-async function removeEntry(entryId: number) {
-  const entry = curriculumEntries.value.find(e => e.id === entryId)
-  // Clear bidirectional pairing before removing
-  if (entry?.paired_entry_id) {
-    const updated = await classesStore.updateCurriculumEntry(entry.paired_entry_id, { paired_entry_id: null })
-    const idx = curriculumEntries.value.findIndex(e => e.id === entry.paired_entry_id)
-    if (idx !== -1) curriculumEntries.value[idx] = updated
-  }
-  await classesStore.removeCurriculumEntry(entryId)
-  curriculumEntries.value = curriculumEntries.value.filter((e) => e.id !== entryId)
-  $q.notify({ type: 'positive', message: 'Removida' })
+  groupsDialog.value = true
 }
 
 function confirmDelete(row: SchoolClass) {

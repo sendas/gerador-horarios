@@ -24,6 +24,30 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="call_split" color="secondary">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="secondary" class="version-badge">v1.17.0</q-badge>
+                  Separação clara entre Currículo e Turnos
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="menu_book" size="xs" color="secondary" />
+                  <strong>Planos Curriculares</strong> é agora a única fonte de verdade para definir, editar e remover disciplinas das turmas
+                </div>
+                <div class="feature-item">
+                  <q-icon name="call_split" size="xs" color="secondary" />
+                  Em <strong>Turmas</strong>, o botão "Currículo" passou a "Turnos" — gere apenas grupos de disciplinas simultâneas (turnos). O currículo da turma é visível em modo de leitura com ligação direta aos Planos Curriculares
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="group" color="indigo-7">
               <template #title>
                 <span class="version-title">
