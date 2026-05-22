@@ -53,7 +53,7 @@
             </div>
           </div>
 
-          <div class="brand-version">v1.0.0</div>
+          <div class="brand-version">v1.13.0</div>
         </div>
       </div>
 
@@ -283,9 +283,9 @@ async function handleDemo() {
 }
 
 .brand-tagline {
-  font-size: 1.15rem;
-  line-height: 1.55;
-  opacity: 0.9;
+  font-size: 1.45rem;
+  line-height: 1.5;
+  opacity: 0.92;
   margin-bottom: 40px;
   font-weight: 300;
 }
