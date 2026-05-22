@@ -21,6 +21,34 @@ def list_classes(school_id: int = None, academic_year_id: int = None, db: Sessio
     return q.all()
 
 
+@router.get("/curriculum-overview")
+def curriculum_overview(cluster_id: int, academic_year_id: int, db: Session = Depends(get_db)):
+    """All curriculum entries in a cluster/year with class, subject and assigned teacher."""
+    schools = db.query(School).filter(School.cluster_id == cluster_id).all()
+    school_map = {s.id: s for s in schools}
+    school_ids = [s.id for s in schools]
+    entries = (
+        db.query(CurriculumEntry)
+        .join(Class, CurriculumEntry.class_id == Class.id)
+        .filter(Class.school_id.in_(school_ids), Class.academic_year_id == academic_year_id)
+        .order_by(Class.year_level, Class.name)
+        .all()
+    )
+    return [{
+        "id": e.id,
+        "class_id": e.class_id,
+        "class_name": e.class_.name if e.class_ else "",
+        "year_level": e.class_.year_level if e.class_ else 0,
+        "school_id": e.class_.school_id if e.class_ else None,
+        "school_name": school_map.get(e.class_.school_id, None).name if e.class_ and e.class_.school_id in school_map else "",
+        "subject_id": e.subject_id,
+        "subject_name": e.subject.name if e.subject else "",
+        "hours_per_week": e.hours_per_week,
+        "teacher_id": e.teacher_id,
+        "teacher_name": e.teacher.name if e.teacher else None,
+    } for e in entries]
+
+
 @router.post("", response_model=ClassResponse, status_code=201)
 def create_class(data: ClassCreate, db: Session = Depends(get_db)):
     obj = Class(**data.model_dump())
@@ -120,31 +148,3 @@ def delete_curriculum_entry(entry_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Curriculum entry not found")
     db.delete(obj)
     db.commit()
-
-
-@router.get("/curriculum-overview")
-def curriculum_overview(cluster_id: int, academic_year_id: int, db: Session = Depends(get_db)):
-    """All curriculum entries in a cluster/year with class, subject and assigned teacher."""
-    schools = db.query(School).filter(School.cluster_id == cluster_id).all()
-    school_map = {s.id: s for s in schools}
-    school_ids = [s.id for s in schools]
-    entries = (
-        db.query(CurriculumEntry)
-        .join(Class, CurriculumEntry.class_id == Class.id)
-        .filter(Class.school_id.in_(school_ids), Class.academic_year_id == academic_year_id)
-        .order_by(Class.year_level, Class.name)
-        .all()
-    )
-    return [{
-        "id": e.id,
-        "class_id": e.class_id,
-        "class_name": e.class_.name if e.class_ else "",
-        "year_level": e.class_.year_level if e.class_ else 0,
-        "school_id": e.class_.school_id if e.class_ else None,
-        "school_name": school_map.get(e.class_.school_id, None).name if e.class_ and e.class_.school_id in school_map else "",
-        "subject_id": e.subject_id,
-        "subject_name": e.subject.name if e.subject else "",
-        "hours_per_week": e.hours_per_week,
-        "teacher_id": e.teacher_id,
-        "teacher_name": e.teacher.name if e.teacher else None,
-    } for e in entries]
