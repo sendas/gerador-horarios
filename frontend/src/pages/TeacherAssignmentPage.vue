@@ -6,50 +6,6 @@
       <q-chip v-if="unassignedCount > 0" color="warning" text-color="dark" icon="warning" :label="`${unassignedCount} sem professor`" />
       <q-chip v-else-if="allEntries.length > 0" color="positive" text-color="white" icon="check_circle" label="Todos atribuídos" />
 
-      <q-btn-dropdown unelevated color="teal" icon="auto_fix_high" label="Preencher auto" :loading="bulkRunning" dense>
-        <q-list>
-          <q-item clickable v-close-popup @click="startAutoFill(getVisibleClassIds())">
-            <q-item-section avatar><q-icon name="done_all" color="teal" /></q-item-section>
-            <q-item-section>
-              <q-item-label>Preencher todos visíveis</q-item-label>
-              <q-item-label caption>{{ getVisibleClassIds().length }} turmas</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item clickable v-close-popup @click="showYearFillDialog = true">
-            <q-item-section avatar><q-icon name="filter_list" color="teal" /></q-item-section>
-            <q-item-section><q-item-label>Por ano de escolaridade...</q-item-label></q-item-section>
-          </q-item>
-          <q-separator />
-          <q-item clickable v-close-popup @click="startAutoFill([...selectedClassIds])" :disable="selectedClassIds.size === 0">
-            <q-item-section avatar><q-icon name="checklist" color="teal" /></q-item-section>
-            <q-item-section>
-              <q-item-label>Preencher selecionados</q-item-label>
-              <q-item-label caption>{{ selectedClassIds.size }} turma(s)</q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-btn-dropdown>
-
-      <q-btn-dropdown unelevated color="grey-7" icon="person_remove" label="Limpar" :loading="bulkRunning" dense>
-        <q-list>
-          <q-item clickable v-close-popup @click="confirmClear(getVisibleClassIds())">
-            <q-item-section avatar><q-icon name="remove_done" color="grey-7" /></q-item-section>
-            <q-item-section>
-              <q-item-label>Limpar todos visíveis</q-item-label>
-              <q-item-label caption>{{ getVisibleClassIds().length }} turmas</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-separator />
-          <q-item clickable v-close-popup @click="confirmClear([...selectedClassIds])" :disable="selectedClassIds.size === 0">
-            <q-item-section avatar><q-icon name="checklist" color="grey-7" /></q-item-section>
-            <q-item-section>
-              <q-item-label>Limpar selecionados</q-item-label>
-              <q-item-label caption>{{ selectedClassIds.size }} turma(s)</q-item-label>
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-btn-dropdown>
-
       <q-btn
         flat dense round icon="analytics"
         :color="showHoursPanel ? 'teal-7' : 'grey-5'"
@@ -92,12 +48,7 @@
         <q-input v-model="classSearch" dense outlined clearable placeholder="Pesquisar turma..." class="q-mb-xs">
           <template #prepend><q-icon name="search" /></template>
         </q-input>
-        <div class="row items-center q-mb-xs q-gutter-xs">
-          <q-btn flat dense size="xs" icon="select_all" label="Selec. todos" color="teal" @click="selectAllVisible" />
-          <q-btn v-if="selectedClassIds.size > 0" flat dense size="xs" icon="deselect" label="Limpar sel." color="grey-6" @click="selectedClassIds.clear()" />
-          <q-space />
-          <q-badge v-if="selectedClassIds.size > 0" color="teal" :label="`${selectedClassIds.size} sel.`" />
-        </div>
+
         <q-list bordered separator style="border-radius:6px;overflow:hidden">
           <template v-for="group in classesGrouped" :key="group.school_id">
             <q-item-label header class="bg-grey-2 text-grey-8 text-caption text-weight-bold q-py-xs">
@@ -110,17 +61,13 @@
               active-color="primary"
               @click="selectClass(cls.id)"
             >
-              <q-item-section avatar style="min-width:32px">
-                <q-checkbox :model-value="selectedClassIds.has(cls.id)" dense size="sm" color="teal"
-                  @click.stop @update:model-value="toggleClassSelection(cls.id)" />
-              </q-item-section>
               <q-item-section>
                 <q-item-label>{{ cls.name }}</q-item-label>
                 <q-item-label caption>{{ cls.year_level }}.º ano</q-item-label>
               </q-item-section>
               <q-item-section side>
                 <q-badge v-if="countUnassigned(cls.id) > 0" color="warning" text-color="dark" :label="countUnassigned(cls.id)" />
-                <q-badge v-else-if="(entriesByClassId[cls.id]?.length ?? 0) > 0" color="positive" icon="check" label="" />
+                <q-icon v-else-if="(entriesByClassId[cls.id]?.length ?? 0) > 0" name="check_circle" color="positive" size="sm" />
               </q-item-section>
             </q-item>
           </template>
@@ -136,29 +83,40 @@
       <div :class="showHoursPanel ? 'col-12 col-md-5' : 'col-12 col-md-9'">
         <div v-if="!selectedClassId" class="text-center text-grey q-pa-xl">
           <q-icon name="group" size="64px" color="grey-3" />
-          <div class="q-mt-sm">Selecione uma turma para gerir as disciplinas e professores</div>
+          <div class="q-mt-sm">Selecione uma turma para atribuir professores</div>
         </div>
+
         <template v-else>
           <div class="row items-center q-mb-md">
             <div class="text-h6 col">
               <q-icon name="group" color="primary" class="q-mr-xs" />
               {{ selectedClass?.name }}
               <q-badge color="grey-5" :label="`${selectedEntries.length} disciplinas`" class="q-ml-sm" />
+              <q-badge
+                v-if="countUnassigned(selectedClassId) > 0"
+                color="warning" text-color="dark"
+                :label="`${countUnassigned(selectedClassId)} sem professor`"
+                class="q-ml-xs"
+              />
             </div>
             <q-btn color="primary" icon="add" label="Adicionar disciplina" dense unelevated @click="openAddSubject" />
           </div>
+
           <q-card flat bordered>
             <q-list separator>
               <q-item v-if="!selectedEntries.length" class="text-grey-5 text-caption">
                 <q-item-section>Sem disciplinas. Adicione disciplinas com o botão acima.</q-item-section>
               </q-item>
+
               <q-item v-for="entry in selectedEntries" :key="entry.id" class="q-py-sm">
                 <q-item-section>
-                  <div class="row items-center q-gutter-xs q-mb-xs">
+                  <div class="row items-center q-gutter-xs q-mb-sm">
                     <span class="text-weight-medium">{{ entry.subject_name }}</span>
                     <q-badge color="blue-2" text-color="dark" :label="`${entry.hours_per_week}h/sem`" />
                   </div>
+
                   <div class="row items-center q-gutter-sm flex-wrap">
+                    <!-- Current teacher chip (removable) -->
                     <q-chip
                       v-if="entry.teacher_id"
                       dense removable color="positive" text-color="white" icon="person"
@@ -168,6 +126,8 @@
                     <span v-else class="text-caption text-orange-8">
                       <q-icon name="person_off" size="xs" /> Sem professor
                     </span>
+
+                    <!-- Teacher selector -->
                     <q-select
                       :model-value="null"
                       :options="teacherOptsForSubject(entry.subject_id)"
@@ -175,7 +135,7 @@
                       dense outlined use-input input-debounce="0"
                       @filter="(val, update) => filterTeachersForSubject(val, update, entry.subject_id)"
                       :placeholder="entry.teacher_id ? 'Substituir...' : 'Atribuir professor...'"
-                      style="min-width:210px"
+                      style="min-width:220px"
                       clearable
                       @update:model-value="(v) => { if (v) assignTeacher(entry, v) }"
                     >
@@ -195,11 +155,14 @@
                         </q-item>
                       </template>
                       <template #no-option>
-                        <q-item><q-item-section class="text-grey-6 text-caption">Nenhum professor leciona esta disciplina</q-item-section></q-item>
+                        <q-item>
+                          <q-item-section class="text-grey-6 text-caption">Nenhum professor leciona esta disciplina</q-item-section>
+                        </q-item>
                       </template>
                     </q-select>
                   </div>
                 </q-item-section>
+
                 <q-item-section side top>
                   <q-btn flat round dense icon="delete" color="negative" size="sm" @click="deleteEntry(entry)" />
                 </q-item-section>
@@ -219,6 +182,7 @@
               <q-badge color="white" text-color="teal-9" :label="`${teacherHoursPanel.length} docentes`" />
             </div>
           </q-card-section>
+
           <q-card-section class="q-pa-sm q-pb-xs">
             <q-input v-model="teacherPanelSearch" dense outlined clearable placeholder="Filtrar docente..." class="q-mb-xs">
               <template #prepend><q-icon name="search" size="xs" /></template>
@@ -237,17 +201,15 @@
               size="xs"
             />
           </q-card-section>
+
           <q-separator />
-          <q-scroll-area style="height:540px">
+
+          <q-scroll-area style="height:560px">
             <q-list dense>
-              <q-item
-                v-for="t in filteredTeacherHoursPanel"
-                :key="t.id"
-                class="q-py-xs"
-              >
+              <q-item v-for="t in filteredTeacherHoursPanel" :key="t.id" class="q-py-xs">
                 <q-item-section>
                   <div class="row items-center no-wrap q-mb-xs">
-                    <span class="text-body2 text-weight-medium col ellipsis" style="max-width:160px">{{ t.name }}</span>
+                    <span class="text-body2 text-weight-medium col ellipsis" style="max-width:165px">{{ t.name }}</span>
                     <q-badge
                       class="q-ml-xs"
                       :color="t.remaining < 0 ? 'negative' : t.remaining === 0 ? 'positive' : t.remaining <= 2 ? 'warning' : 'blue-3'"
@@ -318,39 +280,6 @@
         </q-card-section>
       </q-card>
     </q-dialog>
-
-    <!-- Year level auto-fill dialog -->
-    <q-dialog v-model="showYearFillDialog">
-      <q-card style="min-width:380px">
-        <q-card-section class="row items-center">
-          <div class="text-h6"><q-icon name="filter_list" class="q-mr-xs" color="teal" />Preencher por ano</div>
-          <q-space /><q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-        <q-card-section>
-          <div class="text-caption text-grey-7 q-mb-sm">Selecione os anos de escolaridade:</div>
-          <div class="row q-gutter-sm flex-wrap">
-            <q-chip
-              v-for="yl in availableYearLevels" :key="yl"
-              clickable dense square
-              :color="fillYearLevels.has(yl) ? 'teal' : 'grey-3'"
-              :text-color="fillYearLevels.has(yl) ? 'white' : 'dark'"
-              :icon="fillYearLevels.has(yl) ? 'check' : 'radio_button_unchecked'"
-              @click="toggleFillYear(yl)"
-            >{{ yl }}.º ano</q-chip>
-          </div>
-          <div class="text-caption text-grey-6 q-mt-sm">
-            <q-icon name="info" size="xs" class="q-mr-xs" />Só preenche entradas sem professor.
-          </div>
-        </q-card-section>
-        <q-card-section class="row justify-end q-gutter-sm">
-          <q-btn flat label="Cancelar" v-close-popup />
-          <q-btn color="teal" icon="auto_fix_high" label="Preencher"
-            :disable="fillYearLevels.size === 0" :loading="bulkRunning"
-            @click="startAutoFillByYear"
-          />
-        </q-card-section>
-      </q-card>
-    </q-dialog>
   </q-page>
 </template>
 
@@ -389,22 +318,16 @@ type TeacherOpt = { label: string; name: string; value: number; remaining: numbe
 
 // ── State ──────────────────────────────────────────────────────────────────
 const loading = ref(false)
-const bulkRunning = ref(false)
 const selectedYearId = ref<number | null>(null)
 const selectedClassId = ref<number | null>(null)
 const classSearch = ref('')
 const selectedSchoolIds = reactive(new Set<number>())
-const selectedClassIds = reactive(new Set<number>())
 const allEntries = ref<Entry[]>([])
 
 // Teacher hours panel
 const showHoursPanel = ref(true)
 const teacherPanelSearch = ref('')
 const teacherPanelFilter = ref<'all' | 'incomplete' | 'done' | 'over'>('all')
-
-// Year-level fill dialog
-const showYearFillDialog = ref(false)
-const fillYearLevels = reactive(new Set<number>())
 
 // Add subject dialog
 const showAddSubject = ref(false)
@@ -494,9 +417,7 @@ function teacherHoursInfo(t: Teacher) {
 }
 
 const teacherHoursPanel = computed(() =>
-  teachersStore.teachers
-    .map(teacherHoursInfo)
-    .sort((a, b) => a.remaining - b.remaining)
+  teachersStore.teachers.map(teacherHoursInfo).sort((a, b) => a.remaining - b.remaining)
 )
 
 const filteredTeacherHoursPanel = computed(() => {
@@ -512,8 +433,7 @@ const filteredTeacherHoursPanel = computed(() => {
 
 // ── Teacher select helpers ─────────────────────────────────────────────────
 function makeTeacherOpt(t: Teacher): TeacherOpt {
-  const info = teacherHoursInfo(t)
-  return { label: t.name, name: t.name, value: t.id, remaining: info.remaining }
+  return { label: t.name, name: t.name, value: t.id, remaining: teacherHoursInfo(t).remaining }
 }
 
 function teacherOptsForSubject(subjectId: number): TeacherOpt[] {
@@ -661,92 +581,6 @@ async function addSubject() {
     $q.notify({ type: 'positive', message: 'Disciplina adicionada' })
   } catch {
     $q.notify({ type: 'negative', message: 'Erro ao adicionar disciplina' })
-  }
-}
-
-// ── Bulk ops ───────────────────────────────────────────────────────────────
-const availableYearLevels = computed(() =>
-  [...new Set(allClasses.value.map((c) => c.year_level))].sort((a, b) => a - b)
-)
-
-function getVisibleClassIds() {
-  return classesGrouped.value.flatMap((g) => g.classes.map((c) => c.id))
-}
-
-function toggleClassSelection(id: number) {
-  if (selectedClassIds.has(id)) selectedClassIds.delete(id)
-  else selectedClassIds.add(id)
-}
-
-function selectAllVisible() {
-  getVisibleClassIds().forEach((id) => selectedClassIds.add(id))
-}
-
-function toggleFillYear(yl: number) {
-  if (fillYearLevels.has(yl)) fillYearLevels.delete(yl)
-  else fillYearLevels.add(yl)
-}
-
-async function startAutoFill(classIds: number[]) {
-  if (!classIds.length) return
-  bulkRunning.value = true
-  let filled = 0; let skipped = 0
-  try {
-    for (const classId of classIds) {
-      for (const entry of (entriesByClassId.value[classId] ?? [])) {
-        if (entry.teacher_id) continue
-        const candidates = teachersStore.teachers
-          .filter((t) => t.subject_ids?.includes(entry.subject_id))
-          .sort((a, b) => teacherHoursInfo(b).remaining - teacherHoursInfo(a).remaining)
-        if (!candidates.length) { skipped++; continue }
-        try {
-          await api.put(`/classes/curriculum/${entry.id}`, { teacher_id: candidates[0].id })
-          entry.teacher_id = candidates[0].id
-          entry.teacher_name = candidates[0].name
-          filled++
-        } catch { /* skip */ }
-      }
-    }
-    $q.notify({ type: 'positive', message: `${filled} atribuição(ões) preenchida(s)${skipped ? `, ${skipped} sem professor disponível` : ''}` })
-  } finally {
-    bulkRunning.value = false
-  }
-}
-
-async function startAutoFillByYear() {
-  const ids = allClasses.value.filter((c) => fillYearLevels.has(c.year_level)).map((c) => c.id)
-  showYearFillDialog.value = false
-  await startAutoFill(ids)
-}
-
-function confirmClear(classIds: number[]) {
-  if (!classIds.length) return
-  $q.dialog({
-    title: 'Limpar atribuições',
-    message: `Remover todos os professores de ${classIds.length} turma(s)?`,
-    ok: { label: 'Limpar', color: 'negative' },
-    cancel: true,
-  }).onOk(() => runClear(classIds))
-}
-
-async function runClear(classIds: number[]) {
-  bulkRunning.value = true
-  let cleared = 0
-  try {
-    for (const classId of classIds) {
-      for (const entry of (entriesByClassId.value[classId] ?? [])) {
-        if (!entry.teacher_id) continue
-        try {
-          await api.put(`/classes/curriculum/${entry.id}`, { teacher_id: null })
-          entry.teacher_id = null
-          entry.teacher_name = null
-          cleared++
-        } catch { /* skip */ }
-      }
-    }
-    $q.notify({ type: 'info', message: `${cleared} atribuição(ões) removida(s)` })
-  } finally {
-    bulkRunning.value = false
   }
 }
 
