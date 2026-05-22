@@ -636,6 +636,20 @@ def _run_solver(db, timetable_id: int, options: dict = None):
         _log(db, tt, msg)
         logger.warning("Timetable %d: professores sobrecarregados: %d", timetable_id, len(teacher_overload))
 
+    # D. Complexity warning: many teachers with very few lessons makes "no gaps" very hard.
+    # With N teachers × few lessons each, the solver has enormous freedom in assigning slots
+    # but must still pack student schedules contiguously — a combinatorial explosion.
+    active_teachers_with_occs = [(tid, sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, [])))
+                                  for tid in teachers if sum(1 for (eid, _) in occurrences if tid in entry_teachers.get(eid, [])) > 0]
+    n_active = len(active_teachers_with_occs)
+    avg_occ_per_teacher = sum(c for _, c in active_teachers_with_occs) / n_active if n_active else 0
+    if n_active > 30 and avg_occ_per_teacher < 5 and (opt_no_student_gaps or opts.get("students_start_slot_1", True)):
+        _log(db, tt, (
+            f"⚠ Aviso de complexidade: {n_active} professores ativos com média de {avg_occ_per_teacher:.1f} aulas/semana. "
+            "Com muitos professores e poucas aulas cada, a restrição 'sem furos nos alunos' torna-se "
+            "computacionalmente muito difícil. Se o solver não encontrar solução, desative 'Sem furos' e 'Alunos entram no 1.º tempo'."
+        ))
+
     # Auto-adjust max_per_day_class when students_start_slot_1 is active and there are
     # more classes than teachers. By pigeonhole, with N classes and T teachers (N>T),
     # some day will always have N classes needing slot-1 simultaneously — impossible with
@@ -1485,7 +1499,9 @@ def _run_solver(db, timetable_id: int, options: dict = None):
             retry_opts['no_student_gaps'] = False
             relaxed_labels.append("'Sem furos nos alunos'")
         if relaxed_labels:
-            phase3_time = min(max_time, 420)  # cap phase 3 at 7 min
+            # Give Phase 3 a generous budget: 50% of original time, capped at 30 min.
+            # Minimum 5 min so even short runs get a real retry.
+            phase3_time = max(300, min(int(max_time * 0.5), 1800))
             retry_opts['max_time_seconds'] = phase3_time
             retry_opts['_relaxed_retry'] = True
             retry_opts['_relaxed_labels'] = relaxed_labels

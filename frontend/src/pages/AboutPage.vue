@@ -24,6 +24,34 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="build" color="red-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="red-8" class="version-badge">v1.15.0</q-badge>
+                  Correções Críticas no Motor de Geração
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="bug_report" size="xs" color="red-8" />
+                  Correção crítica: geração falhava com erro "(eid, occ, slot)" quando professores tinham blocos de disponibilidade configurados — o solver apresentava o erro como status em vez de gerar o horário
+                </div>
+                <div class="feature-item">
+                  <q-icon name="timer" size="xs" color="red-8" />
+                  Fase 3 (retry automático sem restrições rígidas) recebe agora até 50% do tempo original (máx. 30 min) em vez dos 7 min anteriores
+                </div>
+                <div class="feature-item">
+                  <q-icon name="warning" size="xs" color="orange-8" />
+                  Aviso de complexidade no log quando há muitos professores com poucas aulas — informa que "sem furos" fica muito difícil nesse cenário
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="auto_awesome" color="teal-7">
               <template #title>
                 <span class="version-title">
