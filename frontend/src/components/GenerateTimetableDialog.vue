@@ -102,7 +102,20 @@
         <q-separator />
 
         <div class="text-subtitle2">Tempo máximo de cálculo</div>
-        <q-btn-toggle v-model="opts.max_time_seconds" :options="[{label:'1 min',value:60},{label:'2 min',value:120},{label:'5 min',value:300},{label:'10 min',value:600}]" />
+        <div class="row q-gutter-xs flex-wrap">
+          <q-btn
+            v-for="opt in timeOptions" :key="opt.value"
+            :label="opt.label"
+            :color="opts.max_time_seconds === opt.value ? 'primary' : 'grey-4'"
+            :text-color="opts.max_time_seconds === opt.value ? 'white' : 'dark'"
+            unelevated dense size="sm"
+            @click="opts.max_time_seconds = opt.value"
+          />
+        </div>
+        <div class="text-caption text-grey-6 q-mt-xs">
+          <q-icon name="info" size="xs" /> Tempos mais longos dão melhores resultados mas consomem mais recursos.
+          Para agrupamentos grandes, recomenda-se 1h ou mais.
+        </div>
 
       </q-card-section>
 
@@ -150,6 +163,19 @@ const opts = reactive({
   distribute_subjects_weight: 5,
   max_time_seconds: 300,
 })
+
+const timeOptions = [
+  { label: '1 min',  value: 60 },
+  { label: '2 min',  value: 120 },
+  { label: '5 min',  value: 300 },
+  { label: '10 min', value: 600 },
+  { label: '30 min', value: 1800 },
+  { label: '1h',     value: 3600 },
+  { label: '2h',     value: 7200 },
+  { label: '3h',     value: 10800 },
+  { label: '5h',     value: 18000 },
+  { label: '10h',    value: 36000 },
+]
 
 // ── Scope state ───────────────────────────────────────────────────────────────
 const selectedSchoolIds = reactive(new Set<number>())

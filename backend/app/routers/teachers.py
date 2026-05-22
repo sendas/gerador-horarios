@@ -35,6 +35,17 @@ class BulkFreeDayRequest(BaseModel):
     day: Optional[int] = None  # 0=Seg … 4=Sex, None = limpar
 
 
+class BlockedSlot(BaseModel):
+    day_of_week: int
+    slot_number: int
+
+
+class BulkAvailabilityRequest(BaseModel):
+    cluster_id: int
+    academic_year_id: int
+    blocked_slots: List[BlockedSlot]
+
+
 def _build_response(t: Teacher) -> TeacherResponse:
     r = TeacherResponse.model_validate(t)
     r.subject_names = sorted(ts.subject.name for ts in t.teacher_subjects if ts.subject)
@@ -68,6 +79,37 @@ def bulk_set_free_day(req: BulkFreeDayRequest, db: Session = Depends(get_db)):
     day_names = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
     day_label = day_names[req.day] if req.day is not None else "nenhum (limpo)"
     return {"updated": updated, "day": req.day, "message": f"Dia livre definido como {day_label} para {updated} professor(es)."}
+
+
+@router.post("/bulk-availability")
+def bulk_set_availability(req: BulkAvailabilityRequest, db: Session = Depends(get_db)):
+    """Replace all TeacherAvailability records for a cluster+year with the given blocked slots."""
+    teacher_ids = [t.id for t in db.query(Teacher).filter(Teacher.cluster_id == req.cluster_id).all()]
+    if not teacher_ids:
+        return {"updated": 0, "blocked_slots": 0, "message": "Nenhum professor encontrado."}
+    db.query(TeacherAvailability).filter(
+        TeacherAvailability.teacher_id.in_(teacher_ids),
+        TeacherAvailability.academic_year_id == req.academic_year_id,
+    ).delete(synchronize_session=False)
+    objs = [
+        TeacherAvailability(
+            teacher_id=tid,
+            academic_year_id=req.academic_year_id,
+            day_of_week=s.day_of_week,
+            slot_number=s.slot_number,
+            is_available=False,
+        )
+        for tid in teacher_ids
+        for s in req.blocked_slots
+    ]
+    if objs:
+        db.add_all(objs)
+    db.commit()
+    return {
+        "updated": len(teacher_ids),
+        "blocked_slots": len(req.blocked_slots),
+        "message": f"Disponibilidade definida para {len(teacher_ids)} professor(es), {len(req.blocked_slots)} bloco(s) bloqueado(s).",
+    }
 
 
 @router.put("/bulk-update")

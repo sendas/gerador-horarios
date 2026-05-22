@@ -101,6 +101,15 @@ export const useTeachersStore = defineStore('teachers', () => {
     return data
   }
 
+  async function bulkAvailability(clusterId: number, academicYearId: number, blockedSlots: { day_of_week: number; slot_number: number }[]) {
+    const { data } = await api.post<{ updated: number; blocked_slots: number; message: string }>('/teachers/bulk-availability', {
+      cluster_id: clusterId,
+      academic_year_id: academicYearId,
+      blocked_slots: blockedSlots,
+    })
+    return data
+  }
+
   async function fetchSubjects(teacherId: number) {
     const { data } = await api.get(`/teachers/${teacherId}/subjects`)
     return data
@@ -131,7 +140,7 @@ export const useTeachersStore = defineStore('teachers', () => {
 
   return {
     teachers, loading, fetchAll, create, update, remove,
-    fetchSchoolAssignments, addSchoolAssignment, removeSchoolAssignment, setPrimarySchool, bulkFreeDay,
+    fetchSchoolAssignments, addSchoolAssignment, removeSchoolAssignment, setPrimarySchool, bulkFreeDay, bulkAvailability,
     fetchSubjects, addSubject, removeSubject,
     fetchAvailability, setAvailabilityBulk,
   }

@@ -6,8 +6,8 @@
       <q-input v-model="search" placeholder="Pesquisar..." dense outlined clearable style="min-width:200px">
         <template #prepend><q-icon name="search" /></template>
       </q-input>
-      <q-btn color="orange-7" icon="event_busy" label="Dia sem aulas" @click="freeDayDialog = true" class="q-ml-sm">
-        <q-tooltip>Definir o mesmo dia sem aulas para todos os professores</q-tooltip>
+      <q-btn color="orange-7" icon="event_busy" label="Blocos indisponíveis" @click="openBulkAvail" class="q-ml-sm">
+        <q-tooltip>Definir blocos indisponíveis para todos os professores do agrupamento</q-tooltip>
       </q-btn>
       <q-btn color="primary" icon="add" label="Novo" @click="openCreate" class="q-ml-sm" />
       <q-btn color="secondary" icon="upload" label="Importar" @click="showImport = true" class="q-ml-sm" />
@@ -74,42 +74,73 @@
       </template>
     </q-table>
 
-    <!-- Bulk free day dialog -->
-    <q-dialog v-model="freeDayDialog" persistent>
-      <q-card style="min-width:340px">
-        <q-card-section class="bg-orange-7 text-white">
-          <div class="text-h6">Dia sem aulas — todos os professores</div>
-          <div class="text-caption">Define o mesmo dia livre preferido para todos os docentes do agrupamento</div>
-        </q-card-section>
-        <q-card-section class="q-gutter-sm">
-          <q-select
-            v-model="freeDaySelected"
-            :options="[
-              { label: 'Segunda-feira', value: 0 },
-              { label: 'Terça-feira',   value: 1 },
-              { label: 'Quarta-feira',  value: 2 },
-              { label: 'Quinta-feira',  value: 3 },
-              { label: 'Sexta-feira',   value: 4 },
-              { label: 'Sem dia livre (limpar)', value: null },
-            ]"
-            emit-value map-options
-            label="Dia sem aulas"
-            outlined dense
-          />
-          <div class="text-caption text-grey-6">
-            <q-icon name="info" size="xs" />
-            O solver tentará garantir que nenhum professor tenha aulas neste dia.
-            Pode ser sobreposto individualmente em cada professor.
+    <!-- Bulk availability grid dialog -->
+    <q-dialog v-model="bulkAvailDialog" persistent full-width>
+      <q-card style="max-width:900px;width:100%">
+        <q-card-section class="bg-orange-7 text-white row items-center">
+          <div>
+            <div class="text-h6">Blocos indisponíveis — todos os professores</div>
+            <div class="text-caption">Clique nos blocos para os marcar como indisponíveis (vermelho). Aplica a todos os docentes do agrupamento.</div>
           </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Cancelar" @click="freeDayDialog = false" />
+        <q-card-section>
+          <div class="row items-center q-gutter-sm q-mb-md">
+            <q-select
+              v-model="bulkAvailYear"
+              :options="yearOptions"
+              label="Ano letivo"
+              emit-value map-options dense outlined
+              style="min-width:180px"
+              @update:model-value="loadBulkSlots"
+            />
+            <q-chip v-if="bulkBlockedCount > 0" color="negative" text-color="white" icon="block" :label="`${bulkBlockedCount} bloco(s) bloqueado(s)`" />
+            <q-btn v-if="bulkBlockedCount > 0" flat dense size="sm" icon="clear" label="Limpar tudo" color="grey-6" @click="bulkBlockedSlots.clear()" />
+          </div>
+
+          <div v-if="bulkAvailLoading" class="text-center q-py-lg text-grey-6">A carregar tempos letivos...</div>
+          <div v-else-if="bulkAvailYear && bulkUniqueSlots.length === 0" class="text-center q-py-lg text-grey-6">
+            Nenhum tempo letivo configurado para este ano.
+          </div>
+          <div v-else-if="bulkAvailYear" class="bulk-avail-grid-wrap">
+            <table class="bulk-avail-table">
+              <thead>
+                <tr>
+                  <th class="bulk-avail-th bulk-avail-th--slot">Tempo</th>
+                  <th v-for="(day, di) in DAYS" :key="di" class="bulk-avail-th">{{ day }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="slot in bulkUniqueSlots" :key="slot.slot_number">
+                  <td class="bulk-avail-td bulk-avail-td--label">
+                    <span class="text-weight-bold">{{ slot.slot_number }}</span>
+                    <span class="text-caption text-grey-6 q-ml-xs">{{ slot.start_time }}–{{ slot.end_time }}</span>
+                  </td>
+                  <td
+                    v-for="(day, di) in DAYS" :key="di"
+                    class="bulk-avail-td bulk-avail-td--cell"
+                    :class="{ 'bulk-avail-td--blocked': isBulkBlocked(di, slot.slot_number) }"
+                    @click="toggleBulkSlot(di, slot.slot_number)"
+                  >
+                    <q-icon v-if="isBulkBlocked(di, slot.slot_number)" name="block" size="sm" color="white" />
+                    <q-icon v-else name="check" size="sm" color="positive" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="text-center text-grey-6 q-py-lg">Selecione um ano letivo.</div>
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md q-gutter-sm">
+          <q-btn flat label="Cancelar" v-close-popup />
           <q-btn
             label="Aplicar a todos"
             color="orange-7"
-            :loading="freeDayLoading"
-            :disable="freeDaySelected === undefined"
-            @click="applyFreeDay"
+            icon="save"
+            :loading="bulkAvailSaving"
+            :disable="!bulkAvailYear"
+            @click="applyBulkAvail"
           />
         </q-card-actions>
       </q-card>
@@ -495,9 +526,12 @@ const classesStore = useClassesStore()
 
 const search = ref('')
 const showImport = ref(false)
-const freeDayDialog = ref(false)
-const freeDaySelected = ref<number | null | undefined>(undefined)
-const freeDayLoading = ref(false)
+const bulkAvailDialog = ref(false)
+const bulkAvailYear = ref<number | null>(null)
+const bulkAvailLoading = ref(false)
+const bulkAvailSaving = ref(false)
+const bulkBlockedSlots = ref(new Set<string>())
+const bulkAvailRawSlots = ref<{ slot_number: number; start_time: string; end_time: string }[]>([])
 const selectedClusterId = computed(() => clustersStore.clusters[0]?.id ?? null)
 const schoolsStore = useSchoolsStore()
 const yearsStore = useAcademicYearsStore()
@@ -987,24 +1021,65 @@ async function saveAvailability() {
   $q.notify({ type: 'positive', message: 'Disponibilidade guardada' })
 }
 
-async function applyFreeDay() {
-  if (freeDaySelected.value === undefined) return
+const bulkUniqueSlots = computed(() => {
+  const seen = new Map<number, { slot_number: number; start_time: string; end_time: string }>()
+  for (const s of bulkAvailRawSlots.value) {
+    if (!seen.has(s.slot_number)) seen.set(s.slot_number, s)
+  }
+  return [...seen.values()].sort((a, b) => a.slot_number - b.slot_number)
+})
+
+const bulkBlockedCount = computed(() => bulkBlockedSlots.value.size)
+
+function isBulkBlocked(day: number, slot: number) {
+  return bulkBlockedSlots.value.has(`${day}_${slot}`)
+}
+
+function toggleBulkSlot(day: number, slot: number) {
+  const key = `${day}_${slot}`
+  if (bulkBlockedSlots.value.has(key)) bulkBlockedSlots.value.delete(key)
+  else bulkBlockedSlots.value.add(key)
+  // trigger reactivity
+  bulkBlockedSlots.value = new Set(bulkBlockedSlots.value)
+}
+
+async function openBulkAvail() {
+  bulkAvailYear.value = yearsStore.years.find((y) => y.is_active)?.id ?? yearsStore.years[0]?.id ?? null
+  bulkBlockedSlots.value = new Set()
+  bulkAvailDialog.value = true
+  if (bulkAvailYear.value) await loadBulkSlots()
+}
+
+async function loadBulkSlots() {
+  if (!bulkAvailYear.value) return
+  bulkAvailLoading.value = true
+  try {
+    const { data } = await api.get('/time-slots', { params: { academic_year_id: bulkAvailYear.value } })
+    bulkAvailRawSlots.value = (data as { slot_number: number; start_time: string; end_time: string }[])
+  } finally {
+    bulkAvailLoading.value = false
+  }
+}
+
+async function applyBulkAvail() {
   const clusterId = selectedClusterId.value
-  if (!clusterId) {
-    $q.notify({ type: 'warning', message: 'Nenhum agrupamento selecionado.' })
+  if (!clusterId || !bulkAvailYear.value) {
+    $q.notify({ type: 'warning', message: 'Selecione um agrupamento e ano letivo.' })
     return
   }
-  freeDayLoading.value = true
+  bulkAvailSaving.value = true
   try {
-    const res = await teachersStore.bulkFreeDay(clusterId, freeDaySelected.value)
-    freeDayDialog.value = false
-    freeDaySelected.value = undefined
-    await teachersStore.fetchAll()
+    const blocked = [...bulkBlockedSlots.value].map((key) => {
+      const [d, s] = key.split('_').map(Number)
+      return { day_of_week: d, slot_number: s }
+    })
+    const res = await teachersStore.bulkAvailability(clusterId, bulkAvailYear.value, blocked)
+    bulkAvailDialog.value = false
     $q.notify({ type: 'positive', message: res.message })
   } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao aplicar dia livre.' })
+    $q.notify({ type: 'negative', message: 'Erro ao aplicar disponibilidade.' })
   } finally {
-    freeDayLoading.value = false
+    bulkAvailSaving.value = false
   }
 }
 
@@ -1020,3 +1095,55 @@ function confirmDelete(row: Teacher) {
   })
 }
 </script>
+
+<style scoped>
+.bulk-avail-grid-wrap {
+  overflow-x: auto;
+}
+.bulk-avail-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 480px;
+}
+.bulk-avail-th {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  background: #2c3e50;
+  color: white;
+  text-align: center;
+  font-size: 13px;
+}
+.bulk-avail-th--slot {
+  min-width: 120px;
+  text-align: left;
+}
+.bulk-avail-td {
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+}
+.bulk-avail-td--label {
+  white-space: nowrap;
+  font-size: 13px;
+}
+.bulk-avail-td--cell {
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s;
+  min-width: 80px;
+}
+.bulk-avail-td--cell:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.bulk-avail-td--blocked {
+  background: #e53935 !important;
+}
+.body--dark .bulk-avail-th {
+  background: #1a2332;
+}
+.body--dark .bulk-avail-td {
+  border-color: #444;
+}
+.body--dark .bulk-avail-td--cell:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+</style>
