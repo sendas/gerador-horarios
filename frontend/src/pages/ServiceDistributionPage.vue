@@ -270,8 +270,8 @@
     <!-- Component management dialog -->
     <q-dialog v-model="showComponents" persistent maximized>
       <q-card>
-        <q-card-section class="row items-center q-pb-sm bg-teal-8 text-white">
-          <q-icon name="tune" size="sm" class="q-mr-sm" />
+        <q-card-section class="row items-center q-pb-sm bg-indigo-8 text-white">
+          <q-icon name="calculate" size="sm" class="q-mr-sm" />
           <div class="text-h6">Definição de Horas por Docente</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup color="white" />
@@ -281,19 +281,18 @@
         <q-card-section class="q-py-sm bg-blue-grey-1">
           <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
             <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL</strong> = Componente Letiva (22h 2.º/3.º ciclo · 25h 1.º ciclo/Pré-escolar)</span>
-            <span><q-icon name="business" size="xs" color="teal-7" class="q-mr-xs" /><strong>TE</strong> = Trabalho no Estabelecimento (reuniões, coordenação, apoio) — base 3h</span>
-            <span><q-icon name="home" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>TIA</strong> = Trabalho Individual Autónomo = 35 − CL − TE</span>
-            <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
-            <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo (reduz CL)</span>
-            <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>CL líquida</strong> = CL − Red.Art.79° − Crédito H.</span>
+            <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> (c/ 15 anos serviço) = 50–54a → 2h · 55–59a → 4h · ≥60a → 6h</span>
+            <span><q-icon name="calculate" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL líq.</strong> = CL − Red.Art.79°</span>
+            <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo (reduz TE, não a CL)</span>
+            <span><q-icon name="business" size="xs" color="teal-7" class="q-mr-xs" /><strong>TE líq.</strong> = (TE_base + Red.Art.79°) − Crédito H.</span>
+            <span><q-icon name="home" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>TIA</strong> = 35 − CL líq. − TE líq.</span>
           </div>
         </q-card-section>
 
         <q-card-section class="q-pt-sm q-pb-xs">
-          <!-- Bulk actions -->
           <div class="row q-gutter-sm items-center flex-wrap">
-            <q-btn color="blue-7" icon="school" label="CL = 22h a todos (2.º/3.º ciclo)" unelevated dense @click="setAllBase(22)" :loading="bulkLoading" />
-            <q-btn color="teal-7" icon="school" label="CL = 25h a todos (1.º ciclo)" unelevated dense @click="setAllBase(25)" :loading="bulkLoading" />
+            <q-btn color="blue-7" icon="school" label="CL = 22h (2.º/3.º ciclo)" unelevated dense @click="setAllBase(22)" :loading="bulkLoading" />
+            <q-btn color="teal-7" icon="school" label="CL = 25h (1.º ciclo)" unelevated dense @click="setAllBase(25)" :loading="bulkLoading" />
             <q-btn color="indigo-6" icon="elderly" label="Aplicar Art. 79° a todos" unelevated dense @click="applyArt79All" :loading="bulkLoading"
               :disable="compRows.every(r => !r.birth_date)" />
             <q-input v-model="compSearch" placeholder="Pesquisar professor..." dense outlined clearable style="min-width:200px">
@@ -302,8 +301,7 @@
           </div>
         </q-card-section>
 
-        <!-- Per-teacher table -->
-        <q-card-section class="q-pt-xs" style="overflow:auto;height:calc(100vh - 230px)">
+        <q-card-section class="q-pt-xs" style="overflow:auto;height:calc(100vh - 250px)">
           <table class="comp-table">
             <thead>
               <tr>
@@ -311,120 +309,85 @@
                 <th class="comp-th">Data Nasc.</th>
                 <th class="comp-th comp-th--sm">Idade</th>
                 <th class="comp-th comp-th--sm">CL</th>
-                <th class="comp-th comp-th--sm">TE</th>
-                <th class="comp-th comp-th--cargo">Cargo (TE)</th>
-                <th class="comp-th comp-th--sm">TIA</th>
                 <th class="comp-th comp-th--sm">Red. Art.79°</th>
+                <th class="comp-th comp-th--sm">CL líq.</th>
                 <th class="comp-th comp-th--sm">Crédito H.</th>
                 <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
-                <th class="comp-th comp-th--sm">CL líquida</th>
+                <th class="comp-th comp-th--te">Alocações TE</th>
+                <th class="comp-th comp-th--sm">TE líq.</th>
+                <th class="comp-th comp-th--sm">TIA</th>
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="row in filteredCompRows"
-                :key="row.id"
-                class="comp-row"
-              >
+              <tr v-for="row in filteredCompRows" :key="row.id" class="comp-row">
                 <td class="comp-td comp-td--name">{{ row.name }}</td>
                 <td class="comp-td">
-                  <q-input
-                    v-model="row.birth_date"
-                    type="date"
-                    dense outlined
-                    style="min-width:130px"
-                    @update:model-value="onBirthDateChange(row)"
-                  />
+                  <div class="row no-wrap items-center" style="gap:2px">
+                    <q-input v-model="row.birth_date" type="date" dense outlined style="min-width:130px"
+                      @update:model-value="onBirthDateChange(row)" />
+                    <q-btn v-if="row.birth_date" flat round dense size="xs" icon="close" color="grey-5"
+                      @click="() => { row.birth_date = null; onBirthDateChange(row) }" />
+                  </div>
                 </td>
                 <td class="comp-td comp-td--center">
                   <span v-if="row.birth_date" class="text-body2">{{ calcAge(row.birth_date) }}</span>
                   <span v-else class="text-grey-5">—</span>
                 </td>
                 <td class="comp-td comp-td--center">
-                  <q-input
-                    v-model.number="row.base_teaching_hours"
-                    type="number" min="0" max="40"
-                    dense outlined
-                    style="width:58px"
-                    @update:model-value="recalcTeachingComponent(row)"
-                  />
-                </td>
-                <td class="comp-td comp-td--center">
-                  <q-input
-                    v-model.number="row.te_hours"
-                    type="number" min="0" max="20"
-                    dense outlined
-                    style="width:54px"
-                  />
-                </td>
-                <td class="comp-td">
-                  <q-select
-                    v-model="row.te_role"
-                    :options="teRoleOptions"
-                    dense outlined
-                    multiple use-chips use-input
-                    input-debounce="0"
-                    clearable
-                    placeholder="Cargos TE..."
-                    style="min-width:200px"
-                    @new-value="(val, done) => done(val, 'add-unique')"
-                  />
-                </td>
-                <td class="comp-td comp-td--center">
-                  <q-badge
-                    color="deep-orange-7"
-                    :label="Math.max(0, 35 - row.base_teaching_hours - row.te_hours)"
-                    style="font-size:13px;padding:4px 8px"
-                  />
+                  <q-input v-model.number="row.base_teaching_hours" type="number" min="0" max="40" dense outlined
+                    style="width:58px" @update:model-value="recalcTeachingComponent(row)" />
                 </td>
                 <td class="comp-td comp-td--center">
                   <div class="row no-wrap items-center justify-center" style="gap:4px">
-                    <q-input
-                      v-model.number="row.art79_reduction"
-                      type="number" min="0" max="10"
-                      dense outlined
-                      style="width:54px"
-                      @update:model-value="onArt79Change(row)"
-                    />
-                    <q-icon
-                      v-if="row.art79_manual"
-                      name="edit" size="xs" color="orange-6"
-                    ><q-tooltip>Redução manual</q-tooltip></q-icon>
-                    <q-icon
-                      v-else-if="row.birth_date && row.art79_reduction > 0"
-                      name="auto_awesome" size="xs" color="indigo-4"
-                    ><q-tooltip>Calculado automaticamente pelo Art. 79°</q-tooltip></q-icon>
+                    <q-input v-model.number="row.art79_reduction" type="number" min="0" max="10" dense outlined
+                      style="width:54px" @update:model-value="onArt79Change(row)" />
+                    <q-icon v-if="row.art79_manual" name="edit" size="xs" color="orange-6">
+                      <q-tooltip>Redução manual</q-tooltip>
+                    </q-icon>
+                    <q-icon v-else-if="row.birth_date && row.art79_reduction > 0" name="auto_awesome" size="xs" color="indigo-4">
+                      <q-tooltip>Calculado automaticamente pelo Art. 79°</q-tooltip>
+                    </q-icon>
                   </div>
                 </td>
                 <td class="comp-td comp-td--center">
-                  <q-input
-                    v-model.number="row.credit_hours"
-                    type="number" min="0" max="20"
-                    dense outlined
-                    style="width:54px"
-                    @update:model-value="onCreditHoursChange(row)"
-                  />
-                </td>
-                <td class="comp-td">
-                  <q-select
-                    v-model="row.credit_role"
-                    :options="cargoOptions"
-                    :disable="!row.credit_hours"
-                    dense outlined
-                    use-input hide-selected fill-input
-                    input-debounce="0"
-                    clearable
-                    :placeholder="row.credit_hours ? 'Cargo...' : '—'"
-                    style="min-width:180px"
-                    @new-value="(val, done) => done(val)"
-                  />
+                  <q-badge
+                    :color="clLiquida(row) < 0 ? 'negative' : 'blue-7'"
+                    :label="clLiquida(row)"
+                    style="font-size:13px;padding:4px 8px" />
                 </td>
                 <td class="comp-td comp-td--center">
-                  <q-badge
-                    :color="row.teaching_component < 0 ? 'negative' : row.teaching_component === 0 ? 'grey-5' : 'positive'"
-                    :label="row.teaching_component"
-                    style="font-size:13px;padding:4px 8px"
-                  />
+                  <q-input v-model.number="row.credit_hours" type="number" min="0" max="20" dense outlined
+                    style="width:54px" @update:model-value="onCreditHoursChange(row)" />
+                </td>
+                <td class="comp-td">
+                  <q-select v-model="row.credit_role" :options="cargoOptions" :disable="!row.credit_hours"
+                    dense outlined use-input hide-selected fill-input input-debounce="0" clearable
+                    :placeholder="row.credit_hours ? 'Cargo...' : '—'" style="min-width:180px"
+                    @new-value="(val, done) => done(val)" />
+                </td>
+                <td class="comp-td comp-td--te">
+                  <div v-for="(alloc, i) in row.te_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
+                    <q-select v-model="alloc.role" :options="teRoleOptions" dense outlined
+                      use-input fill-input input-debounce="0" clearable
+                      placeholder="Atividade..." style="min-width:160px"
+                      @new-value="(val, done) => done(val)" />
+                    <q-input v-model.number="alloc.hours" type="number" min="0" max="20"
+                      dense outlined style="width:54px" suffix="h" />
+                    <q-btn flat round dense size="xs" icon="close" color="grey-5"
+                      @click="removeTeAlloc(row, i)" />
+                  </div>
+                  <q-btn flat dense size="xs" icon="add" color="teal-7" label="Adicionar"
+                    @click="addTeAlloc(row)" />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-badge color="teal-7"
+                    :label="teLiquido(row)"
+                    style="font-size:13px;padding:4px 8px" />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-badge color="deep-orange-7"
+                    :label="tia(row)"
+                    style="font-size:13px;padding:4px 8px" />
                 </td>
               </tr>
             </tbody>
@@ -433,7 +396,7 @@
 
         <q-card-actions align="right" class="q-px-md q-pb-md q-gutter-sm">
           <q-btn flat label="Cancelar" v-close-popup />
-          <q-btn color="teal-7" icon="save" label="Guardar tudo" :loading="bulkLoading" @click="saveComponents" />
+          <q-btn color="indigo-7" icon="save" label="Guardar tudo" :loading="bulkLoading" @click="saveComponents" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -469,18 +432,19 @@ interface TeacherDistribution {
   primary_school_name: string | null
 }
 
+interface TeAllocation { role: string; hours: number }
+
 interface CompRow {
   id: number
   name: string
   birth_date: string | null
   base_teaching_hours: number   // CL — Componente Letiva
-  te_hours: number              // TE — Trabalho no Estabelecimento
-  te_role: string[]             // cargos do TE (múltiplos)
+  te_role: TeAllocation[]       // alocações TE com horas por atividade
   art79_reduction: number
   art79_manual: boolean
   credit_hours: number
   credit_role: string
-  teaching_component: number    // CL líquida = CL - art79 - credit
+  teaching_component: number    // = CL líquida = CL - art79
 }
 
 interface TimetableOption {
@@ -697,14 +661,35 @@ function calcAge(birthDateStr: string): number {
 
 function calcArt79(birthDateStr: string): number {
   const age = calcAge(birthDateStr)
-  if (age >= 60) return 3
-  if (age >= 55) return 2
-  if (age >= 50) return 1
+  if (age >= 60) return 6
+  if (age >= 55) return 4
+  if (age >= 50) return 2
   return 0
 }
 
+function clLiquida(row: CompRow): number {
+  return Math.max(0, row.base_teaching_hours - row.art79_reduction)
+}
+
+function teLiquido(row: CompRow): number {
+  const teBase = row.te_role.reduce((s, a) => s + (a.hours || 0), 0)
+  return Math.max(0, teBase + row.art79_reduction - row.credit_hours)
+}
+
+function tia(row: CompRow): number {
+  return Math.max(0, 35 - clLiquida(row) - teLiquido(row))
+}
+
+function addTeAlloc(row: CompRow) {
+  row.te_role.push({ role: '', hours: 1 })
+}
+
+function removeTeAlloc(row: CompRow, i: number) {
+  row.te_role.splice(i, 1)
+}
+
 function recalcTeachingComponent(row: CompRow) {
-  row.teaching_component = row.base_teaching_hours - row.art79_reduction - row.credit_hours
+  row.teaching_component = clLiquida(row)
 }
 
 function onBirthDateChange(row: CompRow) {
@@ -738,29 +723,33 @@ async function openComponentDialog() {
     compRows.value = (data as ApiTeacher[]).map(t => {
       const base_teaching_hours = t.base_teaching_hours ?? 22
       const credit_hours = t.credit_hours ?? 0
-      const te_hours = t.te_hours ?? 3
       const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
-
-      let art79_reduction: number
-      let art79_manual: boolean
-      if (t.teaching_component !== null) {
-        // Derive art79 from stored values: NET = base - art79 - credit
-        const derived = base_teaching_hours - t.teaching_component - credit_hours
-        art79_reduction = Math.max(0, derived)
-        art79_manual = art79_reduction !== art79Auto
-      } else {
-        art79_reduction = art79Auto
-        art79_manual = false
+      const art79_reduction = art79Auto
+      const art79_manual = false
+      const teaching_component = Math.max(0, base_teaching_hours - art79_reduction)
+      let te_role: TeAllocation[] = []
+      if (t.te_role) {
+        try {
+          const parsed = JSON.parse(t.te_role)
+          if (Array.isArray(parsed)) {
+            if (parsed.length > 0 && typeof parsed[0] === 'string') {
+              te_role = parsed.map((s: string) => ({ role: s, hours: 1 }))
+            } else {
+              te_role = parsed as TeAllocation[]
+            }
+          }
+        } catch { te_role = [] }
       }
-
-      const teaching_component = base_teaching_hours - art79_reduction - credit_hours
+      if (te_role.length === 0) {
+        const teH = t.te_hours ?? 3
+        te_role = [{ role: 'Reuniões e trabalho de estabelecimento', hours: teH }]
+      }
       return {
         id: t.id,
         name: t.name,
         birth_date: t.birth_date ?? null,
         base_teaching_hours,
-        te_hours,
-        te_role: (() => { if (!t.te_role) return []; try { return JSON.parse(t.te_role) } catch { return [t.te_role] } })(),
+        te_role,
         art79_reduction,
         art79_manual,
         credit_hours,
@@ -796,10 +785,10 @@ async function saveComponents() {
   try {
     const payload = compRows.value.map(r => ({
       id: r.id,
-      teaching_component: r.teaching_component,
+      teaching_component: clLiquida(r),
       birth_date: r.birth_date || null,
       base_teaching_hours: r.base_teaching_hours,
-      te_hours: r.te_hours,
+      te_hours: r.te_role.reduce((s, a) => s + (a.hours || 0), 0),
       te_role: r.te_role.length ? JSON.stringify(r.te_role) : null,
       credit_hours: r.credit_hours,
       credit_role: r.credit_role || null,
@@ -847,6 +836,8 @@ onMounted(async () => {
 .comp-th--name { text-align: left; min-width: 160px; }
 .comp-th--sm { min-width: 70px; }
 .comp-th--cargo { min-width: 200px; text-align: left; }
+.comp-th--te { min-width: 300px; text-align: left; }
+.comp-td--te { vertical-align: top; padding-top: 6px; }
 .comp-td {
   padding: 3px 6px;
   border: 1px solid #e0e0e0;

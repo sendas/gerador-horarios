@@ -24,6 +24,42 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="schedule" color="indigo-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="indigo-8" class="version-badge">v1.23.0</q-badge>
+                  Correção de fórmulas Art.79° e TE/TIA
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />23 de maio de 2026, 14:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="elderly" size="xs" color="indigo-8" />
+                  <strong>Art. 79° ECD corrigido</strong>: escalões 50–54a → 2h · 55–59a → 4h · ≥60a → 6h (em vez de 1/2/3h)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="calculate" size="xs" color="indigo-8" />
+                  <strong>Fórmula correta</strong>: CL líq. = CL − Art.79° · TE líq. = (TE_base + Art.79°) − Crédito H. · TIA = 35 − CL líq. − TE líq.
+                </div>
+                <div class="feature-item">
+                  <q-icon name="card_membership" size="xs" color="indigo-8" />
+                  <strong>Crédito H. reduz TE</strong> (não a CL) — horas de art.79° transferem-se de CL para TE
+                </div>
+                <div class="feature-item">
+                  <q-icon name="list" size="xs" color="indigo-8" />
+                  <strong>Alocações TE itemizadas</strong>: cada atividade/cargo tem o seu número de horas editável
+                </div>
+                <div class="feature-item">
+                  <q-icon name="cancel" size="xs" color="indigo-8" />
+                  Botão para <strong>limpar data de nascimento</strong> de cada docente
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="schedule" color="teal-8">
               <template #title>
                 <span class="version-title">
