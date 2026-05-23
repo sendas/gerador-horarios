@@ -311,8 +311,7 @@
                 <th class="comp-th comp-th--sm">CL</th>
                 <th class="comp-th comp-th--sm">Red. Art.79°</th>
                 <th class="comp-th comp-th--sm">CL líq.</th>
-                <th class="comp-th comp-th--sm">Crédito H.</th>
-                <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
+                <th class="comp-th comp-th--te">Crédito H. por Cargo</th>
                 <th class="comp-th comp-th--te">Alocações TE</th>
                 <th class="comp-th comp-th--sm">TE líq.</th>
                 <th class="comp-th comp-th--sm">TIA</th>
@@ -355,15 +354,24 @@
                     :label="clLiquida(row)"
                     style="font-size:13px;padding:4px 8px" />
                 </td>
-                <td class="comp-td comp-td--center">
-                  <q-input v-model.number="row.credit_hours" type="number" min="0" max="20" dense outlined
-                    style="width:54px" @update:model-value="onCreditHoursChange(row)" />
-                </td>
-                <td class="comp-td">
-                  <q-select v-model="row.credit_role" :options="cargoOptions" :disable="!row.credit_hours"
-                    dense outlined use-input hide-selected fill-input input-debounce="0" clearable
-                    :placeholder="row.credit_hours ? 'Cargo...' : '—'" style="min-width:180px"
-                    @new-value="(val, done) => done(val)" />
+                <td class="comp-td comp-td--te">
+                  <div v-for="(alloc, i) in row.credit_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
+                    <q-select v-model="alloc.role" :options="cargoOptions" dense outlined
+                      use-input fill-input input-debounce="0" clearable
+                      placeholder="Cargo..." style="min-width:180px"
+                      @new-value="(val, done) => done(val)" />
+                    <q-input v-model.number="alloc.hours" type="number" min="0" max="20"
+                      dense outlined style="width:58px" suffix="h" />
+                    <q-btn flat round dense size="xs" icon="close" color="grey-5"
+                      @click="removeCreditAlloc(row, i)" />
+                  </div>
+                  <div class="row items-center" style="gap:8px">
+                    <q-btn flat dense size="xs" icon="add" color="orange-7" label="Adicionar"
+                      @click="addCreditAlloc(row)" />
+                    <span v-if="row.credit_role.length > 0" class="text-caption text-grey-7">
+                      Total: <strong>{{ creditTotal(row) }}h</strong>
+                    </span>
+                  </div>
                 </td>
                 <td class="comp-td comp-td--te">
                   <div v-for="(alloc, i) in row.te_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
@@ -438,6 +446,7 @@ interface TeacherDistribution {
 }
 
 interface TeAllocation { role: string; hours: number }
+interface CreditAllocation { role: string; hours: number }
 
 interface CompRow {
   id: number
@@ -445,11 +454,10 @@ interface CompRow {
   birth_date: string | null
   base_teaching_hours: number   // CL — Componente Letiva
   te_role: TeAllocation[]       // alocações TE com horas por atividade
+  credit_role: CreditAllocation[]  // crédito horário com horas por cargo
   art79_reduction: number
   art79_manual: boolean
-  credit_hours: number
-  credit_role: string
-  teaching_component: number    // = CL líquida = CL - art79
+  teaching_component: number    // = CL líquida = CL - art79 - crédito
 }
 
 interface TimetableOption {
@@ -673,8 +681,12 @@ function calcArt79(birthDateStr: string): number {
   return 0
 }
 
+function creditTotal(row: CompRow): number {
+  return row.credit_role.reduce((s, a) => s + (a.hours || 0), 0)
+}
+
 function clLiquida(row: CompRow): number {
-  return Math.max(0, row.base_teaching_hours - row.art79_reduction - row.credit_hours)
+  return Math.max(0, row.base_teaching_hours - row.art79_reduction - creditTotal(row))
 }
 
 function teLiquido(row: CompRow): number {
@@ -694,6 +706,14 @@ function removeTeAlloc(row: CompRow, i: number) {
   row.te_role.splice(i, 1)
 }
 
+function addCreditAlloc(row: CompRow) {
+  row.credit_role.push({ role: '', hours: 1 })
+}
+
+function removeCreditAlloc(row: CompRow, i: number) {
+  row.credit_role.splice(i, 1)
+}
+
 function recalcTeachingComponent(row: CompRow) {
   row.teaching_component = clLiquida(row)
 }
@@ -710,11 +730,6 @@ function onArt79Change(row: CompRow) {
   recalcTeachingComponent(row)
 }
 
-function onCreditHoursChange(row: CompRow) {
-  if (!row.credit_hours) row.credit_role = ''
-  recalcTeachingComponent(row)
-}
-
 async function openComponentDialog() {
   if (!selectedClusterId.value) return
   bulkLoading.value = true
@@ -728,38 +743,50 @@ async function openComponentDialog() {
     }
     compRows.value = (data as ApiTeacher[]).map(t => {
       const base_teaching_hours = t.base_teaching_hours ?? 22
-      const credit_hours = t.credit_hours ?? 0
       const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
       const art79_reduction = art79Auto
       const art79_manual = false
-      const teaching_component = Math.max(0, base_teaching_hours - art79_reduction)
       let te_role: TeAllocation[] = []
       if (t.te_role) {
         try {
           const parsed = JSON.parse(t.te_role)
           if (Array.isArray(parsed)) {
-            if (parsed.length > 0 && typeof parsed[0] === 'string') {
-              te_role = parsed.map((s: string) => ({ role: s, hours: 1 }))
-            } else {
-              te_role = parsed as TeAllocation[]
-            }
+            te_role = parsed.length > 0 && typeof parsed[0] === 'string'
+              ? parsed.map((s: string) => ({ role: s, hours: 1 }))
+              : parsed as TeAllocation[]
           }
         } catch { te_role = [] }
       }
       if (te_role.length === 0) {
-        const teH = t.te_hours ?? 3
-        te_role = [{ role: 'Reuniões e trabalho de estabelecimento', hours: teH }]
+        te_role = [{ role: 'Reuniões e trabalho de estabelecimento', hours: t.te_hours ?? 3 }]
       }
+      let credit_role: CreditAllocation[] = []
+      if (t.credit_role) {
+        try {
+          const parsed = JSON.parse(t.credit_role)
+          if (Array.isArray(parsed)) {
+            credit_role = parsed.length > 0 && typeof parsed[0] === 'string'
+              ? [{ role: parsed[0], hours: t.credit_hours ?? 1 }]
+              : parsed as CreditAllocation[]
+          } else {
+            credit_role = [{ role: t.credit_role, hours: t.credit_hours ?? 1 }]
+          }
+        } catch {
+          credit_role = [{ role: t.credit_role, hours: t.credit_hours ?? 1 }]
+        }
+      } else if (t.credit_hours && t.credit_hours > 0) {
+        credit_role = [{ role: '', hours: t.credit_hours }]
+      }
+      const teaching_component = Math.max(0, base_teaching_hours - art79_reduction - credit_role.reduce((s, a) => s + (a.hours || 0), 0))
       return {
         id: t.id,
         name: t.name,
         birth_date: t.birth_date ?? null,
         base_teaching_hours,
         te_role,
+        credit_role,
         art79_reduction,
         art79_manual,
-        credit_hours,
-        credit_role: t.credit_role ?? '',
         teaching_component,
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
@@ -796,8 +823,8 @@ async function saveComponents() {
       base_teaching_hours: r.base_teaching_hours,
       te_hours: r.te_role.reduce((s, a) => s + (a.hours || 0), 0),
       te_role: r.te_role.length ? JSON.stringify(r.te_role) : null,
-      credit_hours: r.credit_hours,
-      credit_role: r.credit_role || null,
+      credit_hours: creditTotal(r),
+      credit_role: r.credit_role.length ? JSON.stringify(r.credit_role) : null,
     }))
     await api.put('/teachers/bulk-update', payload)
     $q.notify({ type: 'positive', message: `${payload.length} professor(es) atualizados` })
