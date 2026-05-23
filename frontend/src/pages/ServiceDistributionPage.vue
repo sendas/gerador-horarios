@@ -281,11 +281,13 @@
         <!-- Legend -->
         <q-card-section class="q-py-sm bg-blue-grey-1">
           <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
-            <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Totais</strong> = horas de presença na escola CL+CNL (base 25)</span>
-            <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>H. Letivas</strong> = componente letiva base (22)</span>
+            <span><q-icon name="work" size="xs" color="grey-7" class="q-mr-xs" /><strong>Total serviço</strong> = 35h (lei)</span>
+            <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Presença</strong> = presença na escola CL+CNL (base 25h)</span>
+            <span><q-icon name="home_work" size="xs" color="purple-7" class="q-mr-xs" /><strong>CIT</strong> = 35 − H.Presença (componente individual de trabalho)</span>
+            <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>H. Letivas</strong> = componente letiva base (22h)</span>
             <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
+            <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = H.Presença − H.Letivas − Red.Art.79°</span>
             <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito</strong> = horas de crédito por cargo</span>
-            <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = H.Totais − H.Letivas − Red.Art.79°</span>
             <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva</strong> = H.Letivas − Red.Art.79° − Crédito</span>
           </div>
         </q-card-section>
@@ -310,7 +312,8 @@
                 <th class="comp-th comp-th--name">Professor</th>
                 <th class="comp-th">Data Nasc.</th>
                 <th class="comp-th comp-th--sm">Idade</th>
-                <th class="comp-th comp-th--sm">H. Totais</th>
+                <th class="comp-th comp-th--sm">H. Presença</th>
+                <th class="comp-th comp-th--sm">CIT</th>
                 <th class="comp-th comp-th--sm">H. Letivas</th>
                 <th class="comp-th comp-th--sm">Red. Art.79°</th>
                 <th class="comp-th comp-th--sm">CNL</th>
@@ -346,6 +349,13 @@
                     dense outlined
                     style="width:58px"
                     @update:model-value="recalcTeachingComponent(row)"
+                  />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-badge
+                    color="purple-7"
+                    :label="Math.max(0, 35 - row.total_hours)"
+                    style="font-size:13px;padding:4px 8px"
                   />
                 </td>
                 <td class="comp-td comp-td--center">
