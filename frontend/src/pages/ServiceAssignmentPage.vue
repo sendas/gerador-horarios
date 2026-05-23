@@ -436,11 +436,11 @@
               <td class="comp-td comp-td--te">
                 <div v-for="(alloc, i) in row.credit_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
                   <q-select v-model="alloc.role" :options="cargoOptions" dense outlined
-                    use-input fill-input input-debounce="0" clearable
+                    use-input input-debounce="0" clearable
                     placeholder="Cargo..." style="min-width:180px"
                     @new-value="(val, done) => done(val)" />
-                  <q-input v-model.number="alloc.hours" type="number" min="0" max="20"
-                    dense outlined style="width:58px" suffix="h" />
+                  <q-input v-model.number="alloc.hours" type="number" min="1" max="20"
+                    dense outlined style="width:65px" suffix="h" />
                   <q-btn flat round dense size="xs" icon="close" color="grey-5"
                     @click="removeCreditAlloc(row, i)" />
                 </div>
@@ -455,11 +455,11 @@
               <td class="comp-td comp-td--te">
                 <div v-for="(alloc, i) in row.te_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
                   <q-select v-model="alloc.role" :options="teAllocOptions" dense outlined
-                    use-input fill-input input-debounce="0" clearable
+                    use-input input-debounce="0" clearable
                     placeholder="Cargo / Atividade..." style="min-width:180px"
                     @new-value="(val, done) => done(val)" />
-                  <q-input v-model.number="alloc.hours" type="number" min="0" max="20"
-                    dense outlined style="width:58px" suffix="h" />
+                  <q-input v-model.number="alloc.hours" type="number" min="1" max="20"
+                    dense outlined style="width:65px" suffix="h" />
                   <q-btn flat round dense size="xs" icon="close" color="grey-5"
                     @click="removeTeAlloc(row, i)" />
                 </div>
@@ -467,7 +467,7 @@
                   <q-btn flat dense size="xs" icon="add" color="teal-7" label="Adicionar"
                     @click="addTeAlloc(row)" />
                   <span v-if="row.te_role.length > 0" class="text-caption text-grey-7">
-                    Total: <strong>{{ row.te_role.reduce((s,a) => s + (a.hours||0), 0) }}h</strong>
+                    Total: <strong>{{ row.te_role.reduce((s,a) => s + (Number(a.hours)||0), 0) }}h</strong>
                   </span>
                 </div>
               </td>
@@ -901,7 +901,7 @@ function calcArt79(birthDateStr: string): number {
 }
 
 function creditTotal(row: CompRow): number {
-  return row.credit_role.reduce((s, a) => s + (a.hours || 0), 0)
+  return row.credit_role.reduce((s, a) => s + (Number(a.hours) || 0), 0)
 }
 
 function clLiquida(row: CompRow): number {
@@ -909,7 +909,7 @@ function clLiquida(row: CompRow): number {
 }
 
 function teLiquido(row: CompRow): number {
-  const teBase = row.te_role.reduce((s, a) => s + (a.hours || 0), 0)
+  const teBase = row.te_role.reduce((s, a) => s + (Number(a.hours) || 0), 0)
   return Math.max(0, teBase + row.art79_reduction)
 }
 
