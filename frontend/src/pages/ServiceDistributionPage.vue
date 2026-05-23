@@ -356,12 +356,15 @@
                 </td>
                 <td class="comp-td comp-td--te">
                   <div v-for="(alloc, i) in row.credit_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
-                    <q-select v-model="alloc.role" :options="cargoOptions" dense outlined
-                      use-input input-debounce="0" clearable
+                    <q-select
+                      :model-value="alloc.role"
+                      :options="cargoOptions" dense outlined clearable
                       placeholder="Cargo..." style="min-width:180px"
-                      @new-value="(val, done) => done(val)" />
-                    <q-input v-model.number="alloc.hours" type="number" min="1" max="20"
-                      dense outlined style="width:65px" suffix="h" />
+                      @update:model-value="v => setCreditRole(row, i, v)" />
+                    <q-input
+                      :model-value="alloc.hours" type="number" min="1" max="20"
+                      dense outlined style="width:65px" suffix="h"
+                      @update:model-value="v => setCreditHours(row, i, v)" />
                     <q-btn flat round dense size="xs" icon="close" color="grey-5"
                       @click="removeCreditAlloc(row, i)" />
                   </div>
@@ -375,12 +378,15 @@
                 </td>
                 <td class="comp-td comp-td--te">
                   <div v-for="(alloc, i) in row.te_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
-                    <q-select v-model="alloc.role" :options="teAllocOptions" dense outlined
-                      use-input input-debounce="0" clearable
+                    <q-select
+                      :model-value="alloc.role"
+                      :options="teAllocOptions" dense outlined clearable
                       placeholder="Cargo / Atividade..." style="min-width:180px"
-                      @new-value="(val, done) => done(val)" />
-                    <q-input v-model.number="alloc.hours" type="number" min="1" max="20"
-                      dense outlined style="width:65px" suffix="h" />
+                      @update:model-value="v => setTeRole(row, i, v)" />
+                    <q-input
+                      :model-value="alloc.hours" type="number" min="1" max="20"
+                      dense outlined style="width:65px" suffix="h"
+                      @update:model-value="v => setTeHours(row, i, v)" />
                     <q-btn flat round dense size="xs" icon="close" color="grey-5"
                       @click="removeTeAlloc(row, i)" />
                   </div>
@@ -706,12 +712,28 @@ function removeTeAlloc(row: CompRow, i: number) {
   row.te_role.splice(i, 1)
 }
 
+function setTeRole(row: CompRow, i: number, v: string | null) {
+  row.te_role[i] = { ...row.te_role[i], role: v ?? '' }
+}
+
+function setTeHours(row: CompRow, i: number, v: unknown) {
+  row.te_role[i] = { ...row.te_role[i], hours: Math.max(1, Number(v) || 1) }
+}
+
 function addCreditAlloc(row: CompRow) {
   row.credit_role.push({ role: '', hours: 1 })
 }
 
 function removeCreditAlloc(row: CompRow, i: number) {
   row.credit_role.splice(i, 1)
+}
+
+function setCreditRole(row: CompRow, i: number, v: string | null) {
+  row.credit_role[i] = { ...row.credit_role[i], role: v ?? '' }
+}
+
+function setCreditHours(row: CompRow, i: number, v: unknown) {
+  row.credit_role[i] = { ...row.credit_role[i], hours: Math.max(1, Number(v) || 1) }
 }
 
 function recalcTeachingComponent(row: CompRow) {
@@ -830,8 +852,9 @@ async function saveComponents() {
     $q.notify({ type: 'positive', message: `${payload.length} professor(es) atualizados` })
     showComponents.value = false
     await loadData()
-  } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao guardar — tente novamente' })
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? String(err)
+    $q.notify({ type: 'negative', message: `Erro ao guardar: ${msg}`, timeout: 6000 })
   } finally {
     bulkLoading.value = false
   }
