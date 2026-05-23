@@ -439,17 +439,17 @@
                     :model-value="alloc.role"
                     :options="cargoOptions" dense outlined clearable
                     placeholder="Cargo..." style="min-width:180px"
-                    @update:model-value="v => setCreditRole(row, i, v)" />
+                    @update:model-value="v => setCreditRole(row.id, i, v)" />
                   <q-input
                     :model-value="alloc.hours" type="number" min="1" max="20"
                     dense outlined style="width:65px" suffix="h"
-                    @update:model-value="v => setCreditHours(row, i, v)" />
+                    @update:model-value="v => setCreditHours(row.id, i, v)" />
                   <q-btn flat round dense size="xs" icon="close" color="grey-5"
-                    @click="removeCreditAlloc(row, i)" />
+                    @click="removeCreditAlloc(row.id, i)" />
                 </div>
                 <div class="row items-center" style="gap:8px">
                   <q-btn flat dense size="xs" icon="add" color="orange-7" label="Adicionar"
-                    @click="addCreditAlloc(row)" />
+                    @click="addCreditAlloc(row.id)" />
                   <span v-if="row.credit_role.length > 0" class="text-caption text-grey-7">
                     Total: <strong>{{ creditTotal(row) }}h</strong>
                   </span>
@@ -461,17 +461,17 @@
                     :model-value="alloc.role"
                     :options="teAllocOptions" dense outlined clearable
                     placeholder="Cargo / Atividade..." style="min-width:180px"
-                    @update:model-value="v => setTeRole(row, i, v)" />
+                    @update:model-value="v => setTeRole(row.id, i, v)" />
                   <q-input
                     :model-value="alloc.hours" type="number" min="1" max="20"
                     dense outlined style="width:65px" suffix="h"
-                    @update:model-value="v => setTeHours(row, i, v)" />
+                    @update:model-value="v => setTeHours(row.id, i, v)" />
                   <q-btn flat round dense size="xs" icon="close" color="grey-5"
-                    @click="removeTeAlloc(row, i)" />
+                    @click="removeTeAlloc(row.id, i)" />
                 </div>
                 <div class="row items-center" style="gap:8px">
                   <q-btn flat dense size="xs" icon="add" color="teal-7" label="Adicionar"
-                    @click="addTeAlloc(row)" />
+                    @click="addTeAlloc(row.id)" />
                   <span v-if="row.te_role.length > 0" class="text-caption text-grey-7">
                     Total: <strong>{{ row.te_role.reduce((s,a) => s + (Number(a.hours)||0), 0) }}h</strong>
                   </span>
@@ -923,36 +923,44 @@ function tia(row: CompRow): number {
   return Math.max(0, 35 - clLiquida(row) - teLiquido(row))
 }
 
-function addTeAlloc(row: CompRow) {
-  row.te_role.push({ role: '', hours: 1 })
+function addTeAlloc(rowId: number) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.te_role.push({ role: '', hours: 1 })
 }
 
-function removeTeAlloc(row: CompRow, i: number) {
-  row.te_role.splice(i, 1)
+function removeTeAlloc(rowId: number, i: number) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.te_role.splice(i, 1)
 }
 
-function setTeRole(row: CompRow, i: number, v: string | null) {
-  row.te_role[i] = { ...row.te_role[i], role: v ?? '' }
+function setTeRole(rowId: number, i: number, v: string | null) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.te_role[i].role = v ?? ''
 }
 
-function setTeHours(row: CompRow, i: number, v: unknown) {
-  row.te_role[i] = { ...row.te_role[i], hours: Math.max(1, Number(v) || 1) }
+function setTeHours(rowId: number, i: number, v: unknown) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.te_role[i].hours = Math.max(1, Number(v) || 1)
 }
 
-function addCreditAlloc(row: CompRow) {
-  row.credit_role.push({ role: '', hours: 1 })
+function addCreditAlloc(rowId: number) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.credit_role.push({ role: '', hours: 1 })
 }
 
-function removeCreditAlloc(row: CompRow, i: number) {
-  row.credit_role.splice(i, 1)
+function removeCreditAlloc(rowId: number, i: number) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.credit_role.splice(i, 1)
 }
 
-function setCreditRole(row: CompRow, i: number, v: string | null) {
-  row.credit_role[i] = { ...row.credit_role[i], role: v ?? '' }
+function setCreditRole(rowId: number, i: number, v: string | null) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.credit_role[i].role = v ?? ''
 }
 
-function setCreditHours(row: CompRow, i: number, v: unknown) {
-  row.credit_role[i] = { ...row.credit_role[i], hours: Math.max(1, Number(v) || 1) }
+function setCreditHours(rowId: number, i: number, v: unknown) {
+  const r = compRows.value.find(r => r.id === rowId)
+  if (r) r.credit_role[i].hours = Math.max(1, Number(v) || 1)
 }
 
 function recalcTeachingComponent(row: CompRow) {
