@@ -362,12 +362,12 @@
                     v-model="row.te_role"
                     :options="teRoleOptions"
                     dense outlined
-                    use-input hide-selected fill-input
+                    multiple use-chips use-input
                     input-debounce="0"
                     clearable
-                    placeholder="Cargo TE..."
-                    style="min-width:180px"
-                    @new-value="(val, done) => done(val)"
+                    placeholder="Cargos TE..."
+                    style="min-width:200px"
+                    @new-value="(val, done) => done(val, 'add-unique')"
                   />
                 </td>
                 <td class="comp-td comp-td--center">
@@ -475,7 +475,7 @@ interface CompRow {
   birth_date: string | null
   base_teaching_hours: number   // CL — Componente Letiva
   te_hours: number              // TE — Trabalho no Estabelecimento
-  te_role: string               // cargo do TE
+  te_role: string[]             // cargos do TE (múltiplos)
   art79_reduction: number
   art79_manual: boolean
   credit_hours: number
@@ -760,7 +760,7 @@ async function openComponentDialog() {
         birth_date: t.birth_date ?? null,
         base_teaching_hours,
         te_hours,
-        te_role: t.te_role ?? '',
+        te_role: (() => { if (!t.te_role) return []; try { return JSON.parse(t.te_role) } catch { return [t.te_role] } })(),
         art79_reduction,
         art79_manual,
         credit_hours,
@@ -800,7 +800,7 @@ async function saveComponents() {
       birth_date: r.birth_date || null,
       base_teaching_hours: r.base_teaching_hours,
       te_hours: r.te_hours,
-      te_role: r.te_role || null,
+      te_role: r.te_role.length ? JSON.stringify(r.te_role) : null,
       credit_hours: r.credit_hours,
       credit_role: r.credit_role || null,
     }))

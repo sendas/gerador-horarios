@@ -418,9 +418,9 @@
               </td>
               <td class="comp-td">
                 <q-select v-model="row.te_role" :options="teRoleOptions" dense outlined
-                  use-input hide-selected fill-input input-debounce="0" clearable
-                  placeholder="Cargo TE..." style="min-width:180px"
-                  @new-value="(val, done) => done(val)" />
+                  multiple use-chips use-input input-debounce="0" clearable
+                  placeholder="Cargos TE..." style="min-width:200px"
+                  @new-value="(val, done) => done(val, 'add-unique')" />
               </td>
               <td class="comp-td comp-td--center">
                 <q-badge color="deep-orange-7"
@@ -814,7 +814,7 @@ interface CompRow {
   birth_date: string | null
   base_teaching_hours: number  // CL — Componente Letiva
   te_hours: number             // TE — Trabalho no Estabelecimento
-  te_role: string              // cargo associado ao TE
+  te_role: string[]            // cargos associados ao TE (múltiplos)
   art79_reduction: number
   art79_manual: boolean
   credit_hours: number
@@ -920,9 +920,13 @@ async function openComponentDialog() {
         art79_manual = false
       }
       const teaching_component = base_teaching_hours - art79_reduction - credit_hours
+      let te_role: string[] = []
+      if (t.te_role) {
+        try { te_role = JSON.parse(t.te_role) } catch { te_role = [t.te_role] }
+      }
       return {
         id: t.id, name: t.name, birth_date: t.birth_date ?? null,
-        base_teaching_hours, te_hours, te_role: t.te_role ?? '',
+        base_teaching_hours, te_hours, te_role,
         art79_reduction, art79_manual,
         credit_hours, credit_role: t.credit_role ?? '', teaching_component,
       }
@@ -949,7 +953,7 @@ async function saveComponents() {
     const payload = compRows.value.map(r => ({
       id: r.id, teaching_component: r.teaching_component, birth_date: r.birth_date || null,
       base_teaching_hours: r.base_teaching_hours,
-      te_hours: r.te_hours, te_role: r.te_role || null,
+      te_hours: r.te_hours, te_role: r.te_role.length ? JSON.stringify(r.te_role) : null,
       credit_hours: r.credit_hours, credit_role: r.credit_role || null,
     }))
     await api.put('/teachers/bulk-update', payload)
