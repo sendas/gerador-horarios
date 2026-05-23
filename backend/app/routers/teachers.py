@@ -24,6 +24,8 @@ class BulkTeacherUpdate(BaseModel):
     birth_date: Optional[date_type] = None
     total_hours: Optional[int] = None
     base_teaching_hours: Optional[int] = None
+    te_hours: Optional[int] = None
+    te_role: Optional[str] = None
     credit_role: Optional[str] = None
 
 
@@ -128,10 +130,13 @@ def bulk_update_teachers(items: List[BulkTeacherUpdate], db: Session = Depends(g
         t.credit_hours = item.credit_hours if item.credit_hours is not None else 0
         t.birth_date = item.birth_date
         t.credit_role = item.credit_role
+        t.te_role = item.te_role
         if item.total_hours is not None:
             t.total_hours = item.total_hours
         if item.base_teaching_hours is not None:
             t.base_teaching_hours = item.base_teaching_hours
+        if item.te_hours is not None:
+            t.te_hours = item.te_hours
         updated.append(t.id)
     db.commit()
     return {"updated": updated}

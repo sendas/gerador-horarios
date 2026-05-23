@@ -281,10 +281,11 @@
         <q-card-section class="q-py-sm bg-blue-grey-1">
           <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
             <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL</strong> = Componente Letiva (22h 2.º/3.º ciclo · 25h 1.º ciclo/Pré-escolar)</span>
-            <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = Componente Não Letiva = 35 − CL (trabalho no estabelecimento + trabalho individual autónomo)</span>
+            <span><q-icon name="business" size="xs" color="teal-7" class="q-mr-xs" /><strong>TE</strong> = Trabalho no Estabelecimento (reuniões, coordenação, apoio) — base 3h</span>
+            <span><q-icon name="home" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>TIA</strong> = Trabalho Individual Autónomo = 35 − CL − TE</span>
             <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
-            <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo</span>
-            <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva (net)</strong> = CL − Red.Art.79° − Crédito H.</span>
+            <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo (reduz CL)</span>
+            <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>CL líquida</strong> = CL − Red.Art.79° − Crédito H.</span>
           </div>
         </q-card-section>
 
@@ -310,11 +311,13 @@
                 <th class="comp-th">Data Nasc.</th>
                 <th class="comp-th comp-th--sm">Idade</th>
                 <th class="comp-th comp-th--sm">CL</th>
-                <th class="comp-th comp-th--sm">CNL</th>
+                <th class="comp-th comp-th--sm">TE</th>
+                <th class="comp-th comp-th--cargo">Cargo (TE)</th>
+                <th class="comp-th comp-th--sm">TIA</th>
                 <th class="comp-th comp-th--sm">Red. Art.79°</th>
                 <th class="comp-th comp-th--sm">Crédito H.</th>
                 <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
-                <th class="comp-th comp-th--sm">Comp. Letiva (net)</th>
+                <th class="comp-th comp-th--sm">CL líquida</th>
               </tr>
             </thead>
             <tbody>
@@ -347,9 +350,30 @@
                   />
                 </td>
                 <td class="comp-td comp-td--center">
+                  <q-input
+                    v-model.number="row.te_hours"
+                    type="number" min="0" max="20"
+                    dense outlined
+                    style="width:54px"
+                  />
+                </td>
+                <td class="comp-td">
+                  <q-select
+                    v-model="row.te_role"
+                    :options="teRoleOptions"
+                    dense outlined
+                    use-input hide-selected fill-input
+                    input-debounce="0"
+                    clearable
+                    placeholder="Cargo TE..."
+                    style="min-width:180px"
+                    @new-value="(val, done) => done(val)"
+                  />
+                </td>
+                <td class="comp-td comp-td--center">
                   <q-badge
                     color="deep-orange-7"
-                    :label="Math.max(0, 35 - row.base_teaching_hours)"
+                    :label="Math.max(0, 35 - row.base_teaching_hours - row.te_hours)"
                     style="font-size:13px;padding:4px 8px"
                   />
                 </td>
@@ -449,12 +473,14 @@ interface CompRow {
   id: number
   name: string
   birth_date: string | null
-  base_teaching_hours: number   // CL — Componente Letiva (22h 2.º/3.º ciclo, 25h 1.º ciclo)
-  art79_reduction: number       // Art.79° reduction (auto or manual)
-  art79_manual: boolean         // true if user typed manually
-  credit_hours: number          // credit hours (cargo-based)
-  credit_role: string           // role description for credit hours
-  teaching_component: number    // net CL = CL - art79 - credit
+  base_teaching_hours: number   // CL — Componente Letiva
+  te_hours: number              // TE — Trabalho no Estabelecimento
+  te_role: string               // cargo do TE
+  art79_reduction: number
+  art79_manual: boolean
+  credit_hours: number
+  credit_role: string
+  teaching_component: number    // CL líquida = CL - art79 - credit
 }
 
 interface TimetableOption {
@@ -484,6 +510,16 @@ const showComponents = ref(false)
 const compRows = ref<CompRow[]>([])
 const compSearch = ref('')
 const bulkLoading = ref(false)
+
+const teRoleOptions = [
+  'Reuniões de avaliação',
+  'Trabalho de coordenação pedagógica',
+  'Apoio educativo',
+  'Atendimento a encarregados de educação',
+  'Reuniões de departamento / grupo',
+  'Reuniões de conselho de turma',
+  'Atividades de complemento curricular',
+]
 
 const cargoOptions = [
   'Diretor de Turma',
@@ -697,11 +733,12 @@ async function openComponentDialog() {
     type ApiTeacher = {
       id: number; name: string; birth_date: string | null
       teaching_component: number | null; credit_hours: number | null; credit_role: string | null
-      base_teaching_hours: number | null
+      base_teaching_hours: number | null; te_hours: number | null; te_role: string | null
     }
     compRows.value = (data as ApiTeacher[]).map(t => {
       const base_teaching_hours = t.base_teaching_hours ?? 22
       const credit_hours = t.credit_hours ?? 0
+      const te_hours = t.te_hours ?? 3
       const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
 
       let art79_reduction: number
@@ -722,6 +759,8 @@ async function openComponentDialog() {
         name: t.name,
         birth_date: t.birth_date ?? null,
         base_teaching_hours,
+        te_hours,
+        te_role: t.te_role ?? '',
         art79_reduction,
         art79_manual,
         credit_hours,
@@ -759,9 +798,11 @@ async function saveComponents() {
       id: r.id,
       teaching_component: r.teaching_component,
       birth_date: r.birth_date || null,
+      base_teaching_hours: r.base_teaching_hours,
+      te_hours: r.te_hours,
+      te_role: r.te_role || null,
       credit_hours: r.credit_hours,
       credit_role: r.credit_role || null,
-      base_teaching_hours: r.base_teaching_hours,
     }))
     await api.put('/teachers/bulk-update', payload)
     $q.notify({ type: 'positive', message: `${payload.length} professor(es) atualizados` })

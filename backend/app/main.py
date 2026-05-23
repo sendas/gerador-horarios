@@ -70,6 +70,8 @@ for _sql in [
     "ALTER TABLE teachers ADD COLUMN total_hours INTEGER DEFAULT 25",
     "ALTER TABLE teachers ADD COLUMN base_teaching_hours INTEGER DEFAULT 22",
     "ALTER TABLE teachers ADD COLUMN credit_role TEXT",
+    "ALTER TABLE teachers ADD COLUMN te_hours INTEGER DEFAULT 3",
+    "ALTER TABLE teachers ADD COLUMN te_role TEXT",
 ]:
     try:
         with engine.connect() as _conn:

@@ -252,6 +252,8 @@ class TeacherBase(BaseModel):
     birth_date: Optional[date] = None
     total_hours: Optional[int] = 25
     base_teaching_hours: Optional[int] = 22
+    te_hours: Optional[int] = 3
+    te_role: Optional[str] = None
     credit_role: Optional[str] = None
 
 class TeacherCreate(TeacherBase):
@@ -271,6 +273,8 @@ class TeacherUpdate(BaseModel):
     birth_date: Optional[date] = None
     total_hours: Optional[int] = None
     base_teaching_hours: Optional[int] = None
+    te_hours: Optional[int] = None
+    te_role: Optional[str] = None
     credit_role: Optional[str] = None
 
 class TeacherResponse(TeacherBase):
