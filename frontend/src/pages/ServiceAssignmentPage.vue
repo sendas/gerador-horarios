@@ -361,9 +361,9 @@
         <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
           <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL</strong> = Componente Letiva (22h 2.º/3.º ciclo · 25h 1.º ciclo/Pré-escolar)</span>
           <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> (c/ 15 anos serviço) = 50–54a → 2h · 55–59a → 4h · ≥60a → 6h</span>
-          <span><q-icon name="calculate" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL líq.</strong> = CL − Red.Art.79°</span>
-          <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo (reduz TE, não a CL)</span>
-          <span><q-icon name="business" size="xs" color="teal-7" class="q-mr-xs" /><strong>TE líq.</strong> = (TE_base + Red.Art.79°) − Crédito H.</span>
+          <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo (reduz CL líq. — usado na elaboração do horário)</span>
+          <span><q-icon name="calculate" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL líq.</strong> = CL − Red.Art.79° − Crédito H.</span>
+          <span><q-icon name="business" size="xs" color="teal-7" class="q-mr-xs" /><strong>TE líq.</strong> = TE_base + Red.Art.79°</span>
           <span><q-icon name="home" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>TIA</strong> = 35 − CL líq. − TE líq.</span>
         </div>
       </q-card-section>
@@ -893,12 +893,12 @@ function calcArt79(birthDateStr: string): number {
 }
 
 function clLiquida(row: CompRow): number {
-  return Math.max(0, row.base_teaching_hours - row.art79_reduction)
+  return Math.max(0, row.base_teaching_hours - row.art79_reduction - row.credit_hours)
 }
 
 function teLiquido(row: CompRow): number {
   const teBase = row.te_role.reduce((s, a) => s + (a.hours || 0), 0)
-  return Math.max(0, teBase + row.art79_reduction - row.credit_hours)
+  return Math.max(0, teBase + row.art79_reduction)
 }
 
 function tia(row: CompRow): number {
