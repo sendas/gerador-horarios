@@ -24,6 +24,38 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="schedule" color="teal-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="teal-8" class="version-badge">v1.22.0</q-badge>
+                  Definição de Horas por Docente — CL / TE / TIA
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />23 de maio de 2026, 09:30
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="calculate" size="xs" color="teal-8" />
+                  Novo diálogo <strong>Componentes</strong> em Distribuição de Serviço com estrutura completa das 35h: CL · TE · TIA · Red. Art.79° · Crédito H. · CL líquida
+                </div>
+                <div class="feature-item">
+                  <q-icon name="business" size="xs" color="teal-8" />
+                  <strong>TE</strong> (Trabalho no Estabelecimento, base 3h) com campo de cargo atribuível — reuniões de avaliação, coordenação pedagógica, apoio educativo, etc.
+                </div>
+                <div class="feature-item">
+                  <q-icon name="home" size="xs" color="teal-8" />
+                  <strong>TIA</strong> (Trabalho Individual Autónomo) calculado automaticamente: 35 − CL − TE (ex: 22h CL → 3h TE → 10h TIA)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="filter_list" size="xs" color="teal-8" />
+                  Filtro por escola na página de distribuição + botões de aplicação em massa CL=22h (2.º/3.º ciclo) e CL=25h (1.º ciclo)
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="expand_more" color="indigo-8">
               <template #title>
                 <span class="version-title">
