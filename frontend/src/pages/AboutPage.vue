@@ -24,6 +24,34 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="expand_more" color="indigo-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="indigo-8" class="version-badge">v1.21.0</q-badge>
+                  Expansão de Professor, Navegação e Correção do Chat IA
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 23:00
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="expand_more" size="xs" color="indigo-8" />
+                  Na página <strong>Professores</strong>, clicar no nome expande uma linha inline com as escolas atribuídas (escola base em destaque) e as turmas do docente para o ano letivo ativo
+                </div>
+                <div class="feature-item">
+                  <q-icon name="schedule" size="xs" color="indigo-8" />
+                  Menu <strong>Pessoal</strong>: "Distribuição de Serviço" passou a <strong>Definição de horas por docente</strong> (inclui componente letiva, data de nascimento e reduções Art. 79°)
+                </div>
+                <div class="feature-item">
+                  <q-icon name="smart_toy" size="xs" color="indigo-8" />
+                  Chat IA: mensagem de erro do Gemini passa a mostrar o detalhe real da quota em vez de mensagem genérica fixa
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="build" color="deep-purple-7">
               <template #title>
                 <span class="version-title">
@@ -33,7 +61,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 21:05
                 </span>
               </template>
               <div class="feature-list">
@@ -61,7 +89,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 20:22
                 </span>
               </template>
               <div class="feature-list">
@@ -89,7 +117,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 15:46
                 </span>
               </template>
               <div class="feature-list">
@@ -113,7 +141,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 15:25
                 </span>
               </template>
               <div class="feature-list">
@@ -137,7 +165,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 14:05
                 </span>
               </template>
               <div class="feature-list">
@@ -161,7 +189,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 11:23
                 </span>
               </template>
               <div class="feature-list">
@@ -189,7 +217,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />22 de maio de 2026, 08:47
                 </span>
               </template>
               <div class="feature-list">

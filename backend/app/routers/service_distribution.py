@@ -4,7 +4,7 @@ from typing import List, Optional
 from app.database import get_db
 from app.models.models import (
     Teacher, ScheduledLesson, CurriculumEntry, Class, Subject,
-    NonTeachingAssignment, Timetable, AcademicYear, TeacherSchoolAssignment,
+    NonTeachingAssignment, Timetable, AcademicYear, TeacherSchoolAssignment, School,
 )
 
 router = APIRouter(prefix="/service-distribution", tags=["service_distribution"])
@@ -28,12 +28,31 @@ def get_service_distribution(
     timetables = [{"id": t.id, "name": t.name} for t in timetables_q.all()]
 
     # Teachers assigned to this academic year via TeacherSchoolAssignment
-    teacher_ids_q = (
-        db.query(TeacherSchoolAssignment.teacher_id)
+    assignments_q = (
+        db.query(TeacherSchoolAssignment)
         .filter(TeacherSchoolAssignment.academic_year_id == academic_year_id)
-        .distinct()
+        .all()
     )
-    teacher_ids = {row[0] for row in teacher_ids_q.all()}
+    teacher_ids = {a.teacher_id for a in assignments_q}
+    # Map teacher_id -> primary school (name + id)
+    primary_school_map: dict = {}
+    for a in assignments_q:
+        if a.is_primary or a.teacher_id not in primary_school_map:
+            school = db.query(School).filter(School.id == a.school_id).first()
+            primary_school_map[a.teacher_id] = {
+                "id": a.school_id,
+                "name": school.name if school else None,
+                "is_primary": bool(a.is_primary),
+            }
+
+    # Build unique school list for the filter
+    school_ids_seen: set = set()
+    schools_list = []
+    for info in primary_school_map.values():
+        if info["id"] not in school_ids_seen:
+            school_ids_seen.add(info["id"])
+            schools_list.append({"id": info["id"], "name": info["name"]})
+    schools_list.sort(key=lambda s: s["name"] or "")
 
     # Fallback: all teachers in the cluster when no school assignments exist yet
     if not teacher_ids and cluster_id:
@@ -102,6 +121,7 @@ def get_service_distribution(
 
         total_service = scheduled_hours + non_teaching_count
 
+        school_info = primary_school_map.get(teacher.id, {})
         result.append({
             "id": teacher.id,
             "name": teacher.name,
@@ -110,6 +130,8 @@ def get_service_distribution(
             "non_teaching_hours": non_teaching_count,
             "total_service": total_service,
             "classes_taught": classes_taught,
+            "primary_school_id": school_info.get("id"),
+            "primary_school_name": school_info.get("name"),
         })
 
-    return {"teachers": result, "timetables": timetables}
+    return {"teachers": result, "timetables": timetables, "schools": schools_list}

@@ -250,6 +250,9 @@ class TeacherBase(BaseModel):
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = 0
     birth_date: Optional[date] = None
+    total_hours: Optional[int] = 35
+    base_teaching_hours: Optional[int] = 22
+    credit_role: Optional[str] = None
 
 class TeacherCreate(TeacherBase):
     pass
@@ -266,6 +269,9 @@ class TeacherUpdate(BaseModel):
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = None
     birth_date: Optional[date] = None
+    total_hours: Optional[int] = None
+    base_teaching_hours: Optional[int] = None
+    credit_role: Optional[str] = None
 
 class TeacherResponse(TeacherBase):
     model_config = ConfigDict(from_attributes=True)

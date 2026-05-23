@@ -2030,13 +2030,16 @@ def chat(
 
             yield _sse({"type": "done", "tools_called": tools_called})
 
-        except RateLimitError:
+        except RateLimitError as exc:
+            body = exc.body or {}
+            err_detail = body.get("error", {}) if isinstance(body, dict) else {}
+            raw_msg = err_detail.get("message") or exc.message or str(exc)
             yield _sse({"type": "error", "message": (
-                "Limite da API Gemini atingido (quota: limit=0). "
+                f"Limite de quota da API Gemini atingido: {raw_msg}. "
                 "Verifica se a chave foi criada em aistudio.google.com com uma conta Gmail pessoal."
             )})
         except APIStatusError as exc:
-            yield _sse({"type": "error", "message": f"Erro da API Gemini: {exc.message}"})
+            yield _sse({"type": "error", "message": f"Erro da API Gemini ({exc.status_code}): {exc.message}"})
         except Exception as exc:
             yield _sse({"type": "error", "message": str(exc)})
 

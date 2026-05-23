@@ -1,6 +1,6 @@
 {
   "name": "gerador-horarios-frontend",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "Gerador de Horários Escolares",
   "scripts": {
     "dev": "quasar dev",

@@ -22,6 +22,9 @@ class BulkTeacherUpdate(BaseModel):
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = None
     birth_date: Optional[date_type] = None
+    total_hours: Optional[int] = None
+    base_teaching_hours: Optional[int] = None
+    credit_role: Optional[str] = None
 
 
 class BulkComponentRequest(BaseModel):
@@ -121,10 +124,14 @@ def bulk_update_teachers(items: List[BulkTeacherUpdate], db: Session = Depends(g
             continue
         if item.teaching_component is not None:
             t.teaching_component = item.teaching_component
-        if item.credit_hours is not None:
-            t.credit_hours = item.credit_hours
-        if item.birth_date is not None:
-            t.birth_date = item.birth_date
+        # Always persist these fields (allow clearing with null/0)
+        t.credit_hours = item.credit_hours if item.credit_hours is not None else 0
+        t.birth_date = item.birth_date
+        t.credit_role = item.credit_role
+        if item.total_hours is not None:
+            t.total_hours = item.total_hours
+        if item.base_teaching_hours is not None:
+            t.base_teaching_hours = item.base_teaching_hours
         updated.append(t.id)
     db.commit()
     return {"updated": updated}

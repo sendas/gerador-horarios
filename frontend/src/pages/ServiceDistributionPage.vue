@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="text-h5 q-mb-md">Distribuição de Serviço</div>
+    <div class="text-h5 q-mb-md">Definição de horas por docente</div>
 
     <!-- Selectors + actions -->
     <div class="row q-col-gutter-md q-mb-md items-end">
@@ -104,13 +104,29 @@
       </q-card>
     </q-dialog>
 
+    <!-- School filter -->
+    <div v-if="availableSchools.length > 1" class="row items-center q-mb-sm q-gutter-xs">
+      <span class="text-caption text-grey-7 q-mr-xs">Filtrar por escola:</span>
+      <q-chip
+        v-for="school in availableSchools"
+        :key="school.id"
+        clickable
+        :color="selectedSchoolId === school.id ? 'teal-7' : 'grey-3'"
+        :text-color="selectedSchoolId === school.id ? 'white' : 'dark'"
+        :icon="selectedSchoolId === school.id ? 'check' : undefined"
+        :label="school.name"
+        @click="selectedSchoolId = selectedSchoolId === school.id ? null : school.id"
+      />
+      <q-btn v-if="selectedSchoolId" flat dense size="sm" icon="close" color="grey-6" label="Limpar" @click="selectedSchoolId = null" />
+    </div>
+
     <!-- Summary stats -->
     <div v-if="teachers.length > 0" class="row q-col-gutter-md q-mb-md">
       <div class="col-12 col-sm-4">
         <q-card flat bordered>
           <q-card-section class="text-center">
-            <div class="text-h6">{{ teachers.length }}</div>
-            <div class="text-caption text-grey-7">Professores</div>
+            <div class="text-h6">{{ filteredTeachers.length }}</div>
+            <div class="text-caption text-grey-7">Professores{{ selectedSchoolId ? ' (filtrado)' : '' }}</div>
           </q-card-section>
         </q-card>
       </div>
@@ -160,7 +176,7 @@
     </div>
     <q-table
       v-if="teachers.length > 0"
-      :rows="teachers"
+      :rows="filteredTeachers"
       :columns="columns"
       row-key="id"
       flat
@@ -253,95 +269,149 @@
     </q-table>
 
     <!-- Component management dialog -->
-    <q-dialog v-model="showComponents" persistent style="max-width:900px">
-      <q-card style="min-width:min(96vw,860px)">
-        <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6"><q-icon name="tune" class="q-mr-sm" />Gerir Componentes Letivas</div>
-          <q-space /><q-btn icon="close" flat round dense v-close-popup />
+    <q-dialog v-model="showComponents" persistent maximized>
+      <q-card>
+        <q-card-section class="row items-center q-pb-sm bg-teal-8 text-white">
+          <q-icon name="tune" size="sm" class="q-mr-sm" />
+          <div class="text-h6">Definição de Horas por Docente</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup color="white" />
         </q-card-section>
 
-        <q-card-section>
-          <!-- Bulk actions bar -->
-          <div class="row q-gutter-sm q-mb-md items-center">
-            <q-btn color="teal-7" icon="playlist_add_check" label="Definir 22h a todos" unelevated @click="setAllBase(22)" :loading="bulkLoading" />
-            <q-btn color="indigo-6" icon="elderly" label="Aplicar Art. 79° a todos" unelevated @click="applyArt79All" :loading="bulkLoading"
-              :disable="compRows.every(r => !r.birth_date)" />
-            <q-chip dense icon="info" color="blue-2" text-color="dark">
-              Art. 79° ECD: 50–54a → −1h · 55–59a → −2h · ≥60a → −3h
-            </q-chip>
+        <!-- Legend -->
+        <q-card-section class="q-py-sm bg-blue-grey-1">
+          <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
+            <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Totais</strong> = horas de serviço total (35)</span>
+            <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>H. Letivas</strong> = componente letiva base (22)</span>
+            <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
+            <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito</strong> = horas de crédito por cargo</span>
+            <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva</strong> = H.Letivas − Red.Art.79° − Crédito</span>
           </div>
+        </q-card-section>
 
-          <!-- Per-teacher table -->
-          <q-table
-            :rows="compRows"
-            :columns="compColumns"
-            row-key="id"
-            flat dense
-            :pagination="{ rowsPerPage: 0 }"
-            hide-bottom
-            style="max-height:60vh;overflow-y:auto"
-            virtual-scroll
-            :virtual-scroll-item-size="48"
-          >
-            <template #body-cell-birth_date="props">
-              <q-td :props="props">
-                <q-input
-                  v-model="props.row.birth_date"
-                  type="date"
-                  dense outlined
-                  style="min-width:140px"
-                  @update:model-value="recalcRow(props.row)"
-                />
-              </q-td>
-            </template>
-            <template #body-cell-age="props">
-              <q-td :props="props" class="text-center">
-                <span v-if="props.row.birth_date">{{ calcAge(props.row.birth_date) }}</span>
-                <span v-else class="text-grey-5">—</span>
-              </q-td>
-            </template>
-            <template #body-cell-reduction="props">
-              <q-td :props="props" class="text-center">
-                <div class="row no-wrap items-center justify-center q-gutter-xs">
+        <q-card-section class="q-pt-sm q-pb-xs">
+          <!-- Bulk actions -->
+          <div class="row q-gutter-sm items-center flex-wrap">
+            <q-btn color="blue-7" icon="school" label="Definir 22h letivas a todos" unelevated dense @click="setAllBase(22)" :loading="bulkLoading" />
+            <q-btn color="indigo-6" icon="elderly" label="Aplicar Art. 79° a todos" unelevated dense @click="applyArt79All" :loading="bulkLoading"
+              :disable="compRows.every(r => !r.birth_date)" />
+            <q-input v-model="compSearch" placeholder="Pesquisar professor..." dense outlined clearable style="min-width:200px">
+              <template #prepend><q-icon name="search" /></template>
+            </q-input>
+          </div>
+        </q-card-section>
+
+        <!-- Per-teacher table -->
+        <q-card-section class="q-pt-xs" style="overflow:auto;height:calc(100vh - 220px)">
+          <table class="comp-table">
+            <thead>
+              <tr>
+                <th class="comp-th comp-th--name">Professor</th>
+                <th class="comp-th">Data Nasc.</th>
+                <th class="comp-th comp-th--sm">Idade</th>
+                <th class="comp-th comp-th--sm">H. Totais</th>
+                <th class="comp-th comp-th--sm">H. Letivas</th>
+                <th class="comp-th comp-th--sm">Red. Art.79°</th>
+                <th class="comp-th comp-th--sm">Crédito H.</th>
+                <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
+                <th class="comp-th comp-th--sm">Comp. Letiva</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in filteredCompRows"
+                :key="row.id"
+                class="comp-row"
+              >
+                <td class="comp-td comp-td--name">{{ row.name }}</td>
+                <td class="comp-td">
                   <q-input
-                    v-model.number="props.row.reduction"
+                    v-model="row.birth_date"
+                    type="date"
+                    dense outlined
+                    style="min-width:130px"
+                    @update:model-value="onBirthDateChange(row)"
+                  />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <span v-if="row.birth_date" class="text-body2">{{ calcAge(row.birth_date) }}</span>
+                  <span v-else class="text-grey-5">—</span>
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-input
+                    v-model.number="row.total_hours"
+                    type="number" min="1" max="50"
+                    dense outlined
+                    style="width:58px"
+                    @update:model-value="recalcTeachingComponent(row)"
+                  />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-input
+                    v-model.number="row.base_teaching_hours"
+                    type="number" min="0" max="40"
+                    dense outlined
+                    style="width:58px"
+                    @update:model-value="recalcTeachingComponent(row)"
+                  />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <div class="row no-wrap items-center justify-center" style="gap:4px">
+                    <q-input
+                      v-model.number="row.art79_reduction"
+                      type="number" min="0" max="10"
+                      dense outlined
+                      style="width:54px"
+                      @update:model-value="onArt79Change(row)"
+                    />
+                    <q-icon
+                      v-if="row.art79_manual"
+                      name="edit" size="xs" color="orange-6"
+                    ><q-tooltip>Redução manual</q-tooltip></q-icon>
+                    <q-icon
+                      v-else-if="row.birth_date && row.art79_reduction > 0"
+                      name="auto_awesome" size="xs" color="indigo-4"
+                    ><q-tooltip>Calculado automaticamente pelo Art. 79°</q-tooltip></q-icon>
+                  </div>
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-input
+                    v-model.number="row.credit_hours"
                     type="number" min="0" max="20"
                     dense outlined
-                    style="width:60px"
-                    @update:model-value="onReductionChange(props.row)"
+                    style="width:54px"
+                    @update:model-value="onCreditHoursChange(row)"
                   />
-                  <q-icon
-                    v-if="props.row.reduction_manual"
-                    name="edit" size="xs" color="orange-6"
-                  >
-                    <q-tooltip>Redução manual</q-tooltip>
-                  </q-icon>
-                  <q-icon
-                    v-else-if="props.row.birth_date && props.row.reduction > 0"
-                    name="auto_awesome" size="xs" color="indigo-4"
-                  >
-                    <q-tooltip>Calculado pelo Art. 79°</q-tooltip>
-                  </q-icon>
-                </div>
-              </q-td>
-            </template>
-            <template #body-cell-component="props">
-              <q-td :props="props" class="text-center">
-                <q-input
-                  v-model.number="props.row.teaching_component"
-                  type="number" min="0" max="30"
-                  dense outlined
-                  style="width:70px"
-                  @update:model-value="onComponentChange(props.row)"
-                />
-              </q-td>
-            </template>
-          </q-table>
+                </td>
+                <td class="comp-td">
+                  <q-select
+                    v-model="row.credit_role"
+                    :options="cargoOptions"
+                    :disable="!row.credit_hours"
+                    dense outlined
+                    use-input hide-selected fill-input
+                    input-debounce="0"
+                    clearable
+                    :placeholder="row.credit_hours ? 'Cargo...' : '—'"
+                    style="min-width:180px"
+                    @new-value="(val, done) => done(val)"
+                  />
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-badge
+                    :color="row.teaching_component < 0 ? 'negative' : row.teaching_component === 0 ? 'grey-5' : 'positive'"
+                    :label="row.teaching_component"
+                    style="font-size:13px;padding:4px 8px"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </q-card-section>
 
-        <q-card-actions align="right" class="q-px-md q-pb-md">
+        <q-card-actions align="right" class="q-px-md q-pb-md q-gutter-sm">
           <q-btn flat label="Cancelar" v-close-popup />
-          <q-btn color="teal-7" icon="save" label="Guardar" :loading="bulkLoading" @click="saveComponents" />
+          <q-btn color="teal-7" icon="save" label="Guardar tudo" :loading="bulkLoading" @click="saveComponents" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -373,16 +443,21 @@ interface TeacherDistribution {
   non_teaching_hours: number
   total_service: number
   classes_taught: ClassTaught[]
+  primary_school_id: number | null
+  primary_school_name: string | null
 }
 
 interface CompRow {
   id: number
   name: string
   birth_date: string | null
-  base: number               // implicit base (usually 22); teaching_component + reduction = base
-  reduction: number          // hours of reduction (Art.79° auto or manual)
-  reduction_manual: boolean  // true = user typed reduction directly
-  teaching_component: number | null
+  total_hours: number           // total service hours (default 35)
+  base_teaching_hours: number   // base teaching component before reductions (default 22)
+  art79_reduction: number       // Art.79° reduction (auto or manual)
+  art79_manual: boolean         // true if user typed manually
+  credit_hours: number          // credit hours (cargo-based)
+  credit_role: string           // role description for credit hours
+  teaching_component: number    // net teaching component = base - art79 - credit
 }
 
 interface TimetableOption {
@@ -398,6 +473,8 @@ const selectedYearId = ref<number | null>(null)
 const selectedTimetableId = ref<number | null>(null)
 const teachers = ref<TeacherDistribution[]>([])
 const timetableOptions = ref<{ label: string; value: number }[]>([])
+const availableSchools = ref<{ id: number; name: string }[]>([])
+const selectedSchoolId = ref<number | null>(null)
 const expandedRows = ref<Set<number>>(new Set())
 
 const showImport = ref(false)
@@ -408,15 +485,27 @@ const importResult = ref<{ updated: number; not_found: number; errors: string[] 
 // Component management dialog
 const showComponents = ref(false)
 const compRows = ref<CompRow[]>([])
+const compSearch = ref('')
 const bulkLoading = ref(false)
 
-const compColumns = [
-  { name: 'name', label: 'Professor', field: 'name', align: 'left' as const, sortable: true },
-  { name: 'birth_date', label: 'Data de Nasc.', field: 'birth_date', align: 'center' as const },
-  { name: 'age', label: 'Idade', field: 'birth_date', align: 'center' as const },
-  { name: 'reduction', label: 'Redução (h)', field: 'reduction', align: 'center' as const },
-  { name: 'component', label: 'Comp. Letiva (h)', field: 'teaching_component', align: 'center' as const },
+const cargoOptions = [
+  'Diretor de Turma',
+  'Coordenador de Departamento',
+  'Coordenador dos Diretores de Turma',
+  'Assessor de Direção',
+  'Representante de Grupo Disciplinar',
+  'Coordenador de Projetos',
+  'Dinamizador de Biblioteca / CRE',
+  'Coordenador de Ano',
+  'Orientador de Estágio',
+  'Direção',
 ]
+
+const filteredCompRows = computed(() => {
+  if (!compSearch.value) return compRows.value
+  const q = compSearch.value.toLowerCase()
+  return compRows.value.filter((r) => r.name.toLowerCase().includes(q))
+})
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 
@@ -429,13 +518,18 @@ const selectedClusterId = computed(() => {
   return year?.cluster_id ?? null
 })
 
+const filteredTeachers = computed(() => {
+  if (!selectedSchoolId.value) return teachers.value
+  return teachers.value.filter((t) => t.primary_school_id === selectedSchoolId.value)
+})
+
 const totalScheduledHours = computed(() =>
-  teachers.value.reduce((sum, t) => sum + t.scheduled_hours, 0)
+  filteredTeachers.value.reduce((sum, t) => sum + t.scheduled_hours, 0)
 )
 
 const averageScheduledHours = computed(() => {
-  if (teachers.value.length === 0) return '—'
-  return (totalScheduledHours.value / teachers.value.length).toFixed(1)
+  if (filteredTeachers.value.length === 0) return '—'
+  return (totalScheduledHours.value / filteredTeachers.value.length).toFixed(1)
 })
 
 // ── Columns ───────────────────────────────────────────────────────────────────
@@ -486,6 +580,8 @@ async function loadData() {
     const { data } = await api.get('/service-distribution', { params })
     teachers.value = data.teachers as TeacherDistribution[]
     timetableOptions.value = (data.timetables as TimetableOption[]).map((t) => ({ label: t.name, value: t.id }))
+    availableSchools.value = (data.schools as { id: number; name: string }[]) ?? []
+    selectedSchoolId.value = null
   } catch {
     $q.notify({ type: 'negative', message: 'Erro ao carregar distribuição de serviço' })
     teachers.value = []
@@ -574,37 +670,70 @@ function calcArt79(birthDateStr: string): number {
   return 0
 }
 
-function recalcRow(row: CompRow) {
-  if (row.birth_date && !row.reduction_manual) {
-    row.reduction = calcArt79(row.birth_date)
-    row.teaching_component = row.base - row.reduction
+function recalcTeachingComponent(row: CompRow) {
+  row.teaching_component = row.base_teaching_hours - row.art79_reduction - row.credit_hours
+}
+
+function onBirthDateChange(row: CompRow) {
+  if (!row.art79_manual) {
+    row.art79_reduction = row.birth_date ? calcArt79(row.birth_date) : 0
   }
+  recalcTeachingComponent(row)
 }
 
-function onReductionChange(row: CompRow) {
-  row.reduction_manual = true
-  row.teaching_component = row.base - row.reduction
+function onArt79Change(row: CompRow) {
+  row.art79_manual = true
+  recalcTeachingComponent(row)
 }
 
-function onComponentChange(row: CompRow) {
-  // Keep base in sync so future reduction changes are relative to the new value
-  row.base = (row.teaching_component ?? 0) + row.reduction
+function onCreditHoursChange(row: CompRow) {
+  if (!row.credit_hours) row.credit_role = ''
+  recalcTeachingComponent(row)
 }
 
 async function openComponentDialog() {
   if (!selectedClusterId.value) return
   bulkLoading.value = true
+  compSearch.value = ''
   try {
     const { data } = await api.get('/teachers', { params: { cluster_id: selectedClusterId.value } })
-    compRows.value = (data as { id: number; name: string; birth_date: string | null; teaching_component: number | null; credit_hours: number | null }[])
-      .map(t => {
-        const autoReduction = t.birth_date ? calcArt79(t.birth_date) : 0
-        const reduction = t.credit_hours ?? autoReduction
-        const reduction_manual = t.credit_hours !== null
-        const base = t.teaching_component !== null ? t.teaching_component + reduction : 22
-        return { id: t.id, name: t.name, birth_date: t.birth_date ?? null, base, reduction, reduction_manual, teaching_component: t.teaching_component ?? null }
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
+    type ApiTeacher = {
+      id: number; name: string; birth_date: string | null
+      teaching_component: number | null; credit_hours: number | null; credit_role: string | null
+      total_hours: number | null; base_teaching_hours: number | null
+    }
+    compRows.value = (data as ApiTeacher[]).map(t => {
+      const base_teaching_hours = t.base_teaching_hours ?? 22
+      const credit_hours = t.credit_hours ?? 0
+      const total_hours = t.total_hours ?? 35
+      const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
+
+      let art79_reduction: number
+      let art79_manual: boolean
+      if (t.teaching_component !== null) {
+        // Derive art79 from stored values: NET = base - art79 - credit
+        const derived = base_teaching_hours - t.teaching_component - credit_hours
+        art79_reduction = Math.max(0, derived)
+        art79_manual = art79_reduction !== art79Auto
+      } else {
+        art79_reduction = art79Auto
+        art79_manual = false
+      }
+
+      const teaching_component = base_teaching_hours - art79_reduction - credit_hours
+      return {
+        id: t.id,
+        name: t.name,
+        birth_date: t.birth_date ?? null,
+        total_hours,
+        base_teaching_hours,
+        art79_reduction,
+        art79_manual,
+        credit_hours,
+        credit_role: t.credit_role ?? '',
+        teaching_component,
+      }
+    }).sort((a, b) => a.name.localeCompare(b.name))
   } finally {
     bulkLoading.value = false
   }
@@ -613,17 +742,17 @@ async function openComponentDialog() {
 
 function setAllBase(base: number) {
   compRows.value.forEach(r => {
-    r.base = base
-    r.teaching_component = base - r.reduction
+    r.base_teaching_hours = base
+    recalcTeachingComponent(r)
   })
 }
 
 function applyArt79All() {
   compRows.value.forEach(r => {
     if (r.birth_date) {
-      r.reduction = calcArt79(r.birth_date)
-      r.reduction_manual = false
-      r.teaching_component = r.base - r.reduction
+      r.art79_reduction = calcArt79(r.birth_date)
+      r.art79_manual = false
+      recalcTeachingComponent(r)
     }
   })
 }
@@ -635,14 +764,17 @@ async function saveComponents() {
       id: r.id,
       teaching_component: r.teaching_component,
       birth_date: r.birth_date || null,
-      credit_hours: r.reduction,
+      credit_hours: r.credit_hours,
+      credit_role: r.credit_role || null,
+      total_hours: r.total_hours,
+      base_teaching_hours: r.base_teaching_hours,
     }))
     await api.put('/teachers/bulk-update', payload)
-    $q.notify({ type: 'positive', message: `${payload.length} professores atualizados` })
+    $q.notify({ type: 'positive', message: `${payload.length} professor(es) atualizados` })
     showComponents.value = false
     await loadData()
   } catch {
-    $q.notify({ type: 'negative', message: 'Erro ao guardar componentes' })
+    $q.notify({ type: 'negative', message: 'Erro ao guardar — tente novamente' })
   } finally {
     bulkLoading.value = false
   }
@@ -659,3 +791,36 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.comp-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.comp-th {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  background: #2c3e50;
+  color: white;
+  text-align: center;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.comp-th--name { text-align: left; min-width: 160px; }
+.comp-th--sm { min-width: 70px; }
+.comp-th--cargo { min-width: 200px; text-align: left; }
+.comp-td {
+  padding: 3px 6px;
+  border: 1px solid #e0e0e0;
+  vertical-align: middle;
+}
+.comp-td--name { font-weight: 500; white-space: nowrap; }
+.comp-td--center { text-align: center; }
+.comp-row:hover { background: rgba(0,0,0,0.03); }
+.body--dark .comp-th { background: #1a2332; }
+.body--dark .comp-td { border-color: #444; }
+.body--dark .comp-row:hover { background: rgba(255,255,255,0.05); }
+</style>

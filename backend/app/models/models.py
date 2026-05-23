@@ -191,6 +191,9 @@ class Teacher(Base):
     teaching_component = Column(Integer, nullable=True)  # letivas/semana configuradas (14–22)
     credit_hours = Column(Integer, nullable=True, default=0)  # horas de crédito/redução
     birth_date = Column(Date, nullable=True)
+    total_hours = Column(Integer, nullable=True, default=35)        # horas serviço total (35)
+    base_teaching_hours = Column(Integer, nullable=True, default=22) # componente letiva base antes de reduções
+    credit_role = Column(String, nullable=True)                     # cargo associado ao crédito horário
 
     cluster = relationship("Cluster", back_populates="teachers")
     school_assignments = relationship("TeacherSchoolAssignment", back_populates="teacher", cascade="all, delete-orphan")
