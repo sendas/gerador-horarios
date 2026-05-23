@@ -33,7 +33,6 @@
       <div class="col-12 col-sm-4 row items-center q-gutter-sm">
         <q-btn color="primary" icon="download" label="Exportar CSV" dense :disable="teachers.length === 0" @click="exportCsv" />
         <q-btn color="secondary" icon="upload" label="Importar Comp. Letiva" dense :disable="!selectedYearId" @click="showImport = true" />
-        <q-btn color="teal-7" icon="tune" label="Componentes" dense :disable="!selectedYearId" @click="openComponentDialog" />
       </div>
     </div>
 

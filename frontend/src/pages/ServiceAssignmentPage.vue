@@ -3,6 +3,7 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5 col">Distribuição de Serviço</div>
       <q-btn color="teal-7" icon="tune" label="Gerir horas" class="q-mr-sm" @click="openHoursDialog" />
+      <q-btn color="indigo-7" icon="calculate" label="Componentes" class="q-mr-sm" :disable="!selectedYearId" @click="openComponentDialog" />
       <q-select
         v-model="selectedYearId"
         :options="yearOptions"
@@ -342,6 +343,127 @@
           </div>
         </template>
       </q-card-section>
+    </q-card>
+  </q-dialog>
+
+  <!-- Component management dialog -->
+  <q-dialog v-model="showComponents" persistent maximized>
+    <q-card>
+      <q-card-section class="row items-center q-pb-sm bg-indigo-8 text-white">
+        <q-icon name="calculate" size="sm" class="q-mr-sm" />
+        <div class="text-h6">Definição de Horas por Docente</div>
+        <q-space />
+        <q-btn icon="close" flat round dense v-close-popup color="white" />
+      </q-card-section>
+
+      <!-- Legend -->
+      <q-card-section class="q-py-sm bg-blue-grey-1">
+        <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
+          <span><q-icon name="work" size="xs" color="grey-7" class="q-mr-xs" /><strong>Total serviço</strong> = 35h (lei)</span>
+          <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Presença</strong> = presença na escola CL+CNL (base 25h)</span>
+          <span><q-icon name="home_work" size="xs" color="purple-7" class="q-mr-xs" /><strong>CIT</strong> = 35 − H.Presença (componente individual de trabalho)</span>
+          <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>H. Letivas</strong> = componente letiva base (22h)</span>
+          <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
+          <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = H.Presença − H.Letivas − Red.Art.79°</span>
+          <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito</strong> = horas de crédito por cargo</span>
+          <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva</strong> = H.Letivas − Red.Art.79° − Crédito</span>
+        </div>
+      </q-card-section>
+
+      <q-card-section class="q-pt-sm q-pb-xs">
+        <div class="row q-gutter-sm items-center flex-wrap">
+          <q-btn color="blue-7" icon="school" label="Definir 22h letivas a todos" unelevated dense @click="setAllBase(22)" :loading="compBulkLoading" />
+          <q-btn color="indigo-6" icon="elderly" label="Aplicar Art. 79° a todos" unelevated dense @click="applyArt79All" :loading="compBulkLoading"
+            :disable="compRows.every(r => !r.birth_date)" />
+          <q-input v-model="compSearch" placeholder="Pesquisar professor..." dense outlined clearable style="min-width:200px">
+            <template #prepend><q-icon name="search" /></template>
+          </q-input>
+        </div>
+      </q-card-section>
+
+      <q-card-section class="q-pt-xs" style="overflow:auto;height:calc(100vh - 240px)">
+        <table class="comp-table">
+          <thead>
+            <tr>
+              <th class="comp-th comp-th--name">Professor</th>
+              <th class="comp-th">Data Nasc.</th>
+              <th class="comp-th comp-th--sm">Idade</th>
+              <th class="comp-th comp-th--sm">H. Presença</th>
+              <th class="comp-th comp-th--sm">CIT</th>
+              <th class="comp-th comp-th--sm">H. Letivas</th>
+              <th class="comp-th comp-th--sm">Red. Art.79°</th>
+              <th class="comp-th comp-th--sm">CNL</th>
+              <th class="comp-th comp-th--sm">Crédito H.</th>
+              <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
+              <th class="comp-th comp-th--sm">Comp. Letiva</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in filteredCompRows" :key="row.id" class="comp-row">
+              <td class="comp-td comp-td--name">{{ row.name }}</td>
+              <td class="comp-td">
+                <q-input v-model="row.birth_date" type="date" dense outlined style="min-width:130px"
+                  @update:model-value="onBirthDateChange(row)" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <span v-if="row.birth_date" class="text-body2">{{ calcAge(row.birth_date) }}</span>
+                <span v-else class="text-grey-5">—</span>
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-input v-model.number="row.total_hours" type="number" min="1" max="50" dense outlined
+                  style="width:58px" @update:model-value="recalcTeachingComponent(row)" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-badge color="purple-7" :label="Math.max(0, 35 - row.total_hours)"
+                  style="font-size:13px;padding:4px 8px" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-input v-model.number="row.base_teaching_hours" type="number" min="0" max="40" dense outlined
+                  style="width:58px" @update:model-value="recalcTeachingComponent(row)" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <div class="row no-wrap items-center justify-center" style="gap:4px">
+                  <q-input v-model.number="row.art79_reduction" type="number" min="0" max="10" dense outlined
+                    style="width:54px" @update:model-value="onArt79Change(row)" />
+                  <q-icon v-if="row.art79_manual" name="edit" size="xs" color="orange-6">
+                    <q-tooltip>Redução manual</q-tooltip>
+                  </q-icon>
+                  <q-icon v-else-if="row.birth_date && row.art79_reduction > 0" name="auto_awesome" size="xs" color="indigo-4">
+                    <q-tooltip>Calculado automaticamente pelo Art. 79°</q-tooltip>
+                  </q-icon>
+                </div>
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-badge
+                  :color="Math.max(0, row.total_hours - row.base_teaching_hours - row.art79_reduction) > 0 ? 'deep-orange-7' : 'grey-5'"
+                  :label="Math.max(0, row.total_hours - row.base_teaching_hours - row.art79_reduction)"
+                  style="font-size:13px;padding:4px 8px" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-input v-model.number="row.credit_hours" type="number" min="0" max="20" dense outlined
+                  style="width:54px" @update:model-value="onCreditHoursChange(row)" />
+              </td>
+              <td class="comp-td">
+                <q-select v-model="row.credit_role" :options="cargoOptions" :disable="!row.credit_hours"
+                  dense outlined use-input hide-selected fill-input input-debounce="0" clearable
+                  :placeholder="row.credit_hours ? 'Cargo...' : '—'" style="min-width:180px"
+                  @new-value="(val, done) => done(val)" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-badge
+                  :color="row.teaching_component < 0 ? 'negative' : row.teaching_component === 0 ? 'grey-5' : 'positive'"
+                  :label="row.teaching_component"
+                  style="font-size:13px;padding:4px 8px" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </q-card-section>
+
+      <q-card-actions align="right" class="q-px-md q-pb-md q-gutter-sm">
+        <q-btn flat label="Cancelar" v-close-popup />
+        <q-btn color="indigo-7" icon="save" label="Guardar tudo" :loading="compBulkLoading" @click="saveComponents" />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 
@@ -685,6 +807,149 @@ async function saveAllHours() {
   }
 }
 
+// ── Componentes dialog ─────────────────────────────────
+interface CompRow {
+  id: number
+  name: string
+  birth_date: string | null
+  total_hours: number
+  base_teaching_hours: number
+  art79_reduction: number
+  art79_manual: boolean
+  credit_hours: number
+  credit_role: string
+  teaching_component: number
+}
+
+const showComponents = ref(false)
+const compRows = ref<CompRow[]>([])
+const compSearch = ref('')
+const compBulkLoading = ref(false)
+
+const cargoOptions = [
+  'Diretor de Turma',
+  'Coordenador de Departamento',
+  'Coordenador dos Diretores de Turma',
+  'Assessor de Direção',
+  'Representante de Grupo Disciplinar',
+  'Coordenador de Projetos',
+  'Dinamizador de Biblioteca / CRE',
+  'Coordenador de Ano',
+  'Orientador de Estágio',
+  'Direção',
+]
+
+const filteredCompRows = computed(() => {
+  if (!compSearch.value) return compRows.value
+  const q = compSearch.value.toLowerCase()
+  return compRows.value.filter((r) => r.name.toLowerCase().includes(q))
+})
+
+function calcAge(birthDateStr: string): number {
+  const today = new Date()
+  const bd = new Date(birthDateStr)
+  let age = today.getFullYear() - bd.getFullYear()
+  if (today.getMonth() < bd.getMonth() || (today.getMonth() === bd.getMonth() && today.getDate() < bd.getDate())) age--
+  return age
+}
+
+function calcArt79(birthDateStr: string): number {
+  const age = calcAge(birthDateStr)
+  if (age >= 60) return 3
+  if (age >= 55) return 2
+  if (age >= 50) return 1
+  return 0
+}
+
+function recalcTeachingComponent(row: CompRow) {
+  row.teaching_component = row.base_teaching_hours - row.art79_reduction - row.credit_hours
+}
+
+function onBirthDateChange(row: CompRow) {
+  if (!row.art79_manual) {
+    row.art79_reduction = row.birth_date ? calcArt79(row.birth_date) : 0
+  }
+  recalcTeachingComponent(row)
+}
+
+function onArt79Change(row: CompRow) {
+  row.art79_manual = true
+  recalcTeachingComponent(row)
+}
+
+function onCreditHoursChange(row: CompRow) {
+  if (!row.credit_hours) row.credit_role = ''
+  recalcTeachingComponent(row)
+}
+
+async function openComponentDialog() {
+  if (!clusterId.value) return
+  compBulkLoading.value = true
+  compSearch.value = ''
+  try {
+    const { data } = await api.get('/teachers', { params: { cluster_id: clusterId.value } })
+    type ApiTeacher = {
+      id: number; name: string; birth_date: string | null
+      teaching_component: number | null; credit_hours: number | null; credit_role: string | null
+      total_hours: number | null; base_teaching_hours: number | null
+    }
+    compRows.value = (data as ApiTeacher[]).map(t => {
+      const base_teaching_hours = t.base_teaching_hours ?? 22
+      const credit_hours = t.credit_hours ?? 0
+      const total_hours = t.total_hours ?? 25
+      const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
+      let art79_reduction: number
+      let art79_manual: boolean
+      if (t.teaching_component !== null) {
+        const derived = base_teaching_hours - t.teaching_component - credit_hours
+        art79_reduction = Math.max(0, derived)
+        art79_manual = art79_reduction !== art79Auto
+      } else {
+        art79_reduction = art79Auto
+        art79_manual = false
+      }
+      const teaching_component = base_teaching_hours - art79_reduction - credit_hours
+      return {
+        id: t.id, name: t.name, birth_date: t.birth_date ?? null,
+        total_hours, base_teaching_hours, art79_reduction, art79_manual,
+        credit_hours, credit_role: t.credit_role ?? '', teaching_component,
+      }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  } finally {
+    compBulkLoading.value = false
+  }
+  showComponents.value = true
+}
+
+function setAllBase(base: number) {
+  compRows.value.forEach(r => { r.base_teaching_hours = base; recalcTeachingComponent(r) })
+}
+
+function applyArt79All() {
+  compRows.value.forEach(r => {
+    if (r.birth_date) { r.art79_reduction = calcArt79(r.birth_date); r.art79_manual = false; recalcTeachingComponent(r) }
+  })
+}
+
+async function saveComponents() {
+  compBulkLoading.value = true
+  try {
+    const payload = compRows.value.map(r => ({
+      id: r.id, teaching_component: r.teaching_component, birth_date: r.birth_date || null,
+      credit_hours: r.credit_hours, credit_role: r.credit_role || null,
+      total_hours: r.total_hours, base_teaching_hours: r.base_teaching_hours,
+    }))
+    await api.put('/teachers/bulk-update', payload)
+    await teachersStore.fetchAll()
+    $q.notify({ type: 'positive', message: `${payload.length} professor(es) atualizados` })
+    showComponents.value = false
+  } catch {
+    $q.notify({ type: 'negative', message: 'Erro ao guardar — tente novamente' })
+  } finally {
+    compBulkLoading.value = false
+  }
+}
+
 // Initialize
 import { onMounted } from 'vue'
 onMounted(async () => {
@@ -702,4 +967,34 @@ onMounted(async () => {
 .body--dark .subject-block {
   border-top-color: rgba(255,255,255,0.08);
 }
+.comp-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.comp-th {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  background: #2c3e50;
+  color: white;
+  text-align: center;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.comp-th--name { text-align: left; min-width: 160px; }
+.comp-th--sm { min-width: 70px; }
+.comp-th--cargo { min-width: 200px; text-align: left; }
+.comp-td {
+  padding: 3px 6px;
+  border: 1px solid #e0e0e0;
+  vertical-align: middle;
+}
+.comp-td--name { font-weight: 500; white-space: nowrap; }
+.comp-td--center { text-align: center; }
+.comp-row:hover { background: rgba(0,0,0,0.03); }
+.body--dark .comp-th { background: #1a2332; }
+.body--dark .comp-td { border-color: #444; }
+.body--dark .comp-row:hover { background: rgba(255,255,255,0.05); }
 </style>
