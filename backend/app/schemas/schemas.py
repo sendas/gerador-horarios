@@ -250,7 +250,7 @@ class TeacherBase(BaseModel):
     teaching_component: Optional[int] = None
     credit_hours: Optional[int] = 0
     birth_date: Optional[date] = None
-    total_hours: Optional[int] = 35
+    total_hours: Optional[int] = 25
     base_teaching_hours: Optional[int] = 22
     credit_role: Optional[str] = None
 

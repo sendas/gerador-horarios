@@ -67,7 +67,7 @@ for _sql in [
     "ALTER TABLE curriculum_plans ADD COLUMN is_semestral BOOLEAN DEFAULT 0",
     "ALTER TABLE curriculum_plans ADD COLUMN semester INTEGER",
     "ALTER TABLE curriculum_plans ADD COLUMN paired_subject_id INTEGER REFERENCES subjects(id)",
-    "ALTER TABLE teachers ADD COLUMN total_hours INTEGER DEFAULT 35",
+    "ALTER TABLE teachers ADD COLUMN total_hours INTEGER DEFAULT 25",
     "ALTER TABLE teachers ADD COLUMN base_teaching_hours INTEGER DEFAULT 22",
     "ALTER TABLE teachers ADD COLUMN credit_role TEXT",
 ]:

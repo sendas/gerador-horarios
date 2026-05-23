@@ -281,10 +281,11 @@
         <!-- Legend -->
         <q-card-section class="q-py-sm bg-blue-grey-1">
           <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
-            <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Totais</strong> = horas de serviço total (35)</span>
+            <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Totais</strong> = horas de presença na escola CL+CNL (base 25)</span>
             <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>H. Letivas</strong> = componente letiva base (22)</span>
             <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
             <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito</strong> = horas de crédito por cargo</span>
+            <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = H.Totais − H.Letivas − Red.Art.79°</span>
             <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva</strong> = H.Letivas − Red.Art.79° − Crédito</span>
           </div>
         </q-card-section>
@@ -312,6 +313,7 @@
                 <th class="comp-th comp-th--sm">H. Totais</th>
                 <th class="comp-th comp-th--sm">H. Letivas</th>
                 <th class="comp-th comp-th--sm">Red. Art.79°</th>
+                <th class="comp-th comp-th--sm">CNL</th>
                 <th class="comp-th comp-th--sm">Crédito H.</th>
                 <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
                 <th class="comp-th comp-th--sm">Comp. Letiva</th>
@@ -373,6 +375,13 @@
                       name="auto_awesome" size="xs" color="indigo-4"
                     ><q-tooltip>Calculado automaticamente pelo Art. 79°</q-tooltip></q-icon>
                   </div>
+                </td>
+                <td class="comp-td comp-td--center">
+                  <q-badge
+                    :color="Math.max(0, row.total_hours - row.base_teaching_hours - row.art79_reduction) > 0 ? 'deep-orange-7' : 'grey-5'"
+                    :label="Math.max(0, row.total_hours - row.base_teaching_hours - row.art79_reduction)"
+                    style="font-size:13px;padding:4px 8px"
+                  />
                 </td>
                 <td class="comp-td comp-td--center">
                   <q-input
@@ -705,7 +714,7 @@ async function openComponentDialog() {
     compRows.value = (data as ApiTeacher[]).map(t => {
       const base_teaching_hours = t.base_teaching_hours ?? 22
       const credit_hours = t.credit_hours ?? 0
-      const total_hours = t.total_hours ?? 35
+      const total_hours = t.total_hours ?? 25
       const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
 
       let art79_reduction: number
