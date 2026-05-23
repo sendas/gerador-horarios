@@ -446,17 +446,22 @@
               </td>
               <td class="comp-td comp-td--te">
                 <div v-for="(alloc, i) in row.te_role" :key="i" class="row no-wrap items-center q-mb-xs" style="gap:4px">
-                  <q-select v-model="alloc.role" :options="teRoleOptions" dense outlined
+                  <q-select v-model="alloc.role" :options="teAllocOptions" dense outlined
                     use-input fill-input input-debounce="0" clearable
-                    placeholder="Atividade..." style="min-width:160px"
+                    placeholder="Cargo / Atividade..." style="min-width:180px"
                     @new-value="(val, done) => done(val)" />
                   <q-input v-model.number="alloc.hours" type="number" min="0" max="20"
-                    dense outlined style="width:54px" suffix="h" />
+                    dense outlined style="width:58px" suffix="h" />
                   <q-btn flat round dense size="xs" icon="close" color="grey-5"
                     @click="removeTeAlloc(row, i)" />
                 </div>
-                <q-btn flat dense size="xs" icon="add" color="teal-7" label="Adicionar"
-                  @click="addTeAlloc(row)" />
+                <div class="row items-center" style="gap:8px">
+                  <q-btn flat dense size="xs" icon="add" color="teal-7" label="Adicionar"
+                    @click="addTeAlloc(row)" />
+                  <span v-if="row.te_role.length > 0" class="text-caption text-grey-7">
+                    Total: <strong>{{ row.te_role.reduce((s,a) => s + (a.hours||0), 0) }}h</strong>
+                  </span>
+                </div>
               </td>
               <td class="comp-td comp-td--center">
                 <q-badge color="teal-7"
@@ -841,16 +846,6 @@ const compRows = ref<CompRow[]>([])
 const compSearch = ref('')
 const compBulkLoading = ref(false)
 
-const teRoleOptions = [
-  'Reuniões de avaliação',
-  'Trabalho de coordenação pedagógica',
-  'Apoio educativo',
-  'Atendimento a encarregados de educação',
-  'Reuniões de departamento / grupo',
-  'Reuniões de conselho de turma',
-  'Atividades de complemento curricular',
-]
-
 const cargoOptions = [
   'Diretor de Turma',
   'Coordenador de Departamento',
@@ -862,6 +857,17 @@ const cargoOptions = [
   'Coordenador de Ano',
   'Orientador de Estágio',
   'Direção',
+]
+
+const teAllocOptions = [
+  ...cargoOptions,
+  'Reuniões de avaliação',
+  'Trabalho de coordenação pedagógica',
+  'Apoio educativo',
+  'Atendimento a encarregados de educação',
+  'Reuniões de departamento / grupo',
+  'Reuniões de conselho de turma',
+  'Atividades de complemento curricular',
 ]
 
 const filteredCompRows = computed(() => {
