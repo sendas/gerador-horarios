@@ -359,20 +359,18 @@
       <!-- Legend -->
       <q-card-section class="q-py-sm bg-blue-grey-1">
         <div class="row q-gutter-md items-center text-caption text-grey-8 flex-wrap">
-          <span><q-icon name="work" size="xs" color="grey-7" class="q-mr-xs" /><strong>Total serviço</strong> = 35h (lei)</span>
-          <span><q-icon name="schedule" size="xs" color="teal-7" class="q-mr-xs" /><strong>H. Presença</strong> = presença na escola CL+CNL (base 25h)</span>
-          <span><q-icon name="home_work" size="xs" color="purple-7" class="q-mr-xs" /><strong>CIT</strong> = 35 − H.Presença (componente individual de trabalho)</span>
-          <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>H. Letivas</strong> = componente letiva base (22h)</span>
+          <span><q-icon name="school" size="xs" color="blue-7" class="q-mr-xs" /><strong>CL</strong> = Componente Letiva (22h 2.º/3.º ciclo · 25h 1.º ciclo/Pré-escolar)</span>
+          <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = Componente Não Letiva = 35 − CL (trabalho no estabelecimento + trabalho individual autónomo)</span>
           <span><q-icon name="elderly" size="xs" color="indigo-6" class="q-mr-xs" /><strong>Red. Art.79°</strong> = 50–54a → 1h · 55–59a → 2h · ≥60a → 3h</span>
-          <span><q-icon name="work_off" size="xs" color="deep-orange-7" class="q-mr-xs" /><strong>CNL</strong> = H.Presença − H.Letivas − Red.Art.79°</span>
-          <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito</strong> = horas de crédito por cargo</span>
-          <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva</strong> = H.Letivas − Red.Art.79° − Crédito</span>
+          <span><q-icon name="card_membership" size="xs" color="orange-7" class="q-mr-xs" /><strong>Crédito H.</strong> = horas de crédito por cargo</span>
+          <span><q-icon name="calculate" size="xs" color="positive" class="q-mr-xs" /><strong>Comp. Letiva (net)</strong> = CL − Red.Art.79° − Crédito H.</span>
         </div>
       </q-card-section>
 
       <q-card-section class="q-pt-sm q-pb-xs">
         <div class="row q-gutter-sm items-center flex-wrap">
-          <q-btn color="blue-7" icon="school" label="Definir 22h letivas a todos" unelevated dense @click="setAllBase(22)" :loading="compBulkLoading" />
+          <q-btn color="blue-7" icon="school" label="CL = 22h a todos (2.º/3.º ciclo)" unelevated dense @click="setAllBase(22)" :loading="compBulkLoading" />
+          <q-btn color="teal-7" icon="school" label="CL = 25h a todos (1.º ciclo)" unelevated dense @click="setAllBase(25)" :loading="compBulkLoading" />
           <q-btn color="indigo-6" icon="elderly" label="Aplicar Art. 79° a todos" unelevated dense @click="applyArt79All" :loading="compBulkLoading"
             :disable="compRows.every(r => !r.birth_date)" />
           <q-input v-model="compSearch" placeholder="Pesquisar professor..." dense outlined clearable style="min-width:200px">
@@ -381,21 +379,19 @@
         </div>
       </q-card-section>
 
-      <q-card-section class="q-pt-xs" style="overflow:auto;height:calc(100vh - 240px)">
+      <q-card-section class="q-pt-xs" style="overflow:auto;height:calc(100vh - 250px)">
         <table class="comp-table">
           <thead>
             <tr>
               <th class="comp-th comp-th--name">Professor</th>
               <th class="comp-th">Data Nasc.</th>
               <th class="comp-th comp-th--sm">Idade</th>
-              <th class="comp-th comp-th--sm">H. Presença</th>
-              <th class="comp-th comp-th--sm">CIT</th>
-              <th class="comp-th comp-th--sm">H. Letivas</th>
-              <th class="comp-th comp-th--sm">Red. Art.79°</th>
+              <th class="comp-th comp-th--sm">CL</th>
               <th class="comp-th comp-th--sm">CNL</th>
+              <th class="comp-th comp-th--sm">Red. Art.79°</th>
               <th class="comp-th comp-th--sm">Crédito H.</th>
               <th class="comp-th comp-th--cargo">Cargo (crédito)</th>
-              <th class="comp-th comp-th--sm">Comp. Letiva</th>
+              <th class="comp-th comp-th--sm">Comp. Letiva (net)</th>
             </tr>
           </thead>
           <tbody>
@@ -410,16 +406,13 @@
                 <span v-else class="text-grey-5">—</span>
               </td>
               <td class="comp-td comp-td--center">
-                <q-input v-model.number="row.total_hours" type="number" min="1" max="50" dense outlined
-                  style="width:58px" @update:model-value="recalcTeachingComponent(row)" />
-              </td>
-              <td class="comp-td comp-td--center">
-                <q-badge color="purple-7" :label="Math.max(0, 35 - row.total_hours)"
-                  style="font-size:13px;padding:4px 8px" />
-              </td>
-              <td class="comp-td comp-td--center">
                 <q-input v-model.number="row.base_teaching_hours" type="number" min="0" max="40" dense outlined
                   style="width:58px" @update:model-value="recalcTeachingComponent(row)" />
+              </td>
+              <td class="comp-td comp-td--center">
+                <q-badge color="deep-orange-7"
+                  :label="Math.max(0, 35 - row.base_teaching_hours)"
+                  style="font-size:13px;padding:4px 8px" />
               </td>
               <td class="comp-td comp-td--center">
                 <div class="row no-wrap items-center justify-center" style="gap:4px">
@@ -432,12 +425,6 @@
                     <q-tooltip>Calculado automaticamente pelo Art. 79°</q-tooltip>
                   </q-icon>
                 </div>
-              </td>
-              <td class="comp-td comp-td--center">
-                <q-badge
-                  :color="Math.max(0, row.total_hours - row.base_teaching_hours - row.art79_reduction) > 0 ? 'deep-orange-7' : 'grey-5'"
-                  :label="Math.max(0, row.total_hours - row.base_teaching_hours - row.art79_reduction)"
-                  style="font-size:13px;padding:4px 8px" />
               </td>
               <td class="comp-td comp-td--center">
                 <q-input v-model.number="row.credit_hours" type="number" min="0" max="20" dense outlined
@@ -812,7 +799,6 @@ interface CompRow {
   id: number
   name: string
   birth_date: string | null
-  total_hours: number
   base_teaching_hours: number
   art79_reduction: number
   art79_manual: boolean
@@ -891,12 +877,11 @@ async function openComponentDialog() {
     type ApiTeacher = {
       id: number; name: string; birth_date: string | null
       teaching_component: number | null; credit_hours: number | null; credit_role: string | null
-      total_hours: number | null; base_teaching_hours: number | null
+      base_teaching_hours: number | null
     }
     compRows.value = (data as ApiTeacher[]).map(t => {
       const base_teaching_hours = t.base_teaching_hours ?? 22
       const credit_hours = t.credit_hours ?? 0
-      const total_hours = t.total_hours ?? 25
       const art79Auto = t.birth_date ? calcArt79(t.birth_date) : 0
       let art79_reduction: number
       let art79_manual: boolean
@@ -911,7 +896,7 @@ async function openComponentDialog() {
       const teaching_component = base_teaching_hours - art79_reduction - credit_hours
       return {
         id: t.id, name: t.name, birth_date: t.birth_date ?? null,
-        total_hours, base_teaching_hours, art79_reduction, art79_manual,
+        base_teaching_hours, art79_reduction, art79_manual,
         credit_hours, credit_role: t.credit_role ?? '', teaching_component,
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
@@ -937,7 +922,7 @@ async function saveComponents() {
     const payload = compRows.value.map(r => ({
       id: r.id, teaching_component: r.teaching_component, birth_date: r.birth_date || null,
       credit_hours: r.credit_hours, credit_role: r.credit_role || null,
-      total_hours: r.total_hours, base_teaching_hours: r.base_teaching_hours,
+      base_teaching_hours: r.base_teaching_hours,
     }))
     await api.put('/teachers/bulk-update', payload)
     await teachersStore.fetchAll()
