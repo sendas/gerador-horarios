@@ -67,7 +67,7 @@
               <div class="row text-center q-gutter-none">
                 <div class="col">
                   <div class="text-subtitle2">{{ totalHours }}h</div>
-                  <div class="text-caption text-grey">Componente</div>
+                  <div class="text-caption text-grey">CL líq.</div>
                 </div>
                 <div class="col">
                   <div class="text-subtitle2 text-blue-7">{{ assignedHours }}h</div>
@@ -312,10 +312,11 @@
                   />
                 </q-td>
               </template>
-              <template #body-cell-teaching_component="props">
+              <template #body-cell-base_teaching_hours="props">
                 <q-td :props="props">
                   <q-input
-                    v-model.number="props.row.teaching_component"
+                    :model-value="props.row.base_teaching_hours"
+                    @update:model-value="(value) => setHoursRowBase(props.row, value)"
                     type="number" min="0" max="26" dense borderless
                     style="width:70px"
                     suffix="h"
@@ -325,7 +326,8 @@
               <template #body-cell-credit_hours="props">
                 <q-td :props="props">
                   <q-input
-                    v-model.number="props.row.credit_hours"
+                    :model-value="props.row.credit_hours"
+                    @update:model-value="(value) => setHoursRowCredit(props.row, value)"
                     type="number" min="0" max="22" dense borderless
                     style="width:70px"
                     suffix="h"
@@ -574,7 +576,18 @@ const assignedHours = computed(() => {
     .reduce((sum, e) => sum + e.hours_per_week, 0)
 })
 
-const totalHours = computed(() => selectedTeacher.value?.teaching_component ?? 0)
+const baseHours = computed(() => {
+  const teacher = selectedTeacher.value
+  if (!teacher) return 0
+  return teacher.base_teaching_hours ?? ((teacher.teaching_component ?? 0) + (teacher.credit_hours ?? 0) + teacherArt79Reduction.value)
+})
+const teacherArt79Reduction = computed(() => {
+  const birthDate = selectedTeacher.value?.birth_date
+  return birthDate ? calcArt79(birthDate) : 0
+})
+const totalHours = computed(() =>
+  Math.max(0, baseHours.value - teacherArt79Reduction.value - (Number(creditHours.value) || 0))
+)
 
 // Use refs + watchEffect to guarantee reactivity regardless of v-model quirks
 const remainingHours = ref(0)
@@ -739,7 +752,7 @@ async function assignAll(subject: { subject_name: string; entries: Entry[] }) {
 }
 
 // ── Gerir horas dialog ─────────────────────────────────
-type HoursRow = { id: number; name: string; teaching_component: number; credit_hours: number; assigned_hours: number }
+type HoursRow = { id: number; name: string; base_teaching_hours: number; credit_hours: number; assigned_hours: number; birth_date: string | null }
 type HoursSchool = { school_id: number; school_name: string; teachers: HoursRow[] }
 
 const showHoursDialog = ref(false)
@@ -753,13 +766,21 @@ const bulkReduction = ref(0)
 const hoursColumns = [
   { name: 'sel', label: '', field: 'sel', align: 'center' as const, style: 'width:40px' },
   { name: 'name', label: 'Professor', field: 'name', align: 'left' as const },
-  { name: 'teaching_component', label: 'Componente (h)', field: 'teaching_component', align: 'center' as const },
+  { name: 'base_teaching_hours', label: 'CL base (h)', field: 'base_teaching_hours', align: 'center' as const },
   { name: 'credit_hours', label: 'Redução (h)', field: 'credit_hours', align: 'center' as const },
   { name: 'letivo', label: 'Saldo', field: 'letivo', align: 'center' as const },
 ]
 
 function effectiveHours(row: HoursRow) {
-  return (row.teaching_component ?? 0) - (row.credit_hours ?? 0) - (row.assigned_hours ?? 0)
+  return Math.max(0, (row.base_teaching_hours ?? 0) - calcArt79(row.birth_date ?? '') - (row.credit_hours ?? 0)) - (row.assigned_hours ?? 0)
+}
+
+function setHoursRowBase(row: HoursRow, value: unknown) {
+  row.base_teaching_hours = Math.max(0, Number(value) || 0)
+}
+
+function setHoursRowCredit(row: HoursRow, value: unknown) {
+  row.credit_hours = Math.max(0, Number(value) || 0)
 }
 
 async function openHoursDialog() {
@@ -791,8 +812,9 @@ async function openHoursDialog() {
           schoolMap.get(sid)!.teachers.push({
             id: t.id,
             name: t.name,
-            teaching_component: t.teaching_component ?? 22,
+            base_teaching_hours: t.base_teaching_hours ?? ((t.teaching_component ?? 22) + (t.credit_hours ?? 0)),
             credit_hours: t.credit_hours ?? 0,
+            birth_date: t.birth_date ?? null,
             assigned_hours: assignedMap.get(t.id) ?? 0,
           })
         }
@@ -825,7 +847,7 @@ function toggleSelectAll(val: boolean) {
 function applyBulkReduction() {
   for (const school of hoursDialogData.value) {
     for (const t of school.teachers) {
-      if (selectedTeacherIds.value.has(t.id)) t.credit_hours = bulkReduction.value
+      if (selectedTeacherIds.value.has(t.id)) setHoursRowCredit(t, bulkReduction.value)
     }
   }
   $q.notify({ type: 'positive', message: `Redução de ${bulkReduction.value}h aplicada a ${selectedTeacherIds.value.size} docente(s)` })
@@ -835,10 +857,19 @@ async function saveAllHours() {
   savingHours.value = true
   try {
     const payload = hoursDialogData.value.flatMap((s) =>
-      s.teachers.map((t) => ({ id: t.id, teaching_component: t.teaching_component, credit_hours: t.credit_hours }))
+      s.teachers.map((t) => ({
+        id: t.id,
+        base_teaching_hours: t.base_teaching_hours,
+        credit_hours: t.credit_hours,
+        teaching_component: Math.max(0, t.base_teaching_hours - calcArt79(t.birth_date ?? '') - t.credit_hours),
+      }))
     )
     await api.put('/teachers/bulk-update', payload)
     await teachersStore.fetchAll()
+    if (selectedTeacherId.value) {
+      const current = teachersStore.teachers.find((t) => t.id === selectedTeacherId.value)
+      creditHours.value = current?.credit_hours ?? 0
+    }
     $q.notify({ type: 'positive', message: 'Horas guardadas com sucesso' })
     showHoursDialog.value = false
   } catch {
@@ -954,12 +985,18 @@ function setTeHours(rowId: number, i: number, v: unknown) {
 
 function addCreditAlloc(rowId: number) {
   const r = compRows.value.find(r => r.id === rowId)
-  if (r) r.credit_role.push({ role: '', hours: 1 })
+  if (r) {
+    r.credit_role.push({ role: '', hours: 1 })
+    recalcTeachingComponent(r)
+  }
 }
 
 function removeCreditAlloc(rowId: number, i: number) {
   const r = compRows.value.find(r => r.id === rowId)
-  if (r) r.credit_role.splice(i, 1)
+  if (r) {
+    r.credit_role.splice(i, 1)
+    recalcTeachingComponent(r)
+  }
 }
 
 function setCreditRole(rowId: number, i: number, v: string | null) {
@@ -969,7 +1006,10 @@ function setCreditRole(rowId: number, i: number, v: string | null) {
 
 function setCreditHours(rowId: number, i: number, v: unknown) {
   const r = compRows.value.find(r => r.id === rowId)
-  if (r) r.credit_role[i].hours = Math.max(1, Number(v) || 1)
+  if (r) {
+    r.credit_role[i].hours = Math.max(1, Number(v) || 1)
+    recalcTeachingComponent(r)
+  }
 }
 
 function recalcTeachingComponent(row: CompRow) {
@@ -1071,6 +1111,10 @@ async function saveComponents() {
     }))
     await api.put('/teachers/bulk-update', payload)
     await teachersStore.fetchAll()
+    if (selectedTeacherId.value) {
+      const current = teachersStore.teachers.find((t) => t.id === selectedTeacherId.value)
+      creditHours.value = current?.credit_hours ?? 0
+    }
     $q.notify({ type: 'positive', message: `${payload.length} professor(es) atualizados` })
     showComponents.value = false
   } catch (err: unknown) {

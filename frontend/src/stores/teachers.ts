@@ -20,6 +20,11 @@ export interface Teacher {
   primary_school_id?: number | null
   primary_school_name?: string | null
   credit_hours?: number | null
+  birth_date?: string | null
+  base_teaching_hours?: number | null
+  te_hours?: number | null
+  te_role?: string | null
+  credit_role?: string | null
 }
 
 export interface TeacherSchoolAssignment {

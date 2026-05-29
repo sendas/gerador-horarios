@@ -24,6 +24,38 @@
 
           <q-timeline color="primary" layout="comfortable" class="q-mt-xs">
 
+            <q-timeline-entry icon="badge" color="blue-8">
+              <template #title>
+                <span class="version-title">
+                  <q-badge color="blue-8" class="version-badge">v1.24.0</q-badge>
+                  Separação entre Ficha do Professor e Definição de Horas
+                </span>
+              </template>
+              <template #subtitle>
+                <span class="version-date">
+                  <q-icon name="event" size="xs" class="q-mr-xs" />29 de maio de 2026
+                </span>
+              </template>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <q-icon name="person" size="xs" color="blue-8" />
+                  <strong>Professores</strong> passa a focar-se na ficha do docente: dados pessoais, escolas, disciplinas, turmas atribuídas, disponibilidade e preferências de horário
+                </div>
+                <div class="feature-item">
+                  <q-icon name="schedule" size="xs" color="blue-8" />
+                  <strong>Definição de horas por docente</strong> fica como local próprio para componente letiva, reduções Art. 79.º, crédito horário, TE, TIA e controlo da carga horária
+                </div>
+                <div class="feature-item">
+                  <q-icon name="rule" size="xs" color="blue-8" />
+                  Removida a edição da componente letiva da ficha do professor para evitar dados duplicados e reduzir confusão entre cadastro e distribuição de serviço
+                </div>
+                <div class="feature-item">
+                  <q-icon name="update" size="xs" color="blue-8" />
+                  Corrigido o cálculo das <strong>horas livres</strong>: alterações em crédito horário, reduções e CL base atualizam imediatamente a CL líquida e o saldo disponível
+                </div>
+              </div>
+            </q-timeline-entry>
+
             <q-timeline-entry icon="schedule" color="indigo-8">
               <template #title>
                 <span class="version-title">

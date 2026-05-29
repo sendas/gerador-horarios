@@ -129,8 +129,13 @@ function confirmDelete(row: { id: number; name: string }) {
     ok: { label: 'Eliminar', color: 'negative' },
     cancel: true,
   }).onOk(async () => {
-    await schoolsStore.remove(row.id)
-    $q.notify({ type: 'positive', message: 'Eliminada' })
+    try {
+      await schoolsStore.remove(row.id)
+      $q.notify({ type: 'positive', message: 'Eliminada' })
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      $q.notify({ type: 'negative', message: err.response?.data?.detail ?? 'Erro ao eliminar escola' })
+    }
   })
 }
 </script>

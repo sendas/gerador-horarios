@@ -343,8 +343,13 @@ function confirmDelete(row: SchoolClass) {
     ok: { label: 'Eliminar', color: 'negative' },
     cancel: true,
   }).onOk(async () => {
-    await classesStore.remove(row.id)
-    $q.notify({ type: 'positive', message: 'Eliminada' })
+    try {
+      await classesStore.remove(row.id)
+      $q.notify({ type: 'positive', message: 'Eliminada' })
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      $q.notify({ type: 'negative', message: err.response?.data?.detail ?? 'Erro ao eliminar turma' })
+    }
   })
 }
 </script>
