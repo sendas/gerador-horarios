@@ -33,7 +33,7 @@
               </template>
               <template #subtitle>
                 <span class="version-date">
-                  <q-icon name="event" size="xs" class="q-mr-xs" />29 de maio de 2026
+                  <q-icon name="event" size="xs" class="q-mr-xs" />29 de maio de 2026, 16:12
                 </span>
               </template>
               <div class="feature-list">
