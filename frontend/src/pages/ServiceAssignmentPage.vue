@@ -84,7 +84,8 @@
             <q-card-section>
               <div class="text-caption text-grey-7 q-mb-xs">Horas de crédito / redução</div>
               <q-input
-                v-model.number="creditHours"
+                :model-value="creditHours"
+                @update:model-value="(v) => { creditHours = Number(v) || 0 }"
                 type="number"
                 min="0"
                 step="0.5"
@@ -503,7 +504,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
 import { useClustersStore } from 'stores/clusters'
@@ -574,18 +575,26 @@ const assignedHours = computed(() => {
 })
 
 const totalHours = computed(() => selectedTeacher.value?.teaching_component ?? 0)
-const usedHours = computed(() => assignedHours.value + creditHours.value)
-const remainingHours = computed(() => totalHours.value - usedHours.value)
 
-const progressRatio = computed(() =>
-  totalHours.value > 0 ? Math.min(1, usedHours.value / totalHours.value) : 0
-)
+// Use refs + watchEffect to guarantee reactivity regardless of v-model quirks
+const remainingHours = ref(0)
+const progressRatio = ref(0)
+const progressColor = ref('primary')
 
-const progressColor = computed(() => {
-  if (remainingHours.value < 0) return 'negative'
-  if (remainingHours.value === 0) return 'positive'
-  if (progressRatio.value > 0.85) return 'warning'
-  return 'primary'
+watchEffect(() => {
+  const total = totalHours.value
+  const assigned = assignedHours.value
+  const credit = Number(creditHours.value) || 0
+  const remaining = total - assigned - credit
+
+  remainingHours.value = remaining
+
+  progressRatio.value = total > 0 ? Math.min(1, (assigned + credit) / total) : 0
+
+  if (remaining < 0) progressColor.value = 'negative'
+  else if (remaining === 0) progressColor.value = 'positive'
+  else if (progressRatio.value > 0.85) progressColor.value = 'warning'
+  else progressColor.value = 'primary'
 })
 
 const allYearLevels = computed(() => {
