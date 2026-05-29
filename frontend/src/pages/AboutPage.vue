@@ -7,6 +7,9 @@
       </div>
       <div class="hero__title">Sinaptik</div>
       <q-badge class="hero__badge">v{{ appVersion }}</q-badge>
+      <div class="hero__updated">
+        Atualizado em 29 de maio de 2026, 16:12
+      </div>
       <div class="hero__subtitle">
         Plataforma Inteligente de Horários — o sistema mais completo para criação automática de horários para agrupamentos escolares
       </div>
@@ -1158,6 +1161,15 @@ const importFormats = [
   padding: 4px 12px;
   border-radius: 20px;
   margin-bottom: 14px;
+}
+
+.hero__updated {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.9;
 }
 
 .hero__subtitle {
