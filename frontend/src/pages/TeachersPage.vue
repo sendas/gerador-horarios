@@ -1134,9 +1134,22 @@ async function openBulkAvail() {
 async function loadBulkSlots() {
   if (!bulkAvailYear.value) return
   bulkAvailLoading.value = true
+  // Clear existing selections before loading saved state
+  Object.keys(bulkBlockedMap).forEach((k) => delete bulkBlockedMap[k])
   try {
-    const { data } = await api.get('/time-slots', { params: { academic_year_id: bulkAvailYear.value } })
-    bulkAvailRawSlots.value = (data as { slot_number: number; start_time: string; end_time: string }[])
+    const clusterId = selectedClusterId.value
+    const [slotsRes, savedRes] = await Promise.all([
+      api.get('/time-slots', { params: { academic_year_id: bulkAvailYear.value } }),
+      clusterId
+        ? api.get('/teachers/bulk-availability', { params: { cluster_id: clusterId, academic_year_id: bulkAvailYear.value } })
+        : Promise.resolve({ data: { blocked_slots: [] } }),
+    ])
+    bulkAvailRawSlots.value = slotsRes.data as { slot_number: number; start_time: string; end_time: string }[]
+    // Restore previously saved blocked slots
+    const saved = (savedRes.data as { blocked_slots: { day_of_week: number; slot_number: number }[] }).blocked_slots
+    for (const s of saved) {
+      bulkBlockedMap[`${s.day_of_week}_${s.slot_number}`] = true
+    }
   } finally {
     bulkAvailLoading.value = false
   }
@@ -1157,7 +1170,12 @@ async function applyBulkAvail() {
         return { day_of_week: d, slot_number: s }
       })
     const res = await teachersStore.bulkAvailability(clusterId, bulkAvailYear.value, blocked)
-    $q.notify({ type: 'positive', message: res.message })
+    $q.notify({
+      type: 'positive',
+      message: res.message,
+      caption: blocked.length === 0 ? 'Todos os blocos marcados como disponíveis.' : undefined,
+      timeout: 4000,
+    })
   } catch {
     $q.notify({ type: 'negative', message: 'Erro ao aplicar disponibilidade.' })
   } finally {

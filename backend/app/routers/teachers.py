@@ -86,6 +86,25 @@ def bulk_set_free_day(req: BulkFreeDayRequest, db: Session = Depends(get_db)):
     return {"updated": updated, "day": req.day, "message": f"Dia livre definido como {day_label} para {updated} professor(es)."}
 
 
+@router.get("/bulk-availability")
+def get_bulk_availability(cluster_id: int, academic_year_id: int, db: Session = Depends(get_db)):
+    """Return the saved blocked slots for a cluster+year (reads from the first teacher found)."""
+    first = db.query(Teacher).filter(Teacher.cluster_id == cluster_id).first()
+    if not first:
+        return {"blocked_slots": []}
+    blocked = db.query(TeacherAvailability).filter(
+        TeacherAvailability.teacher_id == first.id,
+        TeacherAvailability.academic_year_id == academic_year_id,
+        TeacherAvailability.is_available == False,
+    ).all()
+    return {
+        "blocked_slots": [
+            {"day_of_week": a.day_of_week, "slot_number": a.slot_number}
+            for a in blocked
+        ]
+    }
+
+
 @router.post("/bulk-availability")
 def bulk_set_availability(req: BulkAvailabilityRequest, db: Session = Depends(get_db)):
     """Replace all TeacherAvailability records for a cluster+year with the given blocked slots."""
