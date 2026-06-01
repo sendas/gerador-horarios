@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <div class="text-h5 col">Distribuição de Serviço</div>
+      <div class="text-h5 col">Definição de Horas por Docente</div>
       <q-btn color="teal-7" icon="tune" label="Gerir horas" class="q-mr-sm" @click="openHoursDialog" />
       <q-btn color="indigo-7" icon="calculate" label="Componentes" class="q-mr-sm" :disable="!selectedYearId" @click="openComponentDialog" />
       <q-select
@@ -66,16 +66,16 @@
               />
               <div class="row text-center q-gutter-none">
                 <div class="col">
-                  <div class="text-subtitle2">{{ totalHours }}h</div>
-                  <div class="text-caption text-grey">CL líq.</div>
+                  <div class="text-subtitle2">{{ baseHours }}h</div>
+                  <div class="text-caption text-grey">CL base</div>
+                </div>
+                <div class="col">
+                  <div class="text-subtitle2 text-teal-7">{{ totalHours }}h</div>
+                  <div class="text-caption text-grey">Disponível</div>
                 </div>
                 <div class="col">
                   <div class="text-subtitle2 text-blue-7">{{ assignedHours }}h</div>
-                  <div class="text-caption text-grey">Letivo</div>
-                </div>
-                <div class="col">
-                  <div class="text-subtitle2 text-orange-7">{{ creditHours }}h</div>
-                  <div class="text-caption text-grey">Crédito</div>
+                  <div class="text-caption text-grey">Atribuído</div>
                 </div>
               </div>
             </q-card-section>
@@ -85,7 +85,7 @@
               <div class="text-caption text-grey-7 q-mb-xs">Horas de crédito / redução</div>
               <q-input
                 :model-value="creditHours"
-                @update:model-value="(v) => { creditHours = Number(v) || 0 }"
+                @update:model-value="onCreditInput"
                 type="number"
                 min="0"
                 step="0.5"
@@ -585,24 +585,30 @@ const teacherArt79Reduction = computed(() => {
   const birthDate = selectedTeacher.value?.birth_date
   return birthDate ? calcArt79(birthDate) : 0
 })
+// totalHours = CL disponível líquida (já deduz art79 e crédito)
 const totalHours = computed(() =>
   Math.max(0, baseHours.value - teacherArt79Reduction.value - (Number(creditHours.value) || 0))
 )
 
-// Use refs + watchEffect to guarantee reactivity regardless of v-model quirks
+function onCreditInput(v: string | number) {
+  creditHours.value = Number(v) || 0
+}
+
+// remainingHours = totalHours (já tem crédito descontado) - assignedHours
+// NÃO subtrair crédito outra vez — totalHours já o fez!
 const remainingHours = ref(0)
 const progressRatio = ref(0)
 const progressColor = ref('primary')
 
 watchEffect(() => {
-  const total = totalHours.value
-  const assigned = assignedHours.value
-  const credit = Number(creditHours.value) || 0
-  const remaining = total - assigned - credit
+  const total = totalHours.value        // base − art79 − crédito
+  const assigned = assignedHours.value  // horas já atribuídas
+
+  // remaining = disponível líquido − atribuído (sem contar crédito de novo!)
+  const remaining = total - assigned
 
   remainingHours.value = remaining
-
-  progressRatio.value = total > 0 ? Math.min(1, (assigned + credit) / total) : 0
+  progressRatio.value = total > 0 ? Math.min(1, assigned / total) : 0
 
   if (remaining < 0) progressColor.value = 'negative'
   else if (remaining === 0) progressColor.value = 'positive'
